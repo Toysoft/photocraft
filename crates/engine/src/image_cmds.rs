@@ -953,7 +953,7 @@ mod tests {
             .unwrap();
         // Whole-canvas translation moves the data's origin, like every other content.
         s.edit("move", |doc, _| {
-            translate_doc(doc, 5, 7);
+            translate_doc(doc, "move", 5, 7)?;
             Ok(())
         })
         .unwrap();
