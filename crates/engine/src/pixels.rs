@@ -399,17 +399,18 @@ pub fn remap_surface(s: &Surface, map: impl Fn(i32, i32) -> (i32, i32)) -> Surfa
 }
 
 /// Merge `upper` onto `lower` producing a raster layer (Layer → Merge Down).
-pub fn merge_down(doc: &Document, lower: &Layer, upper: &Layer) -> Layer {
+pub fn merge_down(doc: &Document, lower: &Layer, upper: &Layer) -> Result<Layer, String> {
     let format = doc.pixel_format();
     // Two deep layers merge their samples and stay deep (Nuke's DeepMerge): the Z sort then
     // composites both inputs' samples together instead of pre-flattening each.
     if let (LayerContent::Deep(a), LayerContent::Deep(b)) = (&lower.content, &upper.content) {
-        let mut merged = Layer::new(lower.name.clone(), LayerContent::Deep(a.merge(b)));
+        let mut merged = Layer::new(lower.name.clone(), LayerContent::Deep(a.merge(b)?));
         merged.id = lower.id;
         merged.blend = lower.blend;
         merged.opacity = 1.0;
-        return merged;
-    }    let stack = vec![lower.clone(), upper.clone()];
+        return Ok(merged);
+    }
+    let stack = vec![lower.clone(), upper.clone()];
     let mut tmp = Document::new("merge", doc.size, format.mode, format.sample);
     // The pair is read (and a CMYK one separated again) through the document's own profile.
     tmp.icc_profile = doc.icc_profile.clone();
@@ -423,5 +424,5 @@ pub fn merge_down(doc: &Document, lower: &Layer, upper: &Layer) -> Layer {
     // Merge Down replaces the lower layer, so keep its editing restrictions.
     // In particular, a merged Background must remain opaque and position-locked.
     merged.locks = lower.locks;
-    merged
+    Ok(merged)
 }
