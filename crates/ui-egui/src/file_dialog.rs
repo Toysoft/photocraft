@@ -232,7 +232,26 @@ impl PhotocraftApp {
                 self.open_failed(&name, &e);
             }
         }
-    }
+
+    /// File › Open as Deep: [`Self::open_dialog_file`]'s picker, keeping every chosen file's
+    /// depth. Web dialogs hand over contents, which the deep importer has no bytes path for.
+    pub(crate) fn open_dialog_file_deep(&mut self) -> Result<Value, String> {
+        self.ask_file(FileDialogRequest::Open { multiple: true }, |app, answer| {
+            match answer {
+                FileDialogAnswer::Paths(paths) => {
+                    for path in paths {
+                        if let Err(e) = app.open_path_deep(&path) {
+                            app.open_failed(&crate::file_open::display_name(&path), &e);
+                        }
+                    }
+                }
+                FileDialogAnswer::Contents(name, _) => {
+                    app.open_failed(&name, "opening as deep needs the file on disk");
+                }
+                FileDialogAnswer::SaveTo(_) => return Err(UNEXPECTED.into()),
+            }
+            Ok(Value::Null)
+        })    }
 
     /// Run `next` on the result of the open dialog's action once it is answered; its result
     /// replaces the action's. False when no dialog is open.

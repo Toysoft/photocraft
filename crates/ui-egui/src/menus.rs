@@ -311,20 +311,12 @@ pub(crate) fn invoke_unguarded(app: &mut PhotocraftApp, ctx: &egui::Context, id:
                 Ok(Value::Null)
             } else {
                 // The multi-file picker of File › Open, with the depth kept.
-                if let Some(pick_paths) = app.services.pick_open_paths.as_mut()
-                    && let Some(paths) = pick_paths()
-                {
-                    for path in paths {
-                        if let Err(e) = app.open_path_deep(&path) {
-                            app.open_failed(&crate::file_open::display_name(&path), &e);
-                        }
-                    }
-                }
-                Ok(Value::Null)
-            }        }
+
+                app.open_dialog_file_deep()
+            }
+        }
         "file.save" => {
-            // Writes back only to a layered file that holds the whole document; anything else
-            // goes through Save As, so the original is never overwritten with less (#3806).
+            // Writes back only to a layered file; a flat one goes through Save As.
             let tga_bits = crate::targa_options_ui::bits_param(&params, id)?;
             match params.get("path").and_then(Value::as_str) {
                 Some(path) => app.save_as_with(Some(path.to_string()), tga_bits),
