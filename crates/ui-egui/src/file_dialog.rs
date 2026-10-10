@@ -232,6 +232,7 @@ impl PhotocraftApp {
                 self.open_failed(&name, &e);
             }
         }
+    }
 
     /// File › Open as Deep: [`Self::open_dialog_file`]'s picker, keeping every chosen file's
     /// depth. Web dialogs hand over contents, which the deep importer has no bytes path for.
@@ -250,10 +251,14 @@ impl PhotocraftApp {
                 FileDialogAnswer::Contents(name, _) => {
                     app.open_failed(&name, "opening as deep needs the file on disk");
                 }
+                FileDialogAnswer::ContentsMany(_) => {
+                    app.open_failed("the picked files", "opening as deep needs the files on disk");
+                }
                 FileDialogAnswer::SaveTo(_) => return Err(UNEXPECTED.into()),
             }
             Ok(Value::Null)
-        })    }
+        })
+    }
 
     /// Run `next` on the result of the open dialog's action once it is answered; its result
     /// replaces the action's. False when no dialog is open.

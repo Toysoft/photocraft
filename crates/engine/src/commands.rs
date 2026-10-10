@@ -120,6 +120,9 @@ fn turn(s: &mut Session, label: &str, t: crate::canvas_geom::Turn) -> Result<Val
         s.set_sampler_map(a);
     }
     s.edit(label, |doc, _| {
+        if photocraft_compose::deep::any_deep(&doc.layers) {
+            return Err(EngineError::Other("deep layers cannot be turned yet; their samples keep their depth".into()));
+        }
         crate::canvas_geom::turn_canvas(doc, t);
         Ok(())
     })?;
