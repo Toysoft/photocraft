@@ -43,7 +43,10 @@ mod mac_window;
 mod linux_libs;
 mod logging;
 mod monitor_profile;
+// The print portal needs the session bus (zbus, Linux only); its pure helpers are tested everywhere.
 mod photoshop_settings;
+#[cfg(any(target_os = "linux", test))]
+mod print_portal;
 mod screen_color;
 mod services;
 // Windows gets pen pressure from winit (WM_POINTER); the web runner has its own listener.
@@ -391,7 +394,15 @@ fn main() -> eframe::Result {
                         services::xwayland_command(var("FLATPAK_ID").as_deref(), var("APPIMAGE").as_deref(), std::env::var_os("DISPLAY").is_some());
                 }
             }
-            let mut app = PhotocraftApp::new(Session::new(), services);
+            #[cfg(target_os = "linux")]
+            let session = {
+                let mut session = Session::new();
+                session.print_spooler = print_portal::spooler();
+                session
+            };
+            #[cfg(not(target_os = "linux"))]
+            let session = Session::new();
+            let mut app = PhotocraftApp::new(session, services);
             app.integrated_titlebar = cfg!(target_os = "macos");
             app.custom_titlebar = custom_titlebar;
             // Only the title bar's free gap drags the window, never the menus (mac_window.rs).
