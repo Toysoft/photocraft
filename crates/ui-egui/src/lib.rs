@@ -199,6 +199,7 @@ pub mod stroke_trace;
 pub mod stroke_trail;
 pub mod stroke_ui;
 pub mod stylus;
+pub mod list_drag;
 pub mod swap_arrow;
 pub mod swatches_ui;
 pub mod symmetry_ui;
