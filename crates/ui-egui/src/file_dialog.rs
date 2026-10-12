@@ -255,6 +255,7 @@ impl PhotocraftApp {
                     app.open_failed("the picked files", "opening as deep needs the files on disk");
                 }
                 FileDialogAnswer::SaveTo(_) => return Err(UNEXPECTED.into()),
+                FileDialogAnswer::FolderTo(_) => return Err(UNEXPECTED.into()),
                 FileDialogAnswer::Unavailable(why) => return Err(why),
             }
             Ok(Value::Null)
