@@ -2790,3 +2790,67 @@ curves	Smooth	平滑
 	set name	組合名稱
 	{set} (modified)	{set}（已修改）
 	Random	隨機
+
+# Type Details: OpenType features and variable axes
+	Type Details	文字詳細資訊
+	Type Details…	文字詳細資訊…
+	OpenType features and variable font axes, with a live preview	OpenType 功能和可變字型軸，附即時預覽
+	Variable	可變
+	Set optical size automatically	自動設定視覺大小
+	On	開啟
+	Additional axes	其他軸
+	Alternate annotation forms	替代註解形式
+	Alternate CJK forms	替代中日韓字形
+	Alternative fractions	替代分數
+	Capital spacing	大寫字母間距
+	Capitals to petite capitals	大寫轉小型大寫字母
+	Capitals to small capitals	大寫轉小型大寫字母 (c2sc)
+	Case	大小寫
+	Case-sensitive forms	區分大小寫的字形
+	Character variant {n}	字元變體 {n}
+	Character variants	字元變體
+	Contextual swash	上下文花飾字形
+	Denominators	分母
+	Expert forms	專家字形
+	Figure spacing	數字間距
+	Figure style	數字樣式
+	Full widths	全形
+	Half widths	半形
+	Historical forms	歷史字形
+	Historical ligatures	歷史連字
+	Horizontal spacing	水平間距
+	Instance	實例
+	Italics	斜體
+	Justification alternates	對齊替代字形
+	Kerning pairs	字偶間距
+	Left bounds	左邊界
+	Letter case	字母大小寫
+	Letterforms	字母形式
+	Lining	等高
+	Lining figures	等高數字
+	Mathematical Greek	數學希臘字母
+	More features	更多功能
+	Numbers	數字
+	Numerators	分子
+	Oldstyle figures	舊式數字
+	Optical bounds	視覺邊界
+	Optical size	視覺大小
+	Petite capitals	小型大寫字母 (petite)
+	Proportional	比例
+	Proportional alternate widths	比例替代寬度
+	Proportional figures	比例數字
+	Proportional widths	比例寬度
+	Reset All Axes	重設所有軸
+	Right bounds	右邊界
+	Ruby notation forms	注音標記字形
+	Scientific inferiors	科學下標
+	Slashed zero	帶斜線的零
+	Small capitals	小型大寫字母
+	Stylistic set {n}	樣式集 {n}
+	Stylistic sets	樣式集
+	Subscript	下標
+	Superscript	上標
+	Tabular	等寬
+	Tabular figures	等寬數字
+	This font has no variable axes.	此字型沒有可變軸。
+	Unicase	單一大小寫

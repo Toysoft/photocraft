@@ -3675,3 +3675,66 @@ curves	Smooth	Làm mượt
 	There are too many sets: delete one first.	Có quá nhiều bộ: hãy xóa một bộ trước.
 	set name	tên bộ
 	{set} (modified)	{set} (đã sửa đổi)
+
+# Type Details: OpenType features and variable axes
+	Type Details	Chi tiết chữ
+	Type Details…	Chi tiết chữ…
+	OpenType features and variable font axes, with a live preview	Tính năng OpenType và trục phông chữ biến đổi, có xem trước trực tiếp
+	Variable	Biến đổi
+	Set optical size automatically	Tự động đặt kích thước quang học
+	On	Bật
+	Additional axes	Trục bổ sung
+	Alternate annotation forms	Dạng chú thích thay thế
+	Alternate CJK forms	Dạng CJK thay thế
+	Alternative fractions	Phân số thay thế
+	Capital spacing	Giãn cách chữ hoa
+	Capitals to petite capitals	Chữ hoa thành chữ hoa nhỏ (petite)
+	Capitals to small capitals	Chữ hoa thành chữ hoa nhỏ
+	Case	Kiểu chữ hoa/thường
+	Case-sensitive forms	Dạng theo chữ hoa
+	Character variant {n}	Biến thể ký tự {n}
+	Character variants	Biến thể ký tự
+	Contextual swash	Nét hoa mỹ theo ngữ cảnh
+	Denominators	Mẫu số
+	Expert forms	Dạng chuyên gia
+	Figure spacing	Độ rộng chữ số
+	Figure style	Kiểu chữ số
+	Full widths	Độ rộng đầy đủ
+	Half widths	Nửa độ rộng
+	Historical forms	Dạng lịch sử
+	Historical ligatures	Chữ ghép lịch sử
+	Horizontal spacing	Giãn cách ngang
+	Instance	Phiên bản
+	Italics	Chữ nghiêng
+	Justification alternates	Dạng thay thế khi căn đều
+	Kerning pairs	Cặp kerning
+	Left bounds	Biên trái
+	Letter case	Chữ hoa/thường
+	Letterforms	Hình dạng chữ
+	Lining	Thẳng hàng
+	Lining figures	Chữ số thẳng hàng
+	Mathematical Greek	Chữ Hy Lạp toán học
+	More features	Tính năng khác
+	Numerators	Tử số
+	Oldstyle figures	Chữ số kiểu cổ
+	Optical bounds	Biên quang học
+	Optical size	Kích thước quang học
+	Petite capitals	Chữ hoa nhỏ (petite)
+	Proportional	Tỷ lệ
+	Proportional alternate widths	Độ rộng tỷ lệ thay thế
+	Proportional figures	Chữ số tỷ lệ
+	Proportional widths	Độ rộng tỷ lệ
+	Reset All Axes	Đặt lại tất cả trục
+	Right bounds	Biên phải
+	Ruby notation forms	Dạng chú thích ruby
+	Scientific inferiors	Chỉ số dưới khoa học
+	Slashed zero	Số không có gạch chéo
+	Small capitals	Chữ hoa nhỏ
+	Stylistic set {n}	Bộ kiểu {n}
+	Stylistic sets	Bộ kiểu
+	Subscript	Chỉ số dưới
+	Superscript	Chỉ số trên
+	Tabular	Bảng
+	Tabular figures	Chữ số dạng bảng
+	This font has no variable axes.	Phông chữ này không có trục biến đổi.
+	Unicase	Unicase

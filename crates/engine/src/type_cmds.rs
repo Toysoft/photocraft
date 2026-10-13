@@ -338,9 +338,23 @@ pub fn apply_char_props(s: &mut CharStyle, p: &Value) -> bool {
     }
     if let Some(Value::Object(m)) = p.get("features") {
         for (tag, v) in m {
-            let value = v.as_u64().map(|x| x as u16).or_else(|| v.as_bool().map(u16::from)).unwrap_or(1);
-            s.features.retain(|f| &f.tag != tag);
-            s.features.push(FontFeature { tag: tag.clone(), value });
+            // `null` resets the feature to the font's default (Type Details' reset).
+            let value = if v.is_null() {
+                None
+            } else {
+                Some(v.as_u64().map(|x| x.min(u64::from(u16::MAX)) as u16).or_else(|| v.as_bool().map(u16::from)).unwrap_or(1))
+            };
+            match tag.as_str() {
+                // Standard and discretionary ligatures have their own fields (and PSD keys).
+                "liga" => s.ligatures = value.is_none_or(|v| v > 0),
+                "dlig" => s.discretionary_ligatures = value.is_some_and(|v| v > 0),
+                _ => {
+                    s.features.retain(|f| &f.tag != tag);
+                    if let Some(value) = value {
+                        s.features.push(FontFeature { tag: tag.clone(), value });
+                    }
+                }
+            }
         }
         hit(true);
     }
@@ -785,7 +799,7 @@ pub(crate) fn new_text_layer(s: &Session, p: &Value, cmd: &str) -> Result<TextLa
     Ok(t)
 }
 
-const CHAR_PARAMS: &str = r##""font":str,"fontStyle":str,"weight":100..900,"italic":bool,"size":0.1..=1296 pt,"color":"#rrggbb"|[r,g,b,a],"tracking":-1000..=10000 (1/1000 em),"leading":pt|"auto","baselineShift":pt,"horizontalScale":%,"verticalScale":%,"underline":bool,"strikethrough":bool,"fauxBold":bool,"fauxItalic":bool,"kerning":1/1000em (manual, after each character)|"metrics"|"optical"|"off","caps":"normal|small|all","ligatures":bool,"discretionaryLigatures":bool,"features":{"ss01":1},"variations":{"wght":650},"language":str"##;
+const CHAR_PARAMS: &str = r##""font":str,"fontStyle":str,"weight":100..900,"italic":bool,"size":0.1..=1296 pt,"color":"#rrggbb"|[r,g,b,a],"tracking":-1000..=10000 (1/1000 em),"leading":pt|"auto","baselineShift":pt,"horizontalScale":%,"verticalScale":%,"underline":bool,"strikethrough":bool,"fauxBold":bool,"fauxItalic":bool,"kerning":1/1000em (manual, after each character)|"metrics"|"optical"|"off","caps":"normal|small|all","ligatures":bool,"discretionaryLigatures":bool,"features":{"ss01":1|0|null (font default)},"variations":{"wght":650|null (axis default; opsz: follow the size)},"language":str"##;
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -1030,11 +1044,65 @@ pub fn specs() -> Vec<CommandSpec> {
                 }
             },
         },
+        CommandSpec {
+            id: "type.fontDetails",
+            label: "Font Details",
+            menu: &[],
+            shortcut: None,
+            params: r##"{"family":str?,"fontStyle":str?,"postscriptName":str?,"weight":100..900?,"italic":bool?} (default: the active type layer's first character style) → axes [{tag,name,min,default,max,hidden}], instances [{name,coords:{tag:value}}], features [{tag,name,sample}] of the face it draws with"##,
+            enabled: |_| Ok(()),
+            journal: false,
+            run: |s, p| font_details(s, p),
+        },
         size_key("type.increaseSize", "Increase Type Size", "Cmd+Shift+.", |s, p| step_size(s, p, true, 2.0)),
         size_key("type.decreaseSize", "Decrease Type Size", "Cmd+Shift+,", |s, p| step_size(s, p, false, 2.0)),
         size_key("type.increaseSizeMore", "Increase Type Size by 10", "Cmd+Alt+Shift+.", |s, p| step_size(s, p, true, 10.0)),
         size_key("type.decreaseSizeMore", "Decrease Type Size by 10", "Cmd+Alt+Shift+,", |s, p| step_size(s, p, false, 10.0)),
     ]
+}
+
+/// `type.fontDetails`: what the face of a style offers (variation axes with the font's names,
+/// named instances, OpenType features with their UI names and samples).
+fn font_details(s: &Session, p: &Value) -> Result<Value> {
+    let mut style = s
+        .active()
+        .and_then(|st| st.active_layer.and_then(|id| st.doc.layer(id)))
+        .and_then(|l| match &l.content {
+            LayerContent::Text(t) => t.char_runs().into_iter().next().map(|r| r.style),
+            _ => None,
+        })
+        .unwrap_or_default();
+    if let Some(f) = p.get("family") {
+        let f = f.as_str().ok_or_else(|| EngineError::Other("family must be a string".into()))?;
+        style = CharStyle { font_family: f.to_string(), ..Default::default() };
+    }
+    if let Some(ps) = p.get("postscriptName").and_then(Value::as_str) {
+        style.postscript_name = Some(ps.to_string());
+    }
+    if let Some(w) = p.get("weight").and_then(Value::as_f64) {
+        style.weight = if w.is_finite() { w.clamp(1.0, 1000.0) as u16 } else { 400 };
+    }
+    if let Some(i) = p.get("italic").and_then(Value::as_bool) {
+        style.italic = i;
+    }
+    let mut eng = photocraft_text::shared().lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(name) = p.get("fontStyle").and_then(Value::as_str)
+        && let Some(face) = eng.fonts.named_face(&style.font_family, name)
+    {
+        style.postscript_name = face.postscript_name;
+        style.weight = face.weight.round().clamp(1.0, 1000.0) as u16;
+        style.italic = face.italic;
+    }
+    let d = eng.fonts.face_details(&style);
+    let axes: Vec<Value> =
+        d.axes.iter().map(|a| json!({ "tag": a.tag, "name": a.name, "min": a.min, "default": a.default, "max": a.max, "hidden": a.hidden })).collect();
+    let instances: Vec<Value> = d
+        .instances
+        .iter()
+        .map(|i| json!({ "name": i.name, "coords": i.coords.iter().map(|(t, v)| (t.clone(), json!(v))).collect::<serde_json::Map<_, _>>() }))
+        .collect();
+    let features: Vec<Value> = d.features.iter().map(|f| json!({ "tag": f.tag, "name": f.name, "sample": f.sample })).collect();
+    Ok(json!({ "axes": axes, "instances": instances, "features": features }))
 }
 
 fn has_type_layer(s: &Session) -> std::result::Result<(), String> {
@@ -1454,6 +1522,40 @@ mod tests {
         assert!(fonts["families"].as_array().unwrap().iter().any(|f| f == "Inter"));
         let faces = s.execute("type.fonts", json!({"family": "Inter"})).unwrap();
         assert!(!faces["faces"].as_array().unwrap().is_empty());
+    }
+
+    /// Type Details reads the face's features; `null` resets a feature, and ligature features
+    /// go to their own fields.
+    #[test]
+    fn font_details_and_feature_reset() {
+        let mut s = Session::new();
+        let d = s.execute("type.fontDetails", json!({"family": "Inter"})).unwrap();
+        let tags: Vec<&str> = d["features"].as_array().unwrap().iter().filter_map(|f| f["tag"].as_str()).collect();
+        assert!(tags.contains(&"tnum") && tags.contains(&"cv11"), "{tags:?}");
+        let cv11 = d["features"].as_array().unwrap().iter().find(|f| f["tag"] == "cv11").unwrap();
+        assert!(cv11["sample"].as_str().unwrap().contains('a'));
+        // Bad params are errors or defaults, never a panic.
+        assert!(s.execute("type.fontDetails", json!({"family": 3})).is_err());
+        assert!(s.execute("type.fontDetails", json!({"family": "Nope", "weight": f64::MAX, "italic": "x", "fontStyle": 2})).is_ok());
+
+        s.execute("file.new", json!({"width": 300, "height": 200})).unwrap();
+        let id = s.execute("type.create", json!({"x": 10, "y": 50, "text": "Hi", "size": 20})).unwrap()["layer"].as_u64().unwrap();
+        let style = |s: &Session| match &s.active().unwrap().doc.layer(LayerId(id)).unwrap().content {
+            LayerContent::Text(t) => t.char_runs()[0].style.clone(),
+            _ => panic!("not a type layer"),
+        };
+        s.execute("type.setStyle", json!({"layer": id, "features": {"tnum": 1, "liga": 0, "dlig": 1, "ss01": 70000}})).unwrap();
+        let st = style(&s);
+        assert!(!st.ligatures && st.discretionary_ligatures);
+        assert!(st.features.iter().any(|f| f.tag == "tnum" && f.value == 1));
+        assert!(st.features.iter().any(|f| f.tag == "ss01" && f.value == u16::MAX));
+        assert!(!st.features.iter().any(|f| f.tag == "liga" || f.tag == "dlig"));
+        s.execute("type.setStyle", json!({"layer": id, "features": {"tnum": null, "liga": null, "dlig": null}})).unwrap();
+        let st = style(&s);
+        assert!(st.ligatures && !st.discretionary_ligatures);
+        assert!(!st.features.iter().any(|f| f.tag == "tnum"));
+        let d = s.execute("type.fontDetails", json!({})).unwrap();
+        assert!(!d["features"].as_array().unwrap().is_empty(), "the active layer's face");
     }
 
     /// #124: a type edit damages only the layer's old and new pixels (the canvas recomposites

@@ -22,6 +22,10 @@ pub struct TypePanelsUi {
     pub styles_tab: usize,
     /// Glyphs panel is open.
     pub glyphs: bool,
+    /// Type Details (OpenType features and variable axes) is open, and its tab: 0 = Details,
+    /// 1 = Variable.
+    pub details: bool,
+    pub details_tab: usize,
     /// Style Options editor open for (paragraph?, id).
     pub options: Option<(bool, u32)>,
     /// Glyphs: font family and style ("" = follow the type selection), "Show" category, cell
@@ -203,6 +207,7 @@ pub fn windows(app: &mut PhotocraftApp, ctx: &egui::Context) {
             app.ui.type_panels.glyphs = false;
         }
     }
+    crate::type_details_ui::window(app, ctx, float_frame(&t));
     if app.ui.type_panels.spell.is_some() {
         spelling_window(app, ctx);
     }

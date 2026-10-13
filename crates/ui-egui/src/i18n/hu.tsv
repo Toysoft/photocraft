@@ -4108,3 +4108,64 @@ cameraRaw	Yellow	Sárga
 	There are too many sets: delete one first.	Túl sok készlet van: előbb töröljön egyet.
 	set name	készlet neve
 	{set} (modified)	{set} (módosítva)
+
+# Type Details: OpenType features and variable axes
+	Type Details	Betűtípus részletei
+	Type Details…	Betűtípus részletei…
+	OpenType features and variable font axes, with a live preview	OpenType-funkciók és változó betűtípus-tengelyek élő előnézettel
+	Variable	Változó
+	Set optical size automatically	Optikai méret automatikus beállítása
+	Additional axes	További tengelyek
+	Alternate annotation forms	Alternatív jelölési formák
+	Alternate CJK forms	Alternatív CJK-formák
+	Alternative fractions	Alternatív törtek
+	Capital spacing	Nagybetűk térköze
+	Capitals to petite capitals	Nagybetűk kis kiskapitálissá
+	Capitals to small capitals	Nagybetűk kiskapitálissá
+	Case	Kis- és nagybetű
+	Case-sensitive forms	Nagybetűhöz igazított formák
+	Character variant {n}	{n}. karaktervariáns
+	Character variants	Karaktervariánsok
+	Contextual swash	Környezetfüggő díszes formák
+	Denominators	Nevezők
+	Expert forms	Expert formák
+	Figure spacing	Számjegyszélesség
+	Figure style	Számjegystílus
+	Full widths	Teljes szélesség
+	Half widths	Fél szélesség
+	Historical forms	Történelmi formák
+	Historical ligatures	Történelmi ligatúrák
+	Horizontal spacing	Vízszintes térköz
+	Instance	Példány
+	Italics	Dőlt
+	Justification alternates	Sorkizárási alternatívák
+	Kerning pairs	Alávágási párok
+	Left bounds	Bal oldali határok
+	Letter case	Kis- és nagybetűk
+	Letterforms	Betűformák
+	Lining	Nagybetűs
+	Lining figures	Nagybetűs számjegyek
+	Mathematical Greek	Matematikai görög
+	More features	További funkciók
+	Numbers	Számok
+	Numerators	Számlálók
+	Oldstyle figures	Régi stílusú számjegyek
+	Optical bounds	Optikai határok
+	Optical size	Optikai méret
+	Petite capitals	Kis kiskapitálisok
+	Proportional	Arányos
+	Proportional alternate widths	Alternatív arányos szélesség
+	Proportional figures	Arányos számjegyek
+	Proportional widths	Arányos szélesség
+	Reset All Axes	Összes tengely visszaállítása
+	Right bounds	Jobb oldali határok
+	Ruby notation forms	Ruby jelölési formák
+	Scientific inferiors	Tudományos alsó indexek
+	Slashed zero	Áthúzott nulla
+	Small capitals	Kiskapitálisok
+	Stylistic set {n}	{n}. stíluskészlet
+	Stylistic sets	Stíluskészletek
+	Tabular	Táblázatos
+	Tabular figures	Táblázatos számjegyek
+	This font has no variable axes.	Ennek a betűtípusnak nincsenek változó tengelyei.
+	Unicase	Unicase

@@ -3919,3 +3919,64 @@ cameraData	Lens	Lens
 	There are too many sets: delete one first.	Çok fazla küme var: önce birini silin.
 	set name	küme adı
 	{set} (modified)	{set} (değiştirildi)
+
+# Type Details: OpenType features and variable axes
+	Type Details	Metin Ayrıntıları
+	Type Details…	Metin Ayrıntıları…
+	OpenType features and variable font axes, with a live preview	Canlı önizlemeli OpenType özellikleri ve değişken yazı tipi eksenleri
+	Variable	Değişken
+	Set optical size automatically	Optik boyutu otomatik ayarla
+	Additional axes	Ek eksenler
+	Alternate annotation forms	Alternatif açıklama biçimleri
+	Alternate CJK forms	Alternatif CJK biçimleri
+	Alternative fractions	Alternatif kesirler
+	Capital spacing	Büyük harf aralığı
+	Capitals to petite capitals	Büyük harften küçük büyük harfe (petite)
+	Capitals to small capitals	Büyük harften küçük büyük harfe
+	Case	Büyük/küçük harf
+	Case-sensitive forms	Büyük harfe duyarlı biçimler
+	Character variant {n}	Karakter varyantı {n}
+	Character variants	Karakter varyantları
+	Contextual swash	Bağlamsal kuyruklu harfler
+	Denominators	Paydalar
+	Expert forms	Uzman biçimleri
+	Figure spacing	Rakam aralığı
+	Figure style	Rakam stili
+	Full widths	Tam genişlik
+	Half widths	Yarım genişlik
+	Historical forms	Tarihsel biçimler
+	Historical ligatures	Tarihsel bitişik harfler
+	Horizontal spacing	Yatay aralık
+	Instance	Örnek
+	Italics	İtalik
+	Justification alternates	Yaslama alternatifleri
+	Kerning pairs	Karakter aralığı çiftleri
+	Left bounds	Sol sınırlar
+	Letter case	Büyük/küçük harf
+	Letterforms	Harf biçimleri
+	Lining	Hizalı
+	Lining figures	Hizalı rakamlar
+	Mathematical Greek	Matematiksel Yunanca
+	More features	Diğer özellikler
+	Numbers	Sayılar
+	Numerators	Paylar
+	Oldstyle figures	Eski stil rakamlar
+	Optical bounds	Optik sınırlar
+	Optical size	Optik boyut
+	Petite capitals	Küçük büyük harfler (petite)
+	Proportional	Orantılı
+	Proportional alternate widths	Alternatif orantılı genişlikler
+	Proportional figures	Orantılı rakamlar
+	Proportional widths	Orantılı genişlikler
+	Reset All Axes	Tüm eksenleri sıfırla
+	Right bounds	Sağ sınırlar
+	Ruby notation forms	Ruby gösterim biçimleri
+	Scientific inferiors	Bilimsel alt simgeler
+	Slashed zero	Eğik çizgili sıfır
+	Small capitals	Küçük büyük harfler
+	Stylistic set {n}	Stil seti {n}
+	Stylistic sets	Stil setleri
+	Tabular	Tablo
+	Tabular figures	Tablo rakamları
+	This font has no variable axes.	Bu yazı tipinin değişken ekseni yok.
+	Unicase	Unicase

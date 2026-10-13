@@ -3888,3 +3888,65 @@ curves	Smooth	Згладити
 	There are too many sets: delete one first.	Забагато наборів: спершу видаліть один.
 	set name	назва набору
 	{set} (modified)	{set} (змінено)
+
+# Type Details: OpenType features and variable axes
+	Type Details	Параметри шрифту
+	Type Details…	Параметри шрифту…
+	OpenType features and variable font axes, with a live preview	Функції OpenType та осі варіативних шрифтів із живим переглядом
+	Variable	Варіативний
+	Set optical size automatically	Задавати оптичний розмір автоматично
+	On	Увімк.
+	Additional axes	Додаткові осі
+	Alternate annotation forms	Альтернативні форми анотацій
+	Alternate CJK forms	Альтернативні форми CJK
+	Alternative fractions	Альтернативні дроби
+	Capital spacing	Розрядка великих літер
+	Capitals to petite capitals	Великі літери в малі капітелі petite
+	Capitals to small capitals	Великі літери в капітелі
+	Case	Регістр
+	Case-sensitive forms	Форми для великих літер
+	Character variant {n}	Варіант символу {n}
+	Character variants	Варіанти символів
+	Contextual swash	Контекстні розчерки
+	Denominators	Знаменники
+	Expert forms	Експертні форми
+	Figure spacing	Ширина цифр
+	Figure style	Стиль цифр
+	Full widths	Повна ширина
+	Half widths	Половинна ширина
+	Historical forms	Історичні форми
+	Historical ligatures	Історичні лігатури
+	Horizontal spacing	Горизонтальні інтервали
+	Instance	Екземпляр
+	Italics	Курсив
+	Justification alternates	Альтернативи для вирівнювання
+	Kerning pairs	Кернінгові пари
+	Left bounds	Ліві межі
+	Letter case	Регістр літер
+	Letterforms	Форми літер
+	Lining	Великі
+	Lining figures	Великі цифри
+	Mathematical Greek	Математичні грецькі
+	More features	Інші функції
+	Numbers	Числа
+	Numerators	Чисельники
+	Oldstyle figures	Старовинні цифри
+	Optical bounds	Оптичні межі
+	Optical size	Оптичний розмір
+	Petite capitals	Малі капітелі petite
+	Proportional	Пропорційні
+	Proportional alternate widths	Альтернативна пропорційна ширина
+	Proportional figures	Пропорційні цифри
+	Proportional widths	Пропорційна ширина
+	Reset All Axes	Скинути всі осі
+	Right bounds	Праві межі
+	Ruby notation forms	Форми для рубі
+	Scientific inferiors	Наукові нижні індекси
+	Slashed zero	Перекреслений нуль
+	Small capitals	Капітелі
+	Stylistic set {n}	Стилістичний набір {n}
+	Stylistic sets	Стилістичні набори
+	Tabular	Моноширинні
+	Tabular figures	Моноширинні цифри
+	This font has no variable axes.	Цей шрифт не має варіативних осей.
+	Unicase	Юнікейс

@@ -3889,3 +3889,64 @@ curves	Smooth	Εξομάλυνση
 	There are too many sets: delete one first.	Υπάρχουν πάρα πολλά σύνολα: διαγράψτε πρώτα ένα.
 	set name	όνομα συνόλου
 	{set} (modified)	{set} (τροποποιημένο)
+
+# Type Details: OpenType features and variable axes
+	Type Details	Λεπτομέρειες γραμματοσειράς
+	Type Details…	Λεπτομέρειες γραμματοσειράς…
+	OpenType features and variable font axes, with a live preview	Λειτουργίες OpenType και άξονες μεταβλητής γραμματοσειράς, με ζωντανή προεπισκόπηση
+	Variable	Μεταβλητή
+	Set optical size automatically	Αυτόματη ρύθμιση οπτικού μεγέθους
+	Additional axes	Πρόσθετοι άξονες
+	Alternate annotation forms	Εναλλακτικές μορφές σχολιασμού
+	Alternate CJK forms	Εναλλακτικές μορφές CJK
+	Alternative fractions	Εναλλακτικά κλάσματα
+	Capital spacing	Διάστιχο κεφαλαίων
+	Capitals to petite capitals	Κεφαλαία σε μικρά κεφαλαία petite
+	Capitals to small capitals	Κεφαλαία σε μικρά κεφαλαία
+	Case	Πεζά/κεφαλαία
+	Case-sensitive forms	Μορφές ευαίσθητες σε πεζά/κεφαλαία
+	Character variant {n}	Παραλλαγή χαρακτήρα {n}
+	Character variants	Παραλλαγές χαρακτήρων
+	Contextual swash	Συμφραζόμενα διακοσμητικά
+	Denominators	Παρονομαστές
+	Expert forms	Μορφές expert
+	Figure spacing	Πλάτος αριθμών
+	Figure style	Στυλ αριθμών
+	Full widths	Πλήρη πλάτη
+	Half widths	Μισά πλάτη
+	Historical forms	Ιστορικές μορφές
+	Historical ligatures	Ιστορικά συμπλέγματα
+	Horizontal spacing	Οριζόντια απόσταση
+	Instance	Παρουσία
+	Italics	Πλάγια
+	Justification alternates	Εναλλακτικές για στοίχιση
+	Kerning pairs	Ζεύγη πυκνότητας
+	Left bounds	Αριστερά όρια
+	Letter case	Πεζά/κεφαλαία
+	Letterforms	Μορφές γραμμάτων
+	Lining	Ευθυγραμμισμένα
+	Lining figures	Ευθυγραμμισμένοι αριθμοί
+	Mathematical Greek	Μαθηματικά ελληνικά
+	More features	Περισσότερες λειτουργίες
+	Numbers	Αριθμοί
+	Numerators	Αριθμητές
+	Oldstyle figures	Αριθμοί παλαιού τύπου
+	Optical bounds	Οπτικά όρια
+	Optical size	Οπτικό μέγεθος
+	Petite capitals	Μικρά κεφαλαία petite
+	Proportional	Αναλογικά
+	Proportional alternate widths	Εναλλακτικά αναλογικά πλάτη
+	Proportional figures	Αναλογικοί αριθμοί
+	Proportional widths	Αναλογικά πλάτη
+	Reset All Axes	Επαναφορά όλων των αξόνων
+	Right bounds	Δεξιά όρια
+	Ruby notation forms	Μορφές σημειογραφίας ruby
+	Scientific inferiors	Επιστημονικοί δείκτες
+	Slashed zero	Μηδέν με κάθετο
+	Small capitals	Μικρά κεφαλαία
+	Stylistic set {n}	Στιλιστικό σύνολο {n}
+	Stylistic sets	Στιλιστικά σύνολα
+	Tabular	Πίνακα
+	Tabular figures	Αριθμοί πίνακα
+	This font has no variable axes.	Αυτή η γραμματοσειρά δεν έχει μεταβλητούς άξονες.
+	Unicase	Ενιαία κεφαλαία

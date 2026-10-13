@@ -3979,3 +3979,64 @@ layerLabel	No Color	Sem cor
 	There are too many sets: delete one first.	Há conjuntos demais: exclua um primeiro.
 	set name	nome do conjunto
 	{set} (modified)	{set} (modificado)
+
+# Type Details: OpenType features and variable axes
+	Type Details	Detalhes do texto
+	Type Details…	Detalhes do texto…
+	OpenType features and variable font axes, with a live preview	Recursos OpenType e eixos de fontes variáveis, com visualização ao vivo
+	Variable	Variável
+	Set optical size automatically	Definir tamanho óptico automaticamente
+	Additional axes	Eixos adicionais
+	Alternate annotation forms	Formas de anotação alternativas
+	Alternate CJK forms	Formas CJK alternativas
+	Alternative fractions	Frações alternativas
+	Capital spacing	Espaçamento de maiúsculas
+	Capitals to petite capitals	Maiúsculas para versaletes pequenos
+	Capitals to small capitals	Maiúsculas para versaletes
+	Case	Maiúsculas/minúsculas
+	Case-sensitive forms	Formas sensíveis a maiúsculas
+	Character variant {n}	Variante de caractere {n}
+	Character variants	Variantes de caractere
+	Contextual swash	Floreios contextuais
+	Denominators	Denominadores
+	Expert forms	Formas expert
+	Figure spacing	Espaçamento de algarismos
+	Figure style	Estilo de algarismos
+	Full widths	Larguras inteiras
+	Half widths	Meias larguras
+	Historical forms	Formas históricas
+	Historical ligatures	Ligaduras históricas
+	Horizontal spacing	Espaçamento horizontal
+	Instance	Instância
+	Italics	Itálicos
+	Justification alternates	Alternativas de justificação
+	Kerning pairs	Pares de kerning
+	Left bounds	Limites esquerdos
+	Letter case	Maiúsculas e minúsculas
+	Letterforms	Formas das letras
+	Lining	Alinhados
+	Lining figures	Algarismos alinhados
+	Mathematical Greek	Grego matemático
+	More features	Mais recursos
+	Numbers	Números
+	Numerators	Numeradores
+	Oldstyle figures	Algarismos estilo antigo
+	Optical bounds	Limites ópticos
+	Optical size	Tamanho óptico
+	Petite capitals	Versaletes pequenos
+	Proportional	Proporcionais
+	Proportional alternate widths	Larguras proporcionais alternativas
+	Proportional figures	Algarismos proporcionais
+	Proportional widths	Larguras proporcionais
+	Reset All Axes	Redefinir todos os eixos
+	Right bounds	Limites direitos
+	Ruby notation forms	Formas de notação ruby
+	Scientific inferiors	Inferiores científicos
+	Slashed zero	Zero cortado
+	Small capitals	Versaletes
+	Stylistic set {n}	Conjunto estilístico {n}
+	Stylistic sets	Conjuntos estilísticos
+	Tabular	Tabulares
+	Tabular figures	Algarismos tabulares
+	This font has no variable axes.	Esta fonte não tem eixos variáveis.
+	Unicase	Unicase

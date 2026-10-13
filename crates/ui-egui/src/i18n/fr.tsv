@@ -3194,3 +3194,65 @@ curves	Smooth	Lisser
 	set name	nom du jeu
 	{set} (modified)	{set} (modifié)
 	Random	Aléatoire
+
+# Type Details: OpenType features and variable axes
+	Type Details	Détails du texte
+	Type Details…	Détails du texte…
+	OpenType features and variable font axes, with a live preview	Fonctions OpenType et axes des polices variables, avec aperçu en direct
+	Variable	Variable
+	Set optical size automatically	Définir la taille optique automatiquement
+	On	Activé
+	Additional axes	Axes supplémentaires
+	Alternate annotation forms	Formes d’annotation alternatives
+	Alternate CJK forms	Formes CJC alternatives
+	Alternative fractions	Fractions alternatives
+	Capital spacing	Espacement des capitales
+	Capitals to petite capitals	Capitales en petites capitales réduites
+	Capitals to small capitals	Capitales en petites capitales
+	Case	Casse
+	Case-sensitive forms	Formes sensibles à la casse
+	Character variant {n}	Variante de caractère {n}
+	Character variants	Variantes de caractère
+	Contextual swash	Lettres ornées contextuelles
+	Denominators	Dénominateurs
+	Expert forms	Formes expert
+	Figure spacing	Chasse des chiffres
+	Figure style	Style des chiffres
+	Full widths	Pleine chasse
+	Half widths	Demi-chasse
+	Historical forms	Formes historiques
+	Historical ligatures	Ligatures historiques
+	Horizontal spacing	Espacement horizontal
+	Instance	Instance
+	Italics	Italiques
+	Justification alternates	Variantes de justification
+	Kerning pairs	Paires de crénage
+	Left bounds	Limites gauches
+	Letter case	Casse
+	Letterforms	Formes des lettres
+	Lining	Alignés
+	Lining figures	Chiffres alignés
+	Mathematical Greek	Grec mathématique
+	More features	Autres fonctions
+	Numbers	Nombres
+	Numerators	Numérateurs
+	Oldstyle figures	Chiffres elzéviriens
+	Optical bounds	Limites optiques
+	Optical size	Taille optique
+	Petite capitals	Petites capitales réduites
+	Proportional	Proportionnels
+	Proportional alternate widths	Chasses proportionnelles alternatives
+	Proportional figures	Chiffres proportionnels
+	Proportional widths	Chasses proportionnelles
+	Reset All Axes	Réinitialiser tous les axes
+	Right bounds	Limites droites
+	Ruby notation forms	Formes de notation ruby
+	Scientific inferiors	Inférieurs scientifiques
+	Slashed zero	Zéro barré
+	Small capitals	Petites capitales
+	Stylistic set {n}	Jeu stylistique {n}
+	Stylistic sets	Jeux stylistiques
+	Tabular	Tabulaires
+	Tabular figures	Chiffres tabulaires
+	This font has no variable axes.	Cette police n’a aucun axe variable.
+	Unicase	Unicase

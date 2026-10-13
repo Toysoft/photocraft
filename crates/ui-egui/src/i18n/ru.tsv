@@ -3159,3 +3159,65 @@ curves	Smooth	Сгладить
 	set name	имя набора
 	{set} (modified)	{set} (изменён)
 	Random	Случайно
+
+# Type Details: OpenType features and variable axes
+	Type Details	Параметры шрифта
+	Type Details…	Параметры шрифта…
+	OpenType features and variable font axes, with a live preview	Функции OpenType и оси вариативных шрифтов с живым просмотром
+	Variable	Вариативный
+	Set optical size automatically	Задавать оптический размер автоматически
+	On	Вкл.
+	Additional axes	Дополнительные оси
+	Alternate annotation forms	Альтернативные формы аннотаций
+	Alternate CJK forms	Альтернативные формы CJK
+	Alternative fractions	Альтернативные дроби
+	Capital spacing	Разрядка прописных
+	Capitals to petite capitals	Прописные в малые капители petite
+	Capitals to small capitals	Прописные в капители
+	Case	Регистр
+	Case-sensitive forms	Формы для прописных
+	Character variant {n}	Вариант символа {n}
+	Character variants	Варианты символов
+	Contextual swash	Контекстные росчерки
+	Denominators	Знаменатели
+	Expert forms	Экспертные формы
+	Figure spacing	Ширина цифр
+	Figure style	Стиль цифр
+	Full widths	Полная ширина
+	Half widths	Половинная ширина
+	Historical forms	Исторические формы
+	Historical ligatures	Исторические лигатуры
+	Horizontal spacing	Горизонтальные интервалы
+	Instance	Экземпляр
+	Italics	Курсив
+	Justification alternates	Альтернативы для выключки
+	Kerning pairs	Кернинговые пары
+	Left bounds	Левые границы
+	Letter case	Регистр букв
+	Letterforms	Формы букв
+	Lining	Прописные
+	Lining figures	Прописные цифры
+	Mathematical Greek	Математические греческие
+	More features	Другие функции
+	Numbers	Числа
+	Numerators	Числители
+	Oldstyle figures	Старинные цифры
+	Optical bounds	Оптические границы
+	Optical size	Оптический размер
+	Petite capitals	Малые капители petite
+	Proportional	Пропорциональные
+	Proportional alternate widths	Альтернативная пропорциональная ширина
+	Proportional figures	Пропорциональные цифры
+	Proportional widths	Пропорциональная ширина
+	Reset All Axes	Сбросить все оси
+	Right bounds	Правые границы
+	Ruby notation forms	Формы для руби
+	Scientific inferiors	Научные нижние индексы
+	Slashed zero	Перечёркнутый ноль
+	Small capitals	Капители
+	Stylistic set {n}	Стилистический набор {n}
+	Stylistic sets	Стилистические наборы
+	Tabular	Моноширинные
+	Tabular figures	Моноширинные цифры
+	This font has no variable axes.	У этого шрифта нет вариативных осей.
+	Unicase	Юникейс

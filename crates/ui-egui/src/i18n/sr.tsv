@@ -4262,3 +4262,63 @@ shape	Appearance	Izgled
 	There are too many sets: delete one first.	Previše skupova: prvo obrišite jedan.
 	set name	ime skupa
 	{set} (modified)	{set} (izmenjen)
+
+# Type Details: OpenType features and variable axes
+	Type Details	Detalji teksta
+	Type Details…	Detalji teksta…
+	OpenType features and variable font axes, with a live preview	OpenType funkcije i ose promenljivih fontova, sa pregledom uživo
+	Variable	Promenljivi
+	Set optical size automatically	Automatski podesi optičku veličinu
+	Additional axes	Dodatne ose
+	Alternate annotation forms	Alternativni oblici napomena
+	Alternate CJK forms	Alternativni CJK oblici
+	Alternative fractions	Alternativni razlomci
+	Capital spacing	Razmak velikih slova
+	Capitals to petite capitals	Velika slova u petite kapitale
+	Capitals to small capitals	Velika slova u kapitale
+	Case	Veličina slova
+	Case-sensitive forms	Oblici zavisni od veličine slova
+	Character variant {n}	Varijanta znaka {n}
+	Character variants	Varijante znakova
+	Contextual swash	Kontekstualni kićeni oblici
+	Denominators	Imenioci
+	Expert forms	Ekspertski oblici
+	Figure spacing	Širina cifara
+	Figure style	Stil cifara
+	Full widths	Puna širina
+	Half widths	Pola širine
+	Historical forms	Istorijski oblici
+	Historical ligatures	Istorijske ligature
+	Horizontal spacing	Horizontalni razmak
+	Instance	Instanca
+	Italics	Kurziv
+	Justification alternates	Alternative za poravnanje
+	Kerning pairs	Parovi kerninga
+	Left bounds	Leve granice
+	Letter case	Veličina slova
+	Letterforms	Oblici slova
+	Lining	Poravnate
+	Lining figures	Poravnate cifre
+	Mathematical Greek	Matematički grčki
+	More features	Još funkcija
+	Numerators	Brojioci
+	Oldstyle figures	Starinske cifre
+	Optical bounds	Optičke granice
+	Optical size	Optička veličina
+	Petite capitals	Petite kapitale
+	Proportional	Proporcionalne
+	Proportional alternate widths	Alternativne proporcionalne širine
+	Proportional figures	Proporcionalne cifre
+	Proportional widths	Proporcionalne širine
+	Reset All Axes	Vrati sve ose
+	Right bounds	Desne granice
+	Ruby notation forms	Oblici ruby beleški
+	Scientific inferiors	Naučni donji indeksi
+	Slashed zero	Precrtana nula
+	Small capitals	Kapitale
+	Stylistic set {n}	Stilski skup {n}
+	Stylistic sets	Stilski skupovi
+	Tabular	Tabelarne
+	Tabular figures	Tabelarne cifre
+	This font has no variable axes.	Ovaj font nema promenljive ose.
+	Unicase	Unicase

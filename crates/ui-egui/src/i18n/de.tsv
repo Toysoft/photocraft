@@ -3191,3 +3191,67 @@ curves	Smooth	Glätten
 	There are too many sets: delete one first.	Zu viele Sätze: Löschen Sie zuerst einen.
 	set name	Name des Satzes
 	{set} (modified)	{set} (geändert)
+
+# Type Details: OpenType features and variable axes
+	Type Details	Schriftdetails
+	Type Details…	Schriftdetails…
+	OpenType features and variable font axes, with a live preview	OpenType-Funktionen und Achsen variabler Schriften, mit Live-Vorschau
+	Variable	Variabel
+	Set optical size automatically	Optische Größe automatisch setzen
+	On	Ein
+	Additional axes	Weitere Achsen
+	Alternate annotation forms	Alternative Anmerkungsformen
+	Alternate CJK forms	Alternative CJK-Formen
+	Alternative fractions	Alternative Brüche
+	Capital spacing	Versalausgleich
+	Capitals to petite capitals	Versalien zu Petit Caps
+	Capitals to small capitals	Versalien zu Kapitälchen
+	Case	Groß-/Kleinschreibung
+	Case-sensitive forms	Versalformen
+	Character variant {n}	Zeichenvariante {n}
+	Character variants	Zeichenvarianten
+	Contextual swash	Kontextuelle Swash-Formen
+	Denominators	Nenner
+	Expert forms	Expertenformen
+	Figure spacing	Ziffernbreite
+	Figure style	Ziffernstil
+	Full widths	Volle Breiten
+	Half widths	Halbe Breiten
+	Historical forms	Historische Formen
+	Historical ligatures	Historische Ligaturen
+	Horizontal spacing	Horizontaler Abstand
+	Instance	Instanz
+	Italics	Kursive
+	Justification alternates	Alternativen für Blocksatz
+	Kerning pairs	Unterschneidungspaare
+	Left bounds	Linke Begrenzungen
+	Letter case	Schreibweise
+	Letterforms	Buchstabenformen
+	Lining	Versal
+	Lining figures	Versalziffern
+	Mathematical Greek	Mathematisches Griechisch
+	More features	Weitere Funktionen
+	Numbers	Zahlen
+	Numerators	Zähler
+	Oldstyle figures	Mediävalziffern
+	Optical bounds	Optische Begrenzungen
+	Optical size	Optische Größe
+	Petite capitals	Petit Caps
+	Proportional	Proportional
+	Proportional alternate widths	Alternative proportionale Breiten
+	Proportional figures	Proportionale Ziffern
+	Proportional widths	Proportionale Breiten
+	Reset All Axes	Alle Achsen zurücksetzen
+	Right bounds	Rechte Begrenzungen
+	Ruby notation forms	Ruby-Notationsformen
+	Scientific inferiors	Wissenschaftliche Tiefstellung
+	Slashed zero	Null mit Schrägstrich
+	Small capitals	Kapitälchen
+	Stylistic set {n}	Stilistischer Satz {n}
+	Stylistic sets	Stilistische Sätze
+	Subscript	Tiefgestellt
+	Superscript	Hochgestellt
+	Tabular	Tabellarisch
+	Tabular figures	Tabellenziffern
+	This font has no variable axes.	Diese Schrift hat keine variablen Achsen.
+	Unicase	Unicase

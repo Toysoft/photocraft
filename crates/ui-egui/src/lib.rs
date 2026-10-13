@@ -220,6 +220,7 @@ mod tool_shortcuts;
 pub mod transform_fx;
 pub mod transform_tex;
 pub mod transform_tool;
+mod type_details_ui;
 mod type_font_preview;
 pub mod type_panels_ui;
 pub mod type_tool;
