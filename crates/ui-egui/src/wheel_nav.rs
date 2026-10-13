@@ -96,6 +96,13 @@ pub fn configure(ctx: &Context) {
 /// unless it comes within [`PINCH_GAP`] of a pinch step. `last` is the time of the previous pinch
 /// step; returns the time of the latest one.
 pub fn legacy_pinch_to_zoom(events: &mut [Event], now: f64, last: Option<f64>, notch: f32, speed: f32) -> Option<f64> {
+    ctrl_wheel_to_zoom(events, now, last, notch, speed, false)
+}
+
+/// [`legacy_pinch_to_zoom`], with `always`: every Ctrl + wheel event is a pinch step, whole notches
+/// included. For touchpad drivers that send a pinch as whole notches, which cannot be told from a
+/// mouse wheel with Ctrl held (Preferences › Enhanced Controls › Ctrl Scroll Acts As Pinch, #2463).
+pub fn ctrl_wheel_to_zoom(events: &mut [Event], now: f64, last: Option<f64>, notch: f32, speed: f32, always: bool) -> Option<f64> {
     let ctrl_wheel = |e: &Event| match e {
         Event::MouseWheel { unit: MouseWheelUnit::Line, delta, modifiers, .. } if modifiers.ctrl => Some((*delta, false)),
         // Wayland precision touchpads can use point units. These are already actual
@@ -104,8 +111,9 @@ pub fn legacy_pinch_to_zoom(events: &mut [Event], now: f64, last: Option<f64>, n
         _ => None,
     };
     let fraction = |d: Vec2| d.x.fract() != 0.0 || d.y.fract() != 0.0;
-    let pinching =
-        last.is_some_and(|t| (0.0..PINCH_GAP).contains(&(now - t))) || events.iter().filter_map(ctrl_wheel).any(|(d, high_res)| high_res || fraction(d));
+    let pinching = always
+        || last.is_some_and(|t| (0.0..PINCH_GAP).contains(&(now - t)))
+        || events.iter().filter_map(ctrl_wheel).any(|(d, high_res)| high_res || fraction(d));
     if !pinching {
         return last;
     }
@@ -125,11 +133,12 @@ fn pinch_id() -> Id {
 }
 
 /// [`legacy_pinch_to_zoom`] for one frame's raw input (`raw_input_hook`, Windows and Linux).
-pub fn fold_legacy_pinch(ctx: &Context, raw: &mut RawInput) {
+/// `always`: treat every Ctrl + wheel as a pinch ([`ctrl_wheel_to_zoom`]).
+pub fn fold_legacy_pinch(ctx: &Context, raw: &mut RawInput, always: bool) {
     let (notch, speed) = ctx.options(|o| (o.input_options.line_scroll_speed, o.input_options.scroll_zoom_speed));
     let now = raw.time.unwrap_or_else(|| ctx.input(|i| i.time));
     let last = ctx.data(|d| d.get_temp::<f64>(pinch_id()));
-    let latest = legacy_pinch_to_zoom(&mut raw.events, now, last, notch, speed);
+    let latest = ctrl_wheel_to_zoom(&mut raw.events, now, last, notch, speed, always);
     if latest != last
         && let Some(t) = latest
     {
@@ -211,7 +220,7 @@ mod tests {
             let mut raw =
                 RawInput { time: Some(f64::from(n) / 60.0), predicted_dt: 1.0 / 60.0, events: frames.next().unwrap_or_default(), ..Default::default() };
             if legacy {
-                fold_legacy_pinch(&ctx, &mut raw);
+                fold_legacy_pinch(&ctx, &mut raw, false);
             }
             let mut out = ctx.run_ui(raw, |ui| match read(ui.ctx(), zoom_with_wheel, true) {
                 Some(Wheel::Pan(d)) => pan += d,
@@ -345,6 +354,54 @@ mod tests {
         assert!(pan == Vec2::ZERO && (zoom - (speed * 40.0 * 0.75).exp()).abs() < 1e-4, "the pinch zooms: {pan:?} {zoom}");
         let (pan, zoom) = gesture(vec![vec![wheel(Vec2::new(0.0, 1.0), CTRL)]], false, true);
         assert!(near(pan, Vec2::new(40.0, 0.0)) && zoom == 1.0, "Ctrl + mouse wheel scrolls sideways: {pan:?} {zoom}");
+    }
+
+    /// Old ELAN and Synaptics drivers send a pinch as whole-notch Ctrl + wheel (#2463). With
+    /// Ctrl Scroll Acts As Pinch on, those zoom; with it off they scroll sideways, as before.
+    #[test]
+    fn ctrl_scroll_acts_as_pinch_turns_whole_notches_into_zoom() {
+        let mut notch = [wheel(Vec2::new(0.0, 1.0), CTRL)];
+        assert_eq!(ctrl_wheel_to_zoom(&mut notch, 1.0, None, 40.0, 0.005, true), Some(1.0));
+        assert!(matches!(notch[0], Event::Zoom(f) if (f - (0.005f32 * 40.0).exp()).abs() < 1e-5), "{notch:?}");
+        // Scrolling the other way zooms out.
+        let mut back = [wheel(Vec2::new(0.0, -1.0), CTRL)];
+        ctrl_wheel_to_zoom(&mut back, 2.0, None, 40.0, 0.005, true);
+        assert!(matches!(back[0], Event::Zoom(f) if f < 1.0), "{back:?}");
+        // Off: the same notch stays a wheel event.
+        let mut off = [wheel(Vec2::new(0.0, 1.0), CTRL)];
+        assert_eq!(ctrl_wheel_to_zoom(&mut off, 3.0, None, 40.0, 0.005, false), None);
+        assert!(matches!(off[0], Event::MouseWheel { .. }));
+        // Only Ctrl + wheel is touched: plain, Shift and Alt wheel keep their meaning.
+        for m in [Modifiers::NONE, Modifiers::SHIFT, Modifiers::ALT] {
+            let mut ev = [wheel(Vec2::new(0.0, 1.0), m)];
+            ctrl_wheel_to_zoom(&mut ev, 4.0, None, 40.0, 0.005, true);
+            assert!(matches!(ev[0], Event::MouseWheel { .. }), "{m:?}: {ev:?}");
+        }
+    }
+
+    /// End to end through egui: a whole-notch Ctrl + wheel pans sideways by default and zooms once
+    /// the preference folds it into a pinch.
+    #[test]
+    fn whole_notch_ctrl_wheel_zooms_only_with_the_preference() {
+        let ctrl_notch = || vec![wheel(Vec2::new(0.0, 1.0), CTRL)];
+        let (pan, zoom) = gesture(vec![ctrl_notch()], false, true);
+        assert!(near(pan, Vec2::new(40.0, 0.0)) && zoom == 1.0, "default: sideways scroll: {pan:?} {zoom}");
+
+        let ctx = Context::default();
+        configure(&ctx);
+        let mut zoom = 1.0;
+        for n in 0..10 {
+            let events = if n == 0 { ctrl_notch() } else { Vec::new() };
+            let mut raw = RawInput { time: Some(f64::from(n) / 60.0), predicted_dt: 1.0 / 60.0, events, ..Default::default() };
+            fold_legacy_pinch(&ctx, &mut raw, true);
+            let mut out = ctx.run_ui(raw, |ui| {
+                if let Some(Wheel::Zoom(f)) = read(ui.ctx(), false, true) {
+                    zoom *= f;
+                }
+            });
+            out.textures_delta.clear();
+        }
+        assert!(zoom > 1.0, "with the preference a whole notch zooms in: {zoom}");
     }
 
     #[test]

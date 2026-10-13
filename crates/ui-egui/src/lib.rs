@@ -1743,9 +1743,14 @@ impl eframe::App for PhotocraftApp {
         shortcuts::clipboard_keys(ctx, ctx.text_edit_focused() || self.ui.text_edit.is_some(), raw_input);
         // Windows precision touchpads and some Linux Wayland compositors send pinches
         // as fractional Ctrl + wheel rather than a native Zoom event (#4566).
-        // Leave Ctrl+whole-notch mouse scrolling alone, and honour the pinch preference.
-        if cfg!(any(target_os = "windows", target_os = "linux")) && self.session.prefs().enhanced_controls.zoom_with_trackpad_pinch {
-            wheel_nav::fold_legacy_pinch(ctx, raw_input);
+        // Leave Ctrl+whole-notch mouse scrolling alone (unless the user says their touchpad
+        // sends whole-notch pinches, #2463), and honour the pinch preference.
+        let (pinch, ctrl_is_pinch) = {
+            let p = &self.session.prefs().enhanced_controls;
+            (p.zoom_with_trackpad_pinch, p.ctrl_scroll_acts_as_pinch)
+        };
+        if pinch && (cfg!(any(target_os = "windows", target_os = "linux")) || ctrl_is_pinch) {
+            wheel_nav::fold_legacy_pinch(ctx, raw_input, ctrl_is_pinch);
         }
         raw_input.events.extend(self.take_synthetic_step());
         // A pen held still is no touch screen's press-and-hold right click (stylus.rs).
