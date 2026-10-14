@@ -46,6 +46,8 @@ mod monitor_profile;
 mod photoshop_settings;
 mod screen_color;
 mod services;
+#[cfg(target_os = "linux")]
+mod startup_notify;
 // Windows gets pen pressure from winit (WM_POINTER); the web runner has its own listener.
 #[cfg(any(target_os = "macos", target_os = "linux", test))]
 mod tablet;
@@ -361,7 +363,13 @@ fn main() -> eframe::Result {
     }
     let gpu_note: std::sync::Arc<std::sync::Mutex<Option<String>>> = Default::default();
     // The adapter's real texture limits (egui asks for 8192 px), so big documents stay on the GPU.
-    gpu_startup::configure(&mut options.wgpu_options.wgpu_setup, &plan, os, sentinel.clone(), gpu_note.clone());
+    let present_modes: gpu_startup::SharedPresentModes = Default::default();
+    gpu_startup::configure(&mut options.wgpu_options.wgpu_setup, &plan, os, sentinel.clone(), gpu_note.clone(), present_modes.clone());
+    // Low-latency presentation, so menus keep up with the pointer. Vsync until the surface's present
+    // modes are known; the app switches to mailbox on its first frame where the surface has it.
+    let frame_latency = std::env::var("PHOTOCRAFT_FRAME_LATENCY").ok();
+    let present_mode = std::env::var("PHOTOCRAFT_PRESENT_MODE").ok();
+    options.wgpu_options.surface = gpu_startup::surface_config(frame_latency.as_deref(), present_mode.as_deref(), None);
     let sentinel_ms = t_sentinel.elapsed().as_secs_f64() * 1000.0;
     log::info!("GPU startup: {:?} ({sentinel_ms:.2} ms)", plan);
     let retry_cpu = !safe_gpu && plan.backend != photocraft_engine::prefs::GpuBackend::Cpu;
@@ -397,6 +405,12 @@ fn main() -> eframe::Result {
             mac_window::disable_native_title_drag();
             // Long commands and file opens run as background jobs with progress and Cancel (#210).
             app.background_jobs = std::env::var_os("PHOTOCRAFT_INLINE_JOBS").is_none();
+            let supported = present_modes.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
+            let surface = gpu_startup::surface_config(frame_latency.as_deref(), present_mode.as_deref(), supported.as_deref());
+            log::info!("window surface: {surface:?} (supported: {supported:?})");
+            app.min_frame_ms = gpu_startup::min_frame_ms(&surface);
+            app.perf.gpu_info.present = gpu_startup::describe(&surface);
+            app.surface_config = Some(surface);
             // Displays and their profiles (#569): wait briefly so the first frames already use
             // the right profile; a slower reading is applied when it arrives, and the shell reads
             // again when the displays may have changed.
@@ -485,6 +499,9 @@ fn main() -> eframe::Result {
             let _ = in_window_menus;
             // Where file drags and drops are (winit 0.30 doesn't say).
             app.services.cursor_pos = cursor::service(cc);
+            // End the launcher's busy cursor (X11 startup notification).
+            #[cfg(target_os = "linux")]
+            startup_notify::finish(cc);
             // The custom title bar's undecorated window must stay borderless, or its caption and
             // border offset the content and the pointer on some Windows systems (#2246).
             app.services.window_frame = window_frame::service(cc, custom_titlebar);
