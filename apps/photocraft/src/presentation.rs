@@ -1,9 +1,10 @@
 //! Launch overrides for how frames reach the display, so testers can compare input-to-pixel
-//! latency without a rebuild (#1343): `PHOTOCRAFT_PRESENT_MODE` (`fifo`, `mailbox`, `immediate`,
-//! `autovsync`, `autonovsync`) and `PHOTOCRAFT_FRAME_LATENCY` (`1` to `3`, frames the swap chain may
+//! latency without a rebuild (#1343): `PHOTOCRAFT_PRESENT_MODE` (`fifo`, `autovsync`, or `novsync`,
+//! also spelled `immediate`, `mailbox` or `autonovsync`: no vsync, wgpu's Immediate → Mailbox → Fifo
+//! by what the driver offers) and `PHOTOCRAFT_FRAME_LATENCY` (`1` to `3`, frames the swap chain may
 //! queue). Unset, the platform default applies. A value that isn't one of these is ignored with a
-//! warning in the log, never a failed start. The result is shown in the stroke trace and in
-//! Help › System Info.
+//! warning in the log, never a failed start; a mode the driver may not offer is never requested.
+//! The result is logged at start and shown in the stroke trace.
 
 use eframe::egui_wgpu::SurfaceConfig;
 use eframe::wgpu::PresentMode;
@@ -20,13 +21,14 @@ pub fn parse(mode: Option<&str>, latency: Option<&str>) -> (Overrides, Vec<Strin
     let mut warnings = Vec::new();
     let mode = mode.map(str::trim).filter(|v| !v.is_empty()).and_then(|v| {
         let m = match v.to_ascii_lowercase().as_str() {
+            // Only modes every surface takes: wgpu crashes on an explicit Immediate, Mailbox or
+            // FifoRelaxed the driver doesn't offer (X11/NVIDIA has no Mailbox, #1343). Without
+            // vsync, wgpu picks Immediate, else Mailbox, else Fifo.
             "fifo" | "vsync" => PresentMode::Fifo,
-            "mailbox" => PresentMode::Mailbox,
-            "immediate" => PresentMode::Immediate,
             "autovsync" => PresentMode::AutoVsync,
-            "autonovsync" => PresentMode::AutoNoVsync,
+            "novsync" | "immediate" | "mailbox" | "autonovsync" => PresentMode::AutoNoVsync,
             _ => {
-                warnings.push(format!("PHOTOCRAFT_PRESENT_MODE={v:?} isn't fifo, mailbox, immediate, autovsync or autonovsync; ignored"));
+                warnings.push(format!("PHOTOCRAFT_PRESENT_MODE={v:?} isn't fifo, autovsync or novsync (immediate, mailbox); ignored"));
                 return None;
             }
         };
@@ -86,9 +88,12 @@ mod tests {
         assert_eq!(parse(None, None), (Overrides::default(), vec![]));
         assert_eq!(parse(Some(""), Some(" ")), (Overrides::default(), vec![]));
         let (o, w) = parse(Some(" Mailbox "), Some("1"));
-        assert_eq!((o.mode, o.latency, w.len()), (Some(PresentMode::Mailbox), Some(1), 0));
+        assert_eq!((o.mode, o.latency, w.len()), (Some(PresentMode::AutoNoVsync), Some(1), 0));
         assert_eq!(parse(Some("vsync"), None).0.mode, Some(PresentMode::Fifo));
-        assert_eq!(parse(Some("IMMEDIATE"), None).0.mode, Some(PresentMode::Immediate));
+        // Never a mode a driver may lack (wgpu crashes on it): no vsync falls back by support.
+        for v in ["IMMEDIATE", "mailbox", "novsync", "autonovsync"] {
+            assert_eq!(parse(Some(v), None).0.mode, Some(PresentMode::AutoNoVsync), "{v}");
+        }
         for (mode, latency) in
             [(Some("fast"), None), (None, Some("0")), (None, Some("4")), (None, Some("-1")), (None, Some("one")), (None, Some("99999999999"))]
         {
@@ -105,8 +110,8 @@ mod tests {
         let s = latency_only.apply(default);
         assert_eq!((s.present_mode, s.desired_maximum_frame_latency), (PresentMode::AutoVsync, Some(1)));
         assert_eq!(describe(&s, &latency_only), "autovsync, latency 1 (override)");
-        let mailbox = Overrides { mode: Some(PresentMode::Mailbox), latency: None };
-        assert_eq!(describe(&mailbox.apply(default), &mailbox), "mailbox (override), latency 2");
+        let novsync = Overrides { mode: Some(PresentMode::AutoNoVsync), latency: None };
+        assert_eq!(describe(&novsync.apply(default), &novsync), "autonovsync (override), latency 2");
         let none = SurfaceConfig { present_mode: PresentMode::Fifo, desired_maximum_frame_latency: None };
         assert_eq!(describe(&none, &Overrides::default()), "fifo, latency default");
     }
