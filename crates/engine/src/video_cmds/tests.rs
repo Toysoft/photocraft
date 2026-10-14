@@ -498,3 +498,32 @@ fn grow_duration_never_shrinks_and_keeps_the_work_area_valid() {
     grow_duration(&mut t, 12);
     assert_eq!((t.work_start, t.work_end, t.duration), (0, 6, 12));
 }
+
+#[test]
+fn render_video_rejects_a_timeline_past_the_frame_cap() {
+    // A timeline loaded from a file never goes through `timeline.create`'s cap; Render Video
+    // must apply it instead of sizing a frame vector (or writing files) for it.
+    let mut s = session();
+    let mut doc = (*s.active().unwrap().doc).clone();
+    doc.timeline = Some(Timeline::new(usize::MAX, 30.0));
+    {
+        let st = s.active_mut().unwrap();
+        st.doc = std::sync::Arc::new(doc);
+        st.revision += 1;
+    }
+    let out = tmpdir("cap");
+    let e = s.execute("file.export.renderVideo", json!({"dir": out, "format": "gif"})).unwrap_err();
+    assert!(e.to_string().contains("limited to"), "{e}");
+}
+
+#[test]
+fn render_video_rejects_a_canvas_too_large_for_a_gif() {
+    // `file.new` admits 300 000 per side (see `file_new_at_the_size_limit_...`); the GIF frame
+    // buffer is dense, so the render has to refuse, not abort on the allocation.
+    let mut s = Session::new();
+    s.execute("file.new", json!({"width": 9000, "height": 8000})).unwrap();
+    let out = tmpdir("gifbig");
+    let e = s.execute("file.export.renderVideo", json!({"dir": out, "format": "gif"})).unwrap_err();
+    assert!(e.to_string().contains("too large"), "{e}");
+}
+

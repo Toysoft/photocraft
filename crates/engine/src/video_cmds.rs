@@ -11,6 +11,11 @@ use serde_json::{Value, json};
 use crate::commands::CommandSpec;
 use crate::{EngineError, Result, Session};
 
+/// Largest GIF frame Render Video will stage: the dense RGBA f32 pixels, `gif_frame`'s copy of
+/// the visible pixels and the palette all live at once, so the canvas is limited by a fixed
+/// pixel budget rather than by the document (a 300 000² canvas is 1.4 TB of f32s).
+const MAX_GIF_FRAME_PIXELS: u64 = 64 << 20;
+
 /// Set every video layer's displayed content to its frame at the playhead.
 pub fn sync(doc: &mut Document) {
     let cur = doc.timeline.as_ref().map_or(0, |t| t.current);
@@ -416,6 +421,15 @@ pub fn render_video_with(
     let mut base = (*st.doc).clone();
     store(&mut base);
     let frames = base.timeline.as_ref().map_or(1, |t| t.duration).max(1);
+    // A document loaded from a file carries whatever `duration` its manifest held (the loader
+    // only validates the canvas); a frame vector and one file per frame are sized by it, so
+    // the cap `timeline.create` enforces applies here too.
+    if frames > crate::timeline_cmds::MAX_DURATION {
+        return Err(EngineError::Other(format!(
+            "the timeline is {frames} frames; Render Video is limited to {} frames",
+            crate::timeline_cmds::MAX_DURATION
+        )));
+    }
     let fps = base.timeline.as_ref().map_or(30.0, |t| t.fps).max(1.0);
     let stem = base.name.rsplit_once('.').map_or(base.name.as_str(), |(a, _)| a).to_string();
     let fmt = base.pixel_format();
@@ -429,6 +443,14 @@ pub fn render_video_with(
 
     // Animated GIF: one file, every frame quantised to its own palette.
     if format.eq_ignore_ascii_case("gif") {
+        // The frame buffer below is dense and sized by the canvas: refuse a frame this heavy
+        // instead of aborting the process on its (infallible) allocation.
+        let pixels = (w as u64).saturating_mul(h as u64);
+        if pixels > MAX_GIF_FRAME_PIXELS {
+            return Err(EngineError::Other(format!(
+                "{w} × {h} is too large to render as an animated GIF (limit {MAX_GIF_FRAME_PIXELS} pixels per frame)"
+            )));
+        }
         let delay = (100.0 / fps).round().clamp(1.0, 65535.0) as u16;
         let mut gframes = Vec::with_capacity(frames);
         for f in 0..frames {
