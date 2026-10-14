@@ -400,7 +400,8 @@ pub fn scrub_label(ui: &Ui, label: &Response) -> Response {
     scrub_label_within(ui, label, 24.0)
 }
 
-fn scrub_label_within(ui: &Ui, label: &Response, max_gap: f32) -> Response {
+// Shared headers may put a control between the label and its field.
+pub(crate) fn scrub_label_within(ui: &Ui, label: &Response, max_gap: f32) -> Response {
     // Drag only, not focusable: Tab goes to the value field, not to its label as well.
     let resp = label.interact(Sense::DRAG);
     // Whether a field took this label's drags last frame: only then is it scrubby.
