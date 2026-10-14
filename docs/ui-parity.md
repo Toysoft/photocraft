@@ -1,6 +1,6 @@
 # UI parity: tools, handles, modifiers and feel
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-14 · **Change:** minor (Clip Thumbnails to Layer Bounds; Pen ⇧ 45°; last selected tool restored at launch; Layers panel filter-type dropdown with Kind, Name and Mode, #5048; Free Transform box and marching ants follow the selection, #5297; History: the trash deletes the selected snapshot, rows drag onto the trash, #5324; smart filter reordering by drag; smart object perspective row corrected to done, #426; Free Transform H/V skew fields; toolbar tool shortcuts can be reassigned; ⇧-dragged guides land on ruler ticks; layer and selection keys; tool keys; spring-loaded tool letters; type formatting keys; Pen Auto Add/Delete, #4144; smart filter rows; stale missing-tool rows corrected: Color Replacement, Red Eye and the Add/Delete Anchor Point pair are live toolbar tools, Frame landed; no percentage changed) · **Target:** Adobe Photoshop 2026
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-14 · **Change:** minor (saved preference to collapse layer effects on document open, #5320; estimates unchanged) · **Target:** Adobe Photoshop 2026
 
 How PhotoCraft's direct manipulation compares with Photoshop 2026 (27.11.0): the toolbox, the
 handles and modifier keys of each gesture, nudging, snapping, numeric precision, navigation,
@@ -213,6 +213,7 @@ Paragraph; the rest open as in-app floating windows.
 | Document tabs: overflow, context menu, reorder | done | UI-217-6; middle-click close #2570 |
 | Layers panel: wheel steps blend modes, drop on New/Trash | partial | UI-217-14 |
 | Layers panel filter-type dropdown (Kind, Name, Effect, Mode, Attribute, Color, Smart Object, Selected, Artboard) | partial | Kind, Name and Mode; the other six missing. `layer_filter_ui.rs`, `ui.set {layerFilter}` (#5048) |
+| Layers panel: saved option to collapse effects on document open | done | #5320; `interface.collapseLayerEffectsOnOpen`, engine admission and panel-click tests |
 | Smart filter rows: click selects, drag onto another smart object moves, ⌥-drag copies, drag onto Delete removes | done | `smart_ui.rs`, `layer.smartFilter.transfer` (#4271) |
 | Layers panel: Clip Thumbnails to Layer Bounds (panel menu, `interface.clipThumbnailsToLayerBounds`) | done (2026-10-12) | `layer_thumb_bounds_tests.rs`; #4281. Thumbnail size and the Panel Options dialog to come |
 | Smart filter rows: drag up or down the stack to reorder (a line marks the drop; the bottom filter is applied first) | done | `smart_ui.rs` `reorder_drop`, `layer.smartFilter.move` |
@@ -221,6 +222,7 @@ Paragraph; the rest open as in-app floating windows.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-14 | minor | Layer effects can start collapsed on document open through Preferences > Interface (#5320); individual lists remain expandable; no percentage or estimate changed |
 | 2026-10-13 | minor | Layers panel filter row: Kind is a real dropdown with Kind, Name and Mode filters, drivable by `ui.set {layerFilter}` (#5048); row added as partial |
 | 2026-10-13 | minor | Stale "missing tool" rows corrected against main: Color Replacement (`paint.colorReplacement`), Red Eye (`paint.redEye`) and Add/Delete Anchor Point (the P flyout cycle) are live toolbar tools, so only Art History Brush is missing; no percentage or estimate changed |
 | 2026-10-13 | minor | Smart object perspective (non-affine) corrected to done: #426 landed four-corner placements with PSD round trip; scorecard FILE-215-6 flipped |

@@ -3841,3 +3841,4 @@ curves	Smooth	スムーズ
 	Chisel Hard	チゼルハード
 	Chisel Soft	チゼルソフト
 	Open color-less EXR as ACEScg	色空間のないEXRをACEScgとして開く
+	Collapse Layer Effects on Open	開くときにレイヤー効果を折りたたむ

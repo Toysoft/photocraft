@@ -2759,3 +2759,4 @@ curves	Smooth	平滑
 	Chisel Hard	雕刻清晰
 	Chisel Soft	雕刻柔和
 	Open color-less EXR as ACEScg	將無色彩空間資訊的 EXR 以 ACEScg 開啟
+	Collapse Layer Effects on Open	開啟文件時摺疊圖層效果

@@ -3131,3 +3131,4 @@ curves	Smooth	Сгладить
 	Chisel Hard	Жесткая огранка
 	Chisel Soft	Мягкая огранка
 	Open color-less EXR as ACEScg	Открывать EXR без цветового профиля как ACEScg
+	Collapse Layer Effects on Open	Сворачивать эффекты слоёв при открытии
