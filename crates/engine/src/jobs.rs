@@ -37,7 +37,7 @@ thread_local! {
     static RENDER_AUTHORIZATION: std::cell::Cell<Option<Authorization>> = const { std::cell::Cell::new(None) };
 }
 
-struct AuthorizationScope(Option<Authorization>);
+pub(crate) struct AuthorizationScope(Option<Authorization>);
 
 impl AuthorizationScope {
     fn enter(gate: Option<Authorization>) -> Self {
@@ -49,6 +49,13 @@ impl Drop for AuthorizationScope {
     fn drop(&mut self) {
         RENDER_AUTHORIZATION.with(|current| current.set(self.0));
     }
+}
+
+/// [`AuthorizationScope`] entered with `gate` (or the one already installed, so trusted work on
+/// this thread keeps ambient paths usable). [`Session::edit`] and the job paths use this to carry
+/// the requesting session's authority into every smart-object re-render.
+pub(crate) fn render_authorization_scope(gate: Option<Authorization>) -> AuthorizationScope {
+    AuthorizationScope::enter(gate)
 }
 
 /// Recheck a stored filter's command and parameters before evaluating it or using its cache.

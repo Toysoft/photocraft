@@ -332,28 +332,35 @@ fn mask_mix(base: &Surface, filtered: &Surface, mask: &LayerMask) -> Surface {
     out
 }
 
-/// Runs the smart filter stack on the placed (unfiltered) content.
-pub fn apply_smart_filters(placed: &Surface, sm: &SmartObject, canvas: Rect) -> Surface {
+/// Runs the smart filter stack on the placed (unfiltered) content. A filter the session's
+/// authority denies surfaces its error (the trusted compositor path has no gate installed, so
+/// this reads ambiently only when the caller established one and it refuses).
+pub fn apply_smart_filters(placed: &Surface, sm: &SmartObject, canvas: Rect) -> Result<Surface> {
     if !sm.filters_enabled || !sm.smart_filters.iter().any(|f| f.visible) {
-        return placed.clone();
+        return Ok(placed.clone());
     }
     let mut cur = placed.clone();
     // Edge pixels repeat at the canvas ∪ placed-content edge, as for layer filters.
     let extent = canvas.union(&placed.content_bounds());
     for f in sm.smart_filters.iter().filter(|f| f.visible) {
-        cur = apply_smart_filter(f, &cur, canvas, extent);
+        cur = apply_smart_filter(f, &cur, canvas, extent)?;
     }
-    match sm.filter_mask.as_ref().filter(|m| m.enabled) {
+    Ok(match sm.filter_mask.as_ref().filter(|m| m.enabled) {
         Some(m) => mask_mix(placed, &cur, m),
         None => cur,
-    }
+    })
 }
 
-/// One visible smart filter over `cur`, blended with its blend mode and opacity.
-fn apply_smart_filter(f: &SmartFilter, cur: &Surface, canvas: Rect, extent: Rect) -> Surface {
-    // Unknown ids (e.g. Photoshop filters we don't implement) leave the pixels alone.
-    let Some(out) = crate::filters::apply_filter_to_surface(&f.command, &f.params, cur, canvas, None, extent) else { return cur.clone() };
-    if f.blend == BlendMode::Normal && f.opacity >= 1.0 { out } else { blend_surfaces(cur, &out, f.blend, f.opacity.clamp(0.0, 1.0)) }
+/// One visible smart filter over `cur`, blended with its blend mode and opacity. `Err` when the
+/// requesting session's authority denies the filter's params: callers surface the error instead of
+/// rendering (and caching) unfiltered pixels.
+fn apply_smart_filter(f: &SmartFilter, cur: &Surface, canvas: Rect, extent: Rect) -> Result<Surface> {
+    let out = match crate::filters::apply_filter_to_surface(&f.command, &f.params, cur, canvas, None, extent)? {
+        // Unknown ids (e.g. Photoshop filters we don't implement) leave the pixels alone.
+        Some(out) => out,
+        None => cur.clone(),
+    };
+    if f.blend == BlendMode::Normal && f.opacity >= 1.0 { Ok(out) } else { Ok(blend_surfaces(cur, &out, f.blend, f.opacity.clamp(0.0, 1.0))) }
 }
 
 /// The source placed in document pixels, before any smart filter.
@@ -449,7 +456,7 @@ fn render_in(doc: &Document, sm: &SmartObject, ctx: &JobCtx) -> Result<Option<Su
     for (i, (f, key)) in filters.iter().zip(&keys).enumerate().skip(done) {
         ctx.check()?;
         ctx.progress(i as f32 / n, "");
-        cur = Stage { surface: apply_smart_filter(f, &cur.surface, canvas, cur.extent), extent: cur.extent };
+        cur = Stage { surface: apply_smart_filter(f, &cur.surface, canvas, cur.extent)?, extent: cur.extent };
         stack_cache::put(*key, &cur);
     }
     ctx.progress(1.0, "");
@@ -561,7 +568,7 @@ pub(crate) fn add_smart_filter(doc: &mut Document, id: LayerId, sf: photocraft_d
     }
     let bounds = selection.map(Surface::content_bounds).filter(|b| !b.is_empty()).unwrap_or(canvas);
     let cache = sm.cache.as_ref().ok_or_else(|| other("smart object has no pixels"))?;
-    let out = crate::filters::apply_filter_to_surface(&sf.command, &sf.params, cache, bounds, selection, canvas)
+    let out = crate::filters::apply_filter_to_surface(&sf.command, &sf.params, cache, bounds, selection, canvas)?
         .ok_or_else(|| other(format!("unknown filter {}", sf.command)))?;
     sm.cache = Some(out);
     sm.smart_filters.push(sf);

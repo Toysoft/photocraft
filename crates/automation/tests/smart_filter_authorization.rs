@@ -216,3 +216,46 @@ fn trusted_parameter_edits_still_read_maps_and_luts_after_a_denied_request() {
         assert_eq!(renders[0], renders[2], "trusted rendering remains deterministic");
     }
 }
+
+#[test]
+fn a_refresh_outside_command_execution_surfaces_the_denial_instead_of_rendering_unfiltered() {
+    // link-watch and transform paths re-render through Session::edit, not Session::execute or
+    // jobs::run; the gate must reach them and the denial must not silently pass pixels through
+    // into the process-wide stack cache.
+    for lookup in [false, true] {
+        let f = Fixture::new();
+        let (doc, layer) = f.saved_filter(lookup);
+        let mut h = f.headless();
+        h.open(Path::new("stored.pcraft")).unwrap();
+        let before = h.session.active().unwrap().doc.clone();
+        // Session::edit is the outside-execute mutation path (an edit closure the UI or a
+        // linked-file change runs); the stored filter must be denied there too.
+        assert_denied(h.session.edit("Re-render", |d, _| {
+            match smart_cmds::refresh(d, layer) {
+                Ok(_) => Ok(()),
+                Err(e) => Err(e),
+            }
+        }));
+        assert!(Arc::ptr_eq(&before, &h.session.active().unwrap().doc));
+        // A trusted session (no gate) still renders the same document.
+        let mut trusted = Session::new();
+        trusted.add_document(doc, None);
+        let mut d = (*trusted.active().unwrap().doc).clone();
+        assert!(smart_cmds::refresh(&mut d, layer).is_ok());
+    }
+}
+
+#[test]
+fn an_ambient_map_or_lut_never_renders_unfiltered_pixels_into_the_stack_cache() {
+    // The denial path must fail the render before any stage is cached process-wide.
+    for lookup in [false, true] {
+        let f = Fixture::new();
+        let (doc, layer) = f.saved_filter(lookup);
+        let mut s = Session::new();
+        s.add_document(doc, None);
+        s.authorize = Some(authorize_desktop_engine_step);
+        let bytes = smart_cmds::stack_cache_bytes();
+        assert_denied(s.execute("layer.smartFilter.setVisible", json!({"layer": layer.0, "visible": true})));
+        assert_eq!(bytes, smart_cmds::stack_cache_bytes(), "a denied render cached no stage");
+    }
+}
