@@ -2628,6 +2628,13 @@ pub fn mode_label(doc: &Document) -> &'static str {
     }
 }
 
+/// The Home screen's card is this wide when the canvas has room, and as wide as the canvas when it doesn't.
+const HOME_CARD_WIDTH: f32 = 460.0;
+/// Least width of each of the Home screen's New document and Open buttons.
+const HOME_BUTTON_WIDTH: f32 = 190.0;
+/// Space between the Home screen's two buttons.
+const HOME_BUTTON_GAP: f32 = 12.0;
+
 fn start_screen(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     let t = crate::theme::Tokens::get(ui.ctx());
     let area = ui.available_rect_before_wrap();
@@ -2637,9 +2644,16 @@ fn start_screen(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     let recent: Vec<String> =
         if cfg!(target_arch = "wasm32") || !show_recent { Vec::new() } else { app.ui.recent_files.iter().take(HOME_RECENT).cloned().collect() };
     let recent_h = if recent.is_empty() { 0.0 } else { 34.0 + recent.len() as f32 * HOME_RECENT_ROW };
-    let card = Rect::from_center_size(area.center(), egui::vec2(460.0, 330.0 + recent_h));
+    // A tiling window manager can give the canvas less room than the card wants: shrink the card
+    // to fit, and stack the buttons when they don't fit side by side.
     let new_label = crate::shortcuts::command_label(app, "New document…", "file.new");
     let open_label = crate::shortcuts::command_label(app, "Open…", "file.open");
+    let card_width = HOME_CARD_WIDTH.min(area.width());
+    let button_width = HOME_BUTTON_WIDTH.max(crate::widgets::button_width(ui, &[&new_label, &open_label]));
+    let side_by_side = 2.0 * button_width + HOME_BUTTON_GAP <= card_width;
+    // Stacked buttons take one more row.
+    let stacked_h = if side_by_side { 0.0 } else { 44.0 };
+    let card = Rect::from_center_size(area.center(), egui::vec2(card_width, 330.0 + recent_h + stacked_h));
     ui.scope_builder(egui::UiBuilder::new().max_rect(card), |ui| {
         ui.vertical_centered(|ui| {
             ui.horizontal(|ui| {
@@ -2655,17 +2669,26 @@ fn start_screen(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
             ui.add_space(6.0);
             ui.label(egui::RichText::new(tl!("Create a new document or open an existing file.")).color(t.text_dim).size(14.0));
             ui.add_space(22.0);
-            ui.horizontal(|ui| {
-                ui.add_space(((card.width() - 2.0 * 190.0 - 12.0) / 2.0).max(0.0));
-                ui.spacing_mut().item_spacing.x = 12.0;
-                if crate::widgets::primary_button(ui, &new_label, 190.0).clicked() {
-                    let fields = app.new_document_fields();
-                    app.ui.open_dialog(crate::state::DialogKind::NewDocument, fields);
-                }
-                if crate::widgets::secondary_button(ui, &open_label, 190.0).clicked() {
-                    let _ = app.open_dialog_file();
-                }
-            });
+            let (mut new_clicked, mut open_clicked) = (false, false);
+            if side_by_side {
+                ui.horizontal(|ui| {
+                    ui.add_space(((card.width() - 2.0 * button_width - HOME_BUTTON_GAP) / 2.0).max(0.0));
+                    ui.spacing_mut().item_spacing.x = HOME_BUTTON_GAP;
+                    new_clicked = crate::widgets::primary_button(ui, &new_label, button_width).clicked();
+                    open_clicked = crate::widgets::secondary_button(ui, &open_label, button_width).clicked();
+                });
+            } else {
+                new_clicked = crate::widgets::primary_button(ui, &new_label, button_width).clicked();
+                ui.add_space(HOME_BUTTON_GAP);
+                open_clicked = crate::widgets::secondary_button(ui, &open_label, button_width).clicked();
+            }
+            if new_clicked {
+                let fields = app.new_document_fields();
+                app.ui.open_dialog(crate::state::DialogKind::NewDocument, fields);
+            }
+            if open_clicked {
+                let _ = app.open_dialog_file();
+            }
             ui.add_space(22.0);
             ui.horizontal(|ui| {
                 let msg = start_screen_drop_hint(app);
@@ -6686,6 +6709,33 @@ mod tests {
         let hint = start_screen_drop_hint(&wayland);
         assert!(!hint.contains("Drop"), "{hint}");
         assert!(hint.ends_with(&format!("paste a copied image with {}.", crate::notices::paste_hint(&wayland))), "{hint}");
+    }
+
+    /// A tiling window manager can hand PhotoCraft a canvas narrower than the Home card (460
+    /// points): the two buttons must stay inside the window instead of being clipped at its edges.
+    #[test]
+    fn start_screen_buttons_stay_inside_a_narrow_canvas() {
+        use egui_kittest::kittest::Queryable;
+        for width in [390.0, 420.0, 520.0] {
+            let app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+            let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(width, 760.0)).build_ui_state(
+                |ui, (app, ready): &mut (PhotocraftApp, bool)| {
+                    if *ready {
+                        egui::CentralPanel::default().frame(egui::Frame::NONE).show(ui, |ui| document_area(app, ui));
+                    }
+                },
+                (app, false),
+            );
+            PhotocraftApp::setup_context(&h.ctx, crate::theme::ThemeKind::default());
+            h.state_mut().1 = true;
+            h.run_steps(3);
+            for label in ["New document", "Join us on Discord"] {
+                for node in h.query_all_by_label_contains(label) {
+                    let r = node.rect();
+                    assert!(r.left() >= 0.0 && r.right() <= width, "`{label}` is clipped in a {width}-point-wide canvas: {r:?}");
+                }
+            }
+        }
     }
 
     /// #4382: Interface › Show home recent files off hides the Home screen's list, not the recents.
