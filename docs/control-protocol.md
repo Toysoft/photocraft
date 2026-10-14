@@ -470,6 +470,38 @@ document unmodified; its result is `{document, redeveloped, filter?}`. Cancel cl
 document. `app.open` and other automation opens never show the dialog. The preference
 `rawDefaults.openInCameraRaw` (default `true`) turns it off.
 
+**Several raw files at once.** Two or more raws opened together (dropped on the window except
+onto the canvas, File › Open with several chosen, the command line, the system's open request,
+web pickers), or a raw opened while this dialog shows or waits, share **one** dialog with a
+filmstrip of thumbnails under the preview, as Photoshop's Camera Raw shows several images. Other
+files opened with them open as usual. Only the photo shown is developed (as for one raw); the
+others show the camera's embedded preview, read without decoding the sensor data, until shown.
+Stepping on stops a develop that hasn't finished, and only the last three photos shown besides
+the current one keep their developed documents (older ones develop again when shown).
+Each photo keeps its own settings and demosaic method. A setting changed while several photos
+are selected gets its new value in every selected photo (their other settings stay). The footer
+reads **Open (n)** with n selected; Open opens the selected photos, each developed with its own
+settings, one at a time (in the background in the desktop app; documents shown in the dialog but
+not selected are closed); **Cancel** opens none. Removing a photo only takes it out of the batch:
+its file is never moved or deleted. A raw that opens only as its embedded preview (not developed)
+leaves the strip and opens as an ordinary document; one that fails stays with its error and is
+skipped by Open.
+
+`params.ui.filmstrip` drives it, alone or with `commit` / `cancel` (other `ui` properties go in
+a separate request, and act on the photo then shown): `select: i` (a click: that photo alone,
+shown), `toggle: i` (Ctrl/Cmd-click: in or out of the selection, shown when added; one photo
+always stays selected), `extend: i` (Shift-click: the range from the last click), `selectAll:
+true` (Ctrl/Cmd+A), `next: true` / `previous: true` (→ / ←: the neighbour alone), and `remove: i |
+[i, …] | "selected"` (the × on a thumbnail, its context menu, Delete). Indexes outside the strip
+are errors. Removing every photo is Cancel. While the shown photo is still developing,
+`cameraRaw.params` is null and only `filmstrip`, `commit` and `cancel` are accepted. The reply and
+`ui.inspect.cameraRaw.filmstrip` give `current`, `selected` (indexes) and `items`: `name`, `path`,
+`selected`, `current`, `state` (`waiting` | `opening` | `ready` | `failed`), `error`, `document`
+(index of its document while shown, else null), `edited`, `settings` (non-default settings),
+`demosaic`, `thumbnail` (`[w, h]` or null). Commit replies `{photos: [{name, path, document,
+redeveloped, filter?} | {name, path, job, pending} | {name, error}], queued, pending}`; the rest
+of the photos develop as earlier ones land, and their tabs are then put in filmstrip order.
+
 Imported PSD Camera Raw filters whose processing settings are all mapped or neutral use this
 same editor. `params.__cameraRawPsd` is reserved import/export metadata: preserve it when editing
 stored parameters. Other processing fields or versions remain opaque Photoshop filters. See

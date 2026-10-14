@@ -82,6 +82,27 @@ fn unsupported_raw_falls_back_to_the_embedded_preview() {
     assert!(r.warnings.first().is_some_and(|w| w.contains("Nikon compressed NEF") && w.contains("embedded")), "{:?}", r.warnings);
 }
 
+/// The filmstrip of several raws opening together shows each one's embedded preview, reduced,
+/// without decoding the sensor data.
+#[test]
+fn a_raw_thumbnail_comes_from_its_embedded_preview() {
+    use photocraft_io::raw::preview_thumbnail;
+    let nef = nef_with_preview();
+    let (w, h, px) = preview_thumbnail(&nef, 16).unwrap();
+    assert_eq!((w, h, px.len()), (16, 10, 16 * 10 * 4));
+    assert!(px.chunks(4).all(|p| (i32::from(p[0]) - 180).abs() <= 4 && p[3] == 255), "{:?}", &px[..8]);
+    // Asked for more than the preview has: its own size.
+    assert_eq!(preview_thumbnail(&nef, 100).map(|t| (t.0, t.1)), Some((32, 20)));
+    // No preview, or a truncated file: none, and no panic.
+    let (w, h) = (16, 8);
+    let dng = DngSpec::cfa(w, h, mosaic(&scene(w, h), w, [0, 1, 1, 2], 0, 30000)).build();
+    assert!(preview_thumbnail(&dng, 16).is_none());
+    for n in (0..nef.len()).step_by(11) {
+        let _ = preview_thumbnail(&nef[..n], 16);
+    }
+    assert!(preview_thumbnail(&nef, 0).is_some_and(|t| t.0 >= 1 && t.1 >= 1));
+}
+
 #[test]
 fn unsupported_raw_without_preview_is_a_clear_error() {
     let mut cr3 = vec![0, 0, 0, 24];

@@ -796,3 +796,82 @@ fn lossy_jpeg_rgb_linearraw_decodes() {
         assert!(r.abs_diff(b) >= 64 * 256 - 8 * 256, "channels collapsed at pixel {p}");
     }
 }
+
+#[test]
+fn colour_noise_reduction_cleans_colour_and_keeps_luminance() {
+    // A noisy grey frame (independent Gaussian noise per photosite, like a high-ISO sensor)
+    // with a saturated patch in the middle.
+    let (w, h) = (160, 128);
+    let mut s = 0x2545_F491_4F6C_DD1Du64;
+    let mut gauss = move || {
+        let mut u = || {
+            s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            ((s >> 40) as f64 + 0.5) / (1u64 << 24) as f64
+        };
+        let (a, b) = (u(), u());
+        (-2.0 * a.ln()).sqrt() * (std::f64::consts::TAU * b).cos()
+    };
+    let patch = |x: usize, y: usize| (60..100).contains(&x) && (44..84).contains(&y);
+    let rgb: Vec<[f32; 3]> = (0..w * h).map(|i| if patch(i % w, i / w) { [0.35, 0.12, 0.1] } else { [0.2, 0.2, 0.2] }).collect();
+    let clean = mosaic(&rgb, w, [0, 1, 1, 2], 0, 65535);
+    let noisy: Vec<u16> =
+        clean.iter().map(|&v| (f64::from(v) + 0.04 * 65535.0 * (f64::from(v) / 65535.0).sqrt() * gauss()).clamp(0.0, 65535.0) as u16).collect();
+    let mut spec = DngSpec::cfa(w, h, noisy);
+    spec.as_shot_neutral = Some([1.0; 3]);
+    let b = spec.build();
+    let off = develop(&b, &DevelopOptions::default()).unwrap();
+    let on = develop(&b, &DevelopOptions { color_noise: ColorNoise { amount: 25.0, ..Default::default() }, ..Default::default() }).unwrap();
+    assert_eq!(
+        off.rgb,
+        develop(&b, &DevelopOptions { color_noise: ColorNoise { amount: 0.0, detail: 100.0, smoothness: 0.0 }, ..Default::default() }).unwrap().rgb
+    );
+    let lin = |d: &Developed, i: usize, c: usize| (f64::from(d.rgb[i * 3 + c]) / 65535.0).powf(1.8);
+    let yw = prophoto_luminance().map(f64::from);
+    let lum = |d: &Developed, i: usize| (0..3).map(|c| yw[c] * lin(d, i, c)).sum::<f64>();
+    let interior = |i: usize| {
+        let (x, y) = (i % w, i / w);
+        (8..w - 8).contains(&x) && (8..h - 8).contains(&y)
+    };
+    // Luminance: unchanged up to the 16-bit rounding.
+    for i in (0..w * h).filter(|&i| interior(i)) {
+        let (a, b) = (lum(&off, i), lum(&on, i));
+        assert!((a - b).abs() <= 2e-3 * a.max(0.01), "pixel {i}: luminance {a} -> {b}");
+    }
+    // Colour noise of the grey area drops several times.
+    let grey: Vec<usize> = (0..w * h).filter(|&i| interior(i) && !patch(i % w, i / w) && (i % w < 50 || i % w > 110)).collect();
+    let spread = |d: &Developed| {
+        let v: Vec<f64> = grey.iter().map(|&i| lin(d, i, 0) - lin(d, i, 1)).collect();
+        let m = v.iter().sum::<f64>() / v.len() as f64;
+        (v.iter().map(|x| (x - m) * (x - m)).sum::<f64>() / v.len() as f64).sqrt()
+    };
+    assert!(spread(&on) < spread(&off) / 4.0, "colour noise {} -> {}", spread(&off), spread(&on));
+    // The patch keeps its colour up to its edge.
+    let red = |d: &Developed, x: usize| (50..78).map(|y| lin(d, y * w + x, 0) / lin(d, y * w + x, 1)).sum::<f64>() / 28.0;
+    for x in [62, 80, 97] {
+        assert!(red(&on, x) > 0.9 * red(&off, x), "column {x}: {} vs {}", red(&on, x), red(&off, x));
+    }
+    assert!(red(&on, 56) < 1.15, "grey beside the patch stays grey: {}", red(&on, 56));
+}
+
+#[test]
+fn colour_noise_reduction_does_not_depend_on_exposure() {
+    let (w, h) = (96, 80);
+    let mut s = 0x9E37_79B9u64;
+    let data: Vec<u16> = mosaic(&vec![[0.1f32, 0.1, 0.1]; w * h], w, [0, 1, 1, 2], 0, 65535)
+        .iter()
+        .map(|&v| {
+            s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            (f64::from(v) * (0.85 + 0.3 * ((s >> 40) as f64 / (1u64 << 24) as f64))) as u16
+        })
+        .collect();
+    let mut spec = DngSpec::cfa(w, h, data);
+    spec.as_shot_neutral = Some([1.0; 3]);
+    let b = spec.build();
+    let nr = ColorNoise { amount: 50.0, ..Default::default() };
+    let at = |exposure: f64| develop(&b, &DevelopOptions { exposure, color_noise: nr, ..Default::default() }).unwrap().rgb;
+    let (base, up) = (at(0.0), at(1.0));
+    let lin = |v: u16| (f64::from(v) / 65535.0).powf(1.8);
+    for (a, b) in base.iter().zip(&up) {
+        assert!((lin(*b) - 2.0 * lin(*a)).abs() < 2e-3, "{} x 2 vs {}", lin(*a), lin(*b));
+    }
+}

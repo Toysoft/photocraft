@@ -125,8 +125,13 @@ impl PhotocraftApp {
     /// are resolved against the working directory so the remembered path stays valid. The files
     /// open in name order ([`natural_cmp`]: `File_2` before `File_10`), and their tabs keep that
     /// order however long each takes to open in the background (#3248). Returns how many opened.
+    /// Two or more camera raws among them (or any while a filmstrip shows) open in one Camera Raw
+    /// dialog with a filmstrip instead (`camera_raw_batch`), counted here as opened.
     pub fn open_paths(&mut self, paths: &[String]) -> usize {
-        let mut paths: Vec<String> = paths.iter().map(|p| absolute(p)).collect();
+        let paths: Vec<String> = paths.iter().map(|p| absolute(p)).collect();
+        let total = paths.len();
+        let mut paths = crate::camera_raw_batch::take_paths(self, paths);
+        let raws = total - paths.len();
         paths.sort_by(|a, b| natural_cmp(a, b));
         let batch = crate::jobs_ui::begin_batch(self);
         let mut opened = 0;
@@ -147,7 +152,7 @@ impl PhotocraftApp {
             }
         }
         crate::jobs_ui::end_batch(&mut self.jobs);
-        opened
+        opened + raws
     }
 
     /// Show "Couldn't open <name>: <error>" as an error (status bar + notice).
@@ -167,6 +172,8 @@ impl PhotocraftApp {
     /// Files dropped onto the window at `at` (the pointer, when known), routed by [`DropTarget`].
     /// Preset files (brushes, gradients) always go to their libraries. Native drops carry an
     /// absolute path, read in bounded reads (#375) rather than egui's whole-file read.
+    /// Two or more camera raws among them (or any while a filmstrip shows) open in one Camera Raw
+    /// dialog with a filmstrip (`camera_raw_batch`), unless dropped on the canvas.
     pub fn open_dropped(&mut self, ctx: &egui::Context, files: Vec<egui::DroppedFileHandle>, at: Option<egui::Pos2>) {
         let target = self.drop_target(ctx, at);
         let mut slot = match target {
@@ -179,6 +186,7 @@ impl PhotocraftApp {
         if target == DropTarget::Canvas && self.ui.transform.is_some() && files.iter().any(|f| !crate::preset_files_ui::is_preset_file(&dropped_name(f))) {
             crate::transform_tool::commit(self);
         }
+        let files = if target == DropTarget::Canvas { files } else { self.drop_raws(files) };
         for f in files {
             let name = dropped_name(&f);
             if target == DropTarget::Canvas && !crate::preset_files_ui::is_preset_file(&name) {
@@ -191,6 +199,32 @@ impl PhotocraftApp {
                 Err(e) => self.open_failed(&name, &e),
             }
         }
+    }
+
+    /// The raw files of a drop go to the filmstrip when it takes them (read now when they have no
+    /// path); the other files are returned.
+    fn drop_raws(&mut self, files: Vec<egui::DroppedFileHandle>) -> Vec<egui::DroppedFileHandle> {
+        let raws = files.iter().filter(|f| crate::camera_raw_batch::is_raw_name(&dropped_name(f))).count();
+        if !crate::camera_raw_batch::takes(self, raws) {
+            return files;
+        }
+        let mut rest = Vec::new();
+        let mut sources = Vec::new();
+        for f in files {
+            let name = dropped_name(&f);
+            if !crate::camera_raw_batch::is_raw_name(&name) {
+                rest.push(f);
+            } else if f.path().is_absolute() {
+                sources.push(crate::camera_raw_batch::Source::Path(f.path().to_string_lossy().to_string()));
+            } else {
+                match crate::read_dropped(&*f) {
+                    Ok(bytes) => sources.push(crate::camera_raw_batch::Source::Bytes(name, std::sync::Arc::new(bytes))),
+                    Err(e) => self.open_failed(&name, &e),
+                }
+            }
+        }
+        crate::camera_raw_batch::add(self, sources);
+        rest
     }
 
     /// Where a drop at `at` lands. Over a window or dialog it's neither the canvas nor the tabs.

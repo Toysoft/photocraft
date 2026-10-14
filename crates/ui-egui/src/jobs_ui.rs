@@ -458,6 +458,10 @@ fn on_event(app: &mut PhotocraftApp, ctx: &egui::Context, e: JobEvent) {
     if crate::camera_raw_ui::on_redevelop_event(app, &e) {
         return;
     }
+    // A filmstrip photo developed to be shown (several raws opening together).
+    if crate::camera_raw_batch::on_job_event(app, &e) {
+        return;
+    }
     if e.command == SAVE_JOB
         && let Some(i) = app.jobs.saves.iter().position(|s| s.job == e.id)
     {

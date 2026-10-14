@@ -62,7 +62,7 @@ pub fn can_transform(app: &PhotocraftApp) -> bool {
         && app.ui.transform.is_none()
         && app.ui.text_edit.is_none()
         && app.ui.dialogs.is_empty()
-        && app.camera_raw.is_none()
+        && !crate::camera_raw_ui::is_open(app)
         && app.distort.liquify.is_none()
         && app.distort.puppet.is_none()
         && app.distort.perspective.is_none()

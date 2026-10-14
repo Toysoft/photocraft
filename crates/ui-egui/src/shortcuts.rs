@@ -331,7 +331,7 @@ pub fn handle(app: &mut PhotocraftApp, ctx: &egui::Context) {
     // Camera Raw is modal like Photoshop's filter dialog: no application shortcut (Save, Undo,
     // tools) runs beneath it, and it handles its own keys (Y, U, O, S). Unlike the other dialogs
     // below it covers the canvas, so canvas zoom keys are blocked too.
-    if app.camera_raw.is_some() {
+    if crate::camera_raw_ui::is_open(app) {
         return;
     }
     // An open menu owns the keyboard (arrows, ↩, Esc), like a native menu; so does an open
