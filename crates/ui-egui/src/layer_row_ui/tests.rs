@@ -33,7 +33,7 @@ fn busy() -> photocraft_engine::Session {
         if let Some(p) = prev {
             s.execute("layer.select", json!({"layer": p, "mode": "toggle"})).unwrap();
         }
-        let g = s.execute("layer.groupLayers", json!({"name": format!("{LONG} group {depth}")})).unwrap()["layer"].as_u64().unwrap();
+        let g = s.execute("layer.groupLayers", json!({"name": format!("{LONG} group {depth}"), "expanded": true})).unwrap()["layer"].as_u64().unwrap();
         s.execute("layer.layerStyle.dropShadow", json!({"layer": g})).unwrap();
         prev = Some(g);
     }

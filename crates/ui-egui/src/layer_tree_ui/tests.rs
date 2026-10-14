@@ -14,8 +14,8 @@ fn layered() -> photocraft_engine::Session {
     let mut s = photocraft_engine::Session::new();
     s.execute("file.new", json!({"width": 64, "height": 48})).unwrap();
     s.execute("layer.new.layer", json!({"name": "deep"})).unwrap();
-    let inner = s.execute("layer.groupLayers", json!({"name": "inner"})).unwrap()["layer"].as_u64().unwrap();
-    let outer = s.execute("layer.groupLayers", json!({"layer": inner, "name": "outer"})).unwrap()["layer"].as_u64().unwrap();
+    let inner = s.execute("layer.groupLayers", json!({"name": "inner", "expanded": true})).unwrap()["layer"].as_u64().unwrap();
+    let outer = s.execute("layer.groupLayers", json!({"layer": inner, "name": "outer", "expanded": true})).unwrap()["layer"].as_u64().unwrap();
     s.execute("layer.select", json!({"layer": inner})).unwrap();
     // `layer.new.layer` lands above the active layer, inside `outer`.
     s.execute("layer.new.layer", json!({"name": "in-outer"})).unwrap();

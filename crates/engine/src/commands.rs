@@ -592,7 +592,7 @@ fn build() -> Vec<CommandSpec> {
             "Group Layers",
             ["Layer"],
             Some("Cmd+G"),
-            r##"{"layer":id?,"name":str?} (no layer: every selected layer)"##,
+            r##"{"layer":id?,"name":str?,"expanded":bool=false} (no layer: every selected layer)"##,
             has_layer,
             crate::layer_multi_cmds::group_layers
         ),
