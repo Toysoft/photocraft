@@ -127,13 +127,15 @@ opt-level = "z"
 [profile.wasm-release.package.naga]
 opt-level = "z"
 
-# Pixel processing keeps its speed-oriented optimization level.
+# Pixel processing keeps its speed-oriented optimization level. Colour management is the
+# exception: its transforms are built once and cached (`transform::cached`), so "z" costs little
+# runtime and keeps the wasm under the 24 MiB gate (measured −42 KB vs opt-level 3).
 [profile.wasm-release.package.photocraft-raster]
 opt-level = 3
 [profile.wasm-release.package.photocraft-color]
 opt-level = 3
 [profile.wasm-release.package.photocraft-cms]
-opt-level = 3
+opt-level = "z"
 [profile.wasm-release.package.photocraft-compose]
 opt-level = 3
 [profile.wasm-release.package.photocraft-algo]
