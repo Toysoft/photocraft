@@ -22,6 +22,8 @@ use crate::canvas::{ToolEvent, ViewXform};
 #[derive(Default)]
 pub struct Distort {
     pub liquify: Option<crate::liquify_ui::LiquifyDialog>,
+    /// Edit › Content-Aware Fill… (caf_ui).
+    pub caf: Option<crate::caf_ui::CafWorkspace>,
     pub puppet: Option<crate::puppet_ui::PuppetSession>,
     pub perspective: Option<crate::perspective_ui::PerspSession>,
     pub vanishing: Option<crate::vp_ui::VpSession>,
@@ -31,13 +33,14 @@ pub struct Distort {
 
 impl Distort {
     pub fn active(&self) -> bool {
-        self.liquify.is_some() || self.puppet.is_some() || self.perspective.is_some() || self.vanishing.is_some()
+        self.liquify.is_some() || self.caf.is_some() || self.puppet.is_some() || self.perspective.is_some() || self.vanishing.is_some()
     }
 
     /// Short description for `ui.inspect`.
     pub fn describe(&self) -> Value {
         json!({
             "liquify": self.liquify.as_ref().map(|d| d.describe()),
+            "contentAwareFill": self.caf.as_ref().map(|d| d.describe()),
             "puppet": self.puppet.as_ref().map(|p| p.describe()),
             "perspective": self.perspective.as_ref().map(|p| p.describe()),
             "vanishingPoint": self.vanishing.as_ref().map(|v| v.describe()),
@@ -109,6 +112,7 @@ pub fn menu(app: &mut PhotocraftApp, ctx: &egui::Context, id: &str, params: &Val
         "filter.filterGallery" if ui.is_some() && app.distort.gallery.is_some() => Some(crate::gallery_ui::control(app, ui.unwrap_or(&Value::Null))),
         "filter.liquify" if empty => Some(crate::liquify_ui::open(app, ctx).map(|_| json!({"liquify": app.distort.describe()["liquify"]}))),
         "filter.liquify" if ui.is_some() && app.distort.liquify.is_some() => Some(crate::liquify_ui::control(app, ui.unwrap_or(&Value::Null))),
+        "edit.contentAwareFill" if ui.is_some() && app.distort.caf.is_some() => Some(crate::caf_ui::control(app, ui.unwrap_or(&Value::Null))),
         "edit.puppetWarp" | "layer.smartObjects.puppetWarp" if empty => {
             Some(crate::puppet_ui::begin(app, ctx, id).map(|_| json!({"puppet": app.distort.describe()["puppet"]})))
         }
@@ -129,6 +133,10 @@ pub fn menu(app: &mut PhotocraftApp, ctx: &egui::Context, id: &str, params: &Val
 
 /// Pointer events (document coordinates) while a mode is active. True when consumed.
 pub fn pointer(app: &mut PhotocraftApp, ev: ToolEvent, mods: egui::Modifiers) -> bool {
+    if app.distort.caf.is_some() {
+        crate::caf_ui::pointer(app, ev, mods);
+        return true;
+    }
     if app.distort.liquify.is_some() {
         crate::liquify_ui::pointer(app, ev, mods);
         return true;
@@ -159,6 +167,14 @@ pub fn keys(app: &mut PhotocraftApp, ctx: &egui::Context) -> bool {
             let _ = crate::gallery_ui::commit(app);
         } else if esc(ctx) {
             app.distort.gallery = None;
+        }
+        return true;
+    }
+    if app.distort.caf.is_some() {
+        if enter(ctx) {
+            crate::caf_ui::commit(app);
+        } else if esc(ctx) {
+            crate::caf_ui::cancel(app);
         }
         return true;
     }
@@ -236,8 +252,11 @@ pub fn options_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) -> bool {
     false
 }
 
-/// Full-window dialogs (Liquify, Filter Gallery).
+/// Full-window dialogs (Liquify, Content-Aware Fill, Filter Gallery).
 pub fn show(app: &mut PhotocraftApp, ctx: &egui::Context) {
+    if app.distort.caf.is_some() {
+        crate::caf_ui::show(app, ctx);
+    }
     if app.distort.gallery.is_some() {
         crate::gallery_ui::show(app, ctx);
     }

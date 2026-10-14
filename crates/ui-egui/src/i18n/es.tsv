@@ -2711,6 +2711,26 @@ cameraData	Lens	Objetivo
 	Snap to Origin	Ajustar a origen
 	Search settings…	Buscar ajustes…
 	No matching settings	No hay ajustes que coincidan
+# Edit › Content-Aware Fill workspace
+	Sampling Brush Tool	Herramienta Pincel de muestreo
+	Sampling Area Overlay	Superposición del área de muestreo
+	Show Sampling Area	Mostrar área de muestreo
+	Indicates	Indica
+	Sampling Area	Área de muestreo
+	Excluded Area	Área excluida
+	Sampling Area Options	Opciones del área de muestreo
+	Rectangular	Rectangular
+	Fill Settings	Ajustes de relleno
+	Rotation Adaptation	Adaptación de rotación
+	Very High	Muy alta
+	High	Alta
+	Low	Baja
+	Full	Completa
+	Mirror	Reflejar
+	Output Settings	Ajustes de salida
+	Output To	Salida a
+	Duplicate Layer	Duplicar capa
+	Contract	Contraer
 	Loading fonts…	Cargando fuentes…
 	Tool	Herramienta
 	Simulate Pressure	Simular presión
