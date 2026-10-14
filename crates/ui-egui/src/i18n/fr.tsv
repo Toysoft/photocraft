@@ -3194,3 +3194,8 @@ curves	Smooth	Lisser
 	set name	nom du jeu
 	{set} (modified)	{set} (modifié)
 	Random	Aléatoire
+
+# DDS Options (#1327)
+	DDS Options	Options DDS
+	Compression	Compression
+	Generate Mipmaps	Générer les mipmaps

@@ -46,7 +46,7 @@ pub fn bits_param(params: &serde_json::Value, cmd: &str) -> Result<Option<TgaBit
 /// A prompt already waiting is never replaced (a shortcut can still reach Save a Copy).
 pub fn park(app: &mut PhotocraftApp, path: String, copy: bool, record: &'static str) -> Result<(), String> {
     if app.save_options_open() {
-        return Err("Answer TIFF or Targa Options before starting another save".into());
+        return Err("Answer the TIFF, Targa or DDS Options before starting another save".into());
     }
     let doc = app.active_doc_id()?;
     let bits = app.session.active().map_or(TgaBits::Bits24, |st| photocraft_io::tga_default_bits(&st.doc));
