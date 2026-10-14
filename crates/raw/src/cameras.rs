@@ -19,11 +19,44 @@
 //! after it; the black point follows the frame's darkest tones ([`crate::tone`]). Median
 //! luminance difference to Camera Raw: 0.04 stop (0.29 with the camera-JPEG curve).
 //!
+//! **Camera Standard** ([`standard`]): the camera's own rendering, as its JPEGs with Picture
+//! Control Standard (contrast, brightness, saturation and hue at 0) and Active D-Lighting off
+//! show it. For the D4: 209 of the owner's NEFs with such JPEGs, one third of them held out of the
+//! fit; on 4 × 4 means of smooth areas, matrix and per-channel curve in linear ProPhoto, no black
+//! point. Mean ΔE76 to the camera JPEG on the held-out frames: 3.1 (4.2 with the Camera Raw-like
+//! profile above, which is darker in the midtones). The camera keeps more colour in its
+//! highlights than one curve per channel can (chroma 0.78 of the camera's above L 80).
+//!
 //! Bodies whose full profile is not measured yet can still get their measured image area — the
 //! same alignment method, see [`IMAGE_AREAS`] — so their frames crop like the camera's JPEG.
 
 use crate::color::{Calibration, ColorInfo, IDENTITY, Mat3};
+use crate::look::{CameraLook, ToneCurve};
 use crate::sensor::{Rect, Sensor};
+
+/// The D4's Camera Standard: white-balanced camera → XYZ D50 and the tone curve (linear-light
+/// knots, per channel in linear ProPhoto), see the module notes.
+const D4_STANDARD_TO_XYZ: Mat3 = [[0.635835, 0.210239, 0.118146], [0.310871, 0.719303, -0.0301738], [0.0713651, -0.1955, 0.949345]];
+const D4_STANDARD_TONE: [[f64; 2]; 18] = [
+    [0.0, 0.0],
+    [0.00390625, 0.00242325],
+    [0.00552427, 0.00306022],
+    [0.0078125, 0.00426501],
+    [0.0110485, 0.00693267],
+    [0.015625, 0.0130977],
+    [0.0220971, 0.025927],
+    [0.03125, 0.0491444],
+    [0.0441942, 0.0872395],
+    [0.0625, 0.144152],
+    [0.0883883, 0.223092],
+    [0.125, 0.330823],
+    [0.176777, 0.46649],
+    [0.25, 0.626302],
+    [0.353553, 0.78401],
+    [0.5, 0.901667],
+    [std::f64::consts::FRAC_1_SQRT_2, 0.973001],
+    [1.0, 1.0],
+];
 
 const D4_FORWARD: Mat3 = [[0.639454, 0.260359, 0.0643991], [0.273094, 0.796492, -0.0695779], [0.00965321, -0.131427, 0.94699]];
 /// A third of the 0.1th percentile of the luminance, as Camera Raw renders D4 NEFs by default.
@@ -100,6 +133,9 @@ struct Profile {
     tone: &'static [[f32; 2]],
     /// Camera Raw's adaptive black-point factor ([`Sensor::black_point`]).
     black_point: f32,
+    /// The camera's own rendering ([`standard`]): matrix, tone curve, and its mean ΔE to the
+    /// camera's JPEGs with it and with the profile's default rendering.
+    standard: Option<(Mat3, &'static [[f64; 2]], f64, f64)>,
 }
 
 const PROFILES: &[Profile] = &[Profile {
@@ -113,6 +149,7 @@ const PROFILES: &[Profile] = &[Profile {
     color: D4_COLOR,
     tone: &D4_TONE,
     black_point: D4_BLACK_POINT,
+    standard: Some((D4_STANDARD_TO_XYZ, &D4_STANDARD_TONE, 3.1, 4.2)),
 }];
 
 /// A measured image area of a body whose remaining profile has not been
@@ -165,6 +202,19 @@ pub(crate) fn apply(s: &mut Sensor) {
     };
     s.tone_curve = p.tone.to_vec();
     s.black_point = p.black_point;
+}
+
+/// The name of a camera's measured own rendering.
+pub const CAMERA_STANDARD: &str = "Camera Standard";
+
+/// The camera's own rendering of `s` (its JPEGs' look with the default picture style) when it is
+/// measured: develop with it as [`crate::DevelopOptions::camera_look`] and no black point
+/// ([`Sensor::black_point`] 0), as the camera renders. `None` for other cameras.
+pub(crate) fn standard(s: &Sensor) -> Option<CameraLook> {
+    let (make, model) = (s.make.as_deref()?.trim(), s.model.as_deref()?.trim());
+    let p = PROFILES.iter().find(|p| make == p.make && model == p.model && (s.width, s.height) == p.size)?;
+    let (to_xyz, knots, delta_e, delta_e_fallback) = p.standard?;
+    Some(CameraLook { to_xyz, tone: ToneCurve::new(knots), delta_e, delta_e_fallback, name: Some(CAMERA_STANDARD) })
 }
 
 #[cfg(test)]
@@ -282,5 +332,28 @@ mod tests {
         assert!((n[0] - 0.9642).abs() < 1e-3 && (n[1] - 1.0).abs() < 1e-3 && (n[2] - 0.8252).abs() < 1e-3, "{n:?}");
         assert!(D4_TONE.windows(2).all(|w| w[1][0] > w[0][0] && w[1][1] >= w[0][1]), "increasing");
         assert_eq!(D4_TONE.last().map(|p| (p[0], p[1])), Some((1.0, 1.0)));
+    }
+
+    #[test]
+    fn the_d4_has_a_camera_standard_and_other_bodies_do_not() {
+        let mut s = nef("NIKON D4", 4992, 3292);
+        apply(&mut s);
+        let look = standard(&s).expect("the D4's Camera Standard");
+        assert!(look.is_usable());
+        assert_eq!(look.name, Some(CAMERA_STANDARD));
+        // Neutral stays neutral (white to D50 white), and the curve runs from black to white.
+        let n = mat_apply(&look.to_xyz, [1.0; 3]);
+        assert!((n[0] - 0.9642).abs() < 2e-3 && (n[1] - 1.0).abs() < 2e-3 && (n[2] - 0.8252).abs() < 2e-3, "{n:?}");
+        let tone = look.tone.as_ref().expect("a tone curve");
+        assert_eq!((tone.eval(0.0), tone.eval(1.0)), (0.0, 1.0));
+        // The camera renders brighter midtones than Camera Raw's default for the D4.
+        let mid = 0.18;
+        let camera_raw = crate::develop::tone(&D4_TONE, mid as f32);
+        assert!(tone.eval(mid) > f64::from(camera_raw), "{} vs {camera_raw}", tone.eval(mid));
+        for (model, w, h) in [("NIKON D4S", 4992, 3292), ("NIKON D4", 2496, 1646), ("NIKON D800", 7424, 4924)] {
+            let mut s = nef(model, w, h);
+            apply(&mut s);
+            assert!(standard(&s).is_none(), "{model} {w}x{h}");
+        }
     }
 }

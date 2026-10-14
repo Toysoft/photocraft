@@ -145,8 +145,12 @@ pub struct CameraLook {
     pub tone: Option<ToneCurve>,
     /// Mean CIE76 ΔE against the camera JPEG on the fit grid, with this look.
     pub delta_e: f64,
-    /// The same with the neutral fallback (no calibration, no tone curve).
+    /// The same with the neutral fallback (no calibration, no tone curve), or, for a camera's
+    /// measured rendering, with the camera profile's default one.
     pub delta_e_fallback: f64,
+    /// A camera's measured rendering ([`crate::camera_standard`]): its name. `None`: fitted to
+    /// the file's own JPEG ([`fit_look`]).
+    pub name: Option<&'static str>,
 }
 
 impl CameraLook {
@@ -158,7 +162,16 @@ impl CameraLook {
 
     /// The note `develop` reports.
     pub(crate) fn note(&self) -> String {
-        format!("colour fitted to the camera's embedded JPEG (mean ΔE {:.1} against it; {:.1} with the neutral fallback)", self.delta_e, self.delta_e_fallback)
+        match self.name {
+            Some(name) => format!(
+                "{name}: the camera's own rendering, measured against its JPEGs (mean ΔE {:.1}; {:.1} with the default profile)",
+                self.delta_e, self.delta_e_fallback
+            ),
+            None => format!(
+                "colour fitted to the camera's embedded JPEG (mean ΔE {:.1} against it; {:.1} with the neutral fallback)",
+                self.delta_e, self.delta_e_fallback
+            ),
+        }
     }
 }
 
@@ -571,7 +584,7 @@ fn fit_cells(cells: &[Cell], gw: usize, baseline_exposure: f64) -> Result<Camera
     let delta_e_fallback = mean_delta_e(&lab, &all_refs, &fallback, None);
 
     let to_xyz = color::mul(&color::rgb_to_xyz(color::ROMM, color::D50_XY), &rel);
-    let look = CameraLook { to_xyz, tone: Some(tone), delta_e, delta_e_fallback };
+    let look = CameraLook { to_xyz, tone: Some(tone), delta_e, delta_e_fallback, name: None };
     if !look.is_usable() {
         return reject("the fitted matrix is not usable");
     }
@@ -988,7 +1001,7 @@ mod tests {
     fn develop_ignores_an_unusable_look() {
         let (s, _) = shot(64, 48, &true_matrix());
         for to_xyz in [[[f64::NAN; 3]; 3], [[0.0; 3]; 3], [[1e9, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]] {
-            let look = CameraLook { to_xyz, tone: None, delta_e: 1.0, delta_e_fallback: 2.0 };
+            let look = CameraLook { to_xyz, tone: None, delta_e: 1.0, delta_e_fallback: 2.0, name: None };
             let d = crate::develop_sensor(&s, &DevelopOptions { camera_look: Some(look), ..wb_opts() }).unwrap();
             assert!(d.warnings.iter().any(|w| w.contains("not usable")), "{:?}", d.warnings);
             assert!(d.warnings.iter().any(|w| w.contains("sRGB primaries")), "{:?}", d.warnings);

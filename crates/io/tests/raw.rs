@@ -324,3 +324,26 @@ fn a_re_develop_keeps_the_fitted_look() {
     let mid = curve.iter().find(|k| k[0] >= 0.18).unwrap();
     assert!(mid[1] > mid[0], "{mid:?}");
 }
+
+/// Camera Standard is the default profile; a file with its own calibration (a DNG) develops the
+/// same with either profile, and the import note names the profile.
+#[test]
+fn profiles_name_themselves_and_a_calibrated_dng_keeps_its_colour() {
+    use photocraft_io::raw::{Demosaic, RawProfile, import_raw_as};
+    use photocraft_raw::testgen::{DngSpec, mosaic, scene};
+    let (w, h) = (48, 32);
+    let mut spec = DngSpec::cfa(w, h, mosaic(&scene(w, h), w, [0, 1, 1, 2], 0, 30000));
+    spec.as_shot_neutral = Some([0.5, 1.0, 0.7]);
+    let dng = spec.build();
+    let standard = import_raw_as("a.dng", &dng, Demosaic::default(), RawProfile::CameraStandard).unwrap();
+    let color = import_raw_as("a.dng", &dng, Demosaic::default(), RawProfile::Color).unwrap();
+    let default = photocraft_io::raw::import_raw("a.dng", &dng).unwrap();
+    let px = |r: &photocraft_io::ImportResult| r.document.layers.first().and_then(|l| l.surface()).map(|s| s.read_region(r.document.bounds()));
+    assert_eq!(px(&standard), px(&color), "the DNG's own calibration either way");
+    assert_eq!(px(&standard), px(&default));
+    assert!(standard.warnings.iter().any(|w| w.contains("Camera Standard")), "{:?}", standard.warnings);
+    assert!(color.warnings.iter().any(|w| w.contains("Color profile")), "{:?}", color.warnings);
+    assert_eq!(RawProfile::from_id("cameraStandard"), Some(RawProfile::CameraStandard));
+    assert_eq!(RawProfile::from_id(RawProfile::Color.id()), Some(RawProfile::Color));
+    assert_eq!(RawProfile::from_id("vivid"), None);
+}
