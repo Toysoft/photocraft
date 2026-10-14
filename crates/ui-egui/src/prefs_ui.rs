@@ -1079,6 +1079,11 @@ fn humanize(key: &str) -> String {
     if key == "nudgeBundlePauseMs" {
         return "Nudge Bundle Pause (ms)".into();
     }
+    // Performance: presentation without vsync (#1343); like the other graphics settings, it
+    // takes effect when the window next opens.
+    if key == "lowLatencyDrawing" {
+        return "Low-Latency Drawing (vsync off, applies at next launch)".into();
+    }
     let mut s = String::new();
     for (i, ch) in key.chars().enumerate() {
         if i == 0 {

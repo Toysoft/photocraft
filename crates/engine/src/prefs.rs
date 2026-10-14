@@ -529,6 +529,11 @@ pub struct Performance {
     /// sliders while they drag) render on a reduced copy: fast, but blocky when zoomed in. Off:
     /// they render at full resolution.
     pub low_resolution_previews: bool,
+    /// Low-latency drawing (applies at next launch): frames reach the screen without waiting for
+    /// vsync, so a stroke follows the pen about 50 ms sooner (the swap chain's wait, #1343). Where
+    /// the driver can't replace queued frames (Mailbox), the canvas may tear while it changes.
+    /// Off: vsync, smooth but late.
+    pub low_latency_drawing: bool,
     /// Linux display server (applies at next launch; see [`LinuxDisplayServer`]).
     pub linux_display_server: LinuxDisplayServer,
     /// Memory budget of the layer-effect cache, in MB.
@@ -560,6 +565,7 @@ impl Default for Performance {
             rendering_mode: None,
             gpu_backend: GpuBackend::Auto,
             low_resolution_previews: true,
+            low_latency_drawing: true,
             linux_display_server: LinuxDisplayServer::Auto,
             effect_cache_mb: 768,
             legacy_compositing: false,

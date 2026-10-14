@@ -3181,3 +3181,4 @@ curves	Smooth	Haluskan
 	set name	nama set
 	{set} (modified)	{set} (diubah)
 	Random	Acak
+	Low-Latency Drawing (vsync off, applies at next launch)	Menggambar latensi rendah (tanpa vsync, berlaku saat peluncuran berikutnya)

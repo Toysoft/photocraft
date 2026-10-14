@@ -3979,3 +3979,4 @@ layerLabel	No Color	Sem cor
 	There are too many sets: delete one first.	Há conjuntos demais: exclua um primeiro.
 	set name	nome do conjunto
 	{set} (modified)	{set} (modificado)
+	Low-Latency Drawing (vsync off, applies at next launch)	Desenho de baixa latência (sem sincronização vertical, aplicado na próxima inicialização)

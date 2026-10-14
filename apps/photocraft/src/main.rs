@@ -365,7 +365,12 @@ fn main() -> eframe::Result {
     let gpu_note: std::sync::Arc<std::sync::Mutex<Option<String>>> = Default::default();
     // The adapter's real texture limits (egui asks for 8192 px), so big documents stay on the GPU.
     gpu_startup::configure(&mut options.wgpu_options.wgpu_setup, &plan, os, sentinel.clone(), gpu_note.clone());
-    // Testers' present mode and frame latency overrides (#1343), after the platform default.
+    // Preferences › Performance › Low-Latency Drawing (#1343): without vsync a stroke shows about
+    // 50 ms sooner; wgpu picks Immediate, else Mailbox, else Fifo by what the driver offers.
+    if gpu_startup::read_low_latency(services::prefs_file().as_deref()) {
+        options.wgpu_options.surface.present_mode = eframe::wgpu::PresentMode::AutoNoVsync;
+    }
+    // Testers' present mode and frame latency overrides (#1343), after the preference.
     let present = presentation::Overrides::from_env();
     options.wgpu_options.surface = present.apply(options.wgpu_options.surface);
     let present_desc = presentation::describe(&options.wgpu_options.surface, &present);
