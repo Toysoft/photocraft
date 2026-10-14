@@ -33,9 +33,14 @@ the existing Camera Raw command.
 
 ## Preview limits
 
-The fast proxy remains available while native refinement is pending. Processed
-full-resolution refinement is limited to 64 megapixels because the existing
-engine allocates full-image temporary buffers. Larger sources and failed
+The fast proxy remains available while native refinement is pending. At 1:1 and
+above the refinement keeps the whole frame's raw stage (with its slider-independent
+maps) and tonal stages between edits, and develops the colour stages, Detail and
+Effects only for the visible crop plus a quarter of the view on every side (grown
+by Detail's reach, so the result is the full develop's). A colour edit therefore
+redoes only that part; an edit or a pan the running develop no longer covers makes
+it give up at its next stage. Processed full-resolution refinement is limited to
+64 megapixels because the kept stages are full-image buffers. Larger sources and failed
 refinement retain the proxy with a notification. Only the visible crop is uploaded
 to the GPU (at most 16,777,216 pixels and the device texture-size limit).
 The initial preview domain is bounded to 512 megapixels, including sparse content

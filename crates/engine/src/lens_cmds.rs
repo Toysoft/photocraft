@@ -15,6 +15,7 @@ use photocraft_color::{ColorMode, SampleType};
 use photocraft_doc::{Document, Layer, LayerContent, LayerId, SmartFilter};
 use photocraft_geom::Rect;
 use photocraft_raster::{Surface, from_rgba_into};
+use rayon::prelude::*;
 use serde_json::{Value, json};
 
 use crate::commands::CommandSpec;
@@ -140,13 +141,11 @@ pub fn raw_params(cmd: &str, p: &Value) -> Result<CameraRaw> {
         m.remove("layer");
     }
     let mut cr: CameraRaw = serde_json::from_value(q).map_err(|e| bad(cmd, format!("bad params: {e}")))?;
-    // The noise stages turn these straight into a guided-filter radius and a
-    // blur sigma, so an out-of-range value means unbounded work. Clamp to the
-    // documented 0..100 (part of #707).
-    cr.noise_luminance = cr.noise_luminance.clamp(0.0, 100.0);
-    cr.noise_luminance_detail = cr.noise_luminance_detail.clamp(0.0, 100.0);
-    cr.noise_color = cr.noise_color.clamp(0.0, 100.0);
-    cr.noise_color_detail = cr.noise_color_detail.clamp(0.0, 100.0);
+    // The noise stages turn their amounts straight into a guided-filter radius and a blur
+    // sigma (an out-of-range value meant unbounded work, #707); the Optics, Geometry and
+    // Calibration stages turn theirs into radii, warps and hue windows. Clamp them all to their
+    // documented ranges (non-finite values become the defaults, inverted hue ranges are sorted).
+    cr.clamp_ranges();
     Ok(cr)
 }
 
@@ -163,12 +162,6 @@ fn raw_pixels(area: Rect) -> Option<usize> {
     (n <= MAX_RAW_PIXELS).then(|| usize::try_from(n).ok()).flatten()
 }
 
-fn rgba_region(surf: &Surface, area: Rect, len: usize) -> Vec<[f32; 4]> {
-    let mut v = vec![[0.0f32; 4]; len];
-    surf.read_rgba_into(area, &mut v);
-    v
-}
-
 /// Camera Raw on a surface over `area` (RGB / Gray via RGBA, at the surface's depth).
 ///
 /// An area above [`MAX_RAW_PIXELS`] is returned unchanged: the command rejects it with an
@@ -181,22 +174,49 @@ pub fn camera_raw_surface(surf: &Surface, area: Rect, p: &CameraRaw) -> Surface 
     let Some(len) = raw_pixels(area) else { return surf.clone() };
     let fmt = surf.format();
     let (w, h) = (area.width() as usize, area.height() as usize);
-    let mut px = rgba_region(surf, area, len);
+    let mut px = vec![[0.0f32; 4]; len];
+    // Read in strips of rows, in parallel (the same reads as one `read_rgba_into`).
+    px.par_chunks_mut(w * 64).enumerate().for_each(|(k, chunk)| {
+        let y0 = area.y0 + (k * 64) as i32;
+        surf.read_rgba_into(Rect::new(area.x0, y0, area.x1, y0 + (chunk.len() / w) as i32), chunk);
+    });
     camera_raw::develop(&mut px, w, h, p, fmt.sample == SampleType::F32);
-    let n = fmt.channels();
-    let orig = surf.read_region(area);
-    let mut data = vec![0.0f32; w * h * n];
-    for (i, (q, o)) in px.iter().zip(data.chunks_exact_mut(n)).enumerate() {
-        from_rgba_into(&fmt, *q, o);
-        if fmt.alpha {
-            // Alpha is untouched.
-            o[n - 1] = orig[i * n + n - 1];
-        }
-    }
     let mut out = surf.clone();
-    out.write_region(area, &data);
+    write_rgba_keeping_alpha(&mut out, area, &px);
     out.prune();
     out
+}
+
+/// Writes straight RGBA `px` (row-major over `area`) into `surf` in its format, alpha untouched:
+/// what `from_rgba_into` and one `write_region` over `area` give, tile by tile in parallel (each
+/// tile through `write_region` on a surface of its own, so the samples are the same bits).
+fn write_rgba_keeping_alpha(surf: &mut Surface, area: Rect, px: &[[f32; 4]]) {
+    let fmt = surf.format();
+    let n = fmt.channels();
+    let w = area.width() as usize;
+    let tiles = surf.take_tiles(area);
+    let done: Vec<_> = tiles
+        .into_par_iter()
+        .flat_map_iter(|(tc, tile)| {
+            let tr = tc.rect().intersect(&area);
+            let mut one = Surface::new(fmt);
+            one.put_tiles([(tc, tile)]);
+            let mut data = one.read_region(tr);
+            let tw = tr.width() as usize;
+            for (j, o) in data.chunks_exact_mut(n).enumerate() {
+                let (x, y) = ((tr.x0 - area.x0) as usize + j % tw, (tr.y0 - area.y0) as usize + j / tw);
+                let alpha = if fmt.alpha { o.get(n - 1).copied() } else { None };
+                from_rgba_into(&fmt, px[y * w + x], o);
+                if let (Some(a), Some(v)) = (alpha, o.get_mut(n - 1)) {
+                    // Alpha is untouched.
+                    *v = a;
+                }
+            }
+            one.write_region(tr, &data);
+            one.take_tiles(tc.rect())
+        })
+        .collect();
+    surf.put_tiles(done);
 }
 
 /// Mixes `new` over `old` by the selection's coverage.
@@ -463,7 +483,7 @@ pub fn specs() -> Vec<CommandSpec> {
             label: "Camera Raw Filter…",
             menu: &["Filter"],
             shortcut: Some("Cmd+Shift+A"),
-            params: r##"{"temperature":-100..100=0,"tint":-100..100=0,"exposure":-5..5=0,"contrast":-100..100=0,"highlights":-100..100=0,"shadows":-100..100=0,"whites":-100..100=0,"blacks":-100..100=0,"texture":-100..100=0,"clarity":-100..100=0,"dehaze":-100..100=0,"vibrance":-100..100=0,"saturation":-100..100=0,"curveHighlights":-100..100=0,"curveLights":-100..100=0,"curveDarks":-100..100=0,"curveShadows":-100..100=0,"curveSplits":[25,50,75],"pointCurve":[[in,out]],"pointCurveRed":[[in,out]],"pointCurveGreen":[[in,out]],"pointCurveBlue":[[in,out]],"hslHue":[8],"hslSat":[8],"hslLum":[8],"gradeShadows":{"hue":deg,"sat":0..100,"lum":-100..100},"gradeMidtones":{},"gradeHighlights":{},"gradeGlobal":{},"gradeBlending":0..100=50,"gradeBalance":-100..100=0,"sharpenAmount":0..150=0,"sharpenRadius":0.5..3=1,"sharpenDetail":0..100=25,"sharpenMasking":0..100=0,"noiseLuminance":0..100=0,"noiseLuminanceDetail":0..100=50,"noiseColor":0..100=0,"noiseColorDetail":0..100=50,"grainAmount":0..100=0,"grainSize":0..100=25,"grainRoughness":0..100=50,"vignetteAmount":-100..100=0,"vignetteMidpoint":0..100=50,"vignetteRoundness":-100..100=0,"vignetteFeather":0..100=50,"vignetteHighlights":0..100=0,"vignetteStyle":"highlightPriority|colorPriority|paintOverlay","seed":u32=0}"##,
+            params: r##"{"temperature":-100..100=0,"tint":-100..100=0,"exposure":-5..5=0,"contrast":-100..100=0,"highlights":-100..100=0,"shadows":-100..100=0,"whites":-100..100=0,"blacks":-100..100=0,"texture":-100..100=0,"clarity":-100..100=0,"dehaze":-100..100=0,"vibrance":-100..100=0,"saturation":-100..100=0,"curveHighlights":-100..100=0,"curveLights":-100..100=0,"curveDarks":-100..100=0,"curveShadows":-100..100=0,"curveSplits":[25,50,75],"pointCurve":[[in,out]],"pointCurveRed":[[in,out]],"pointCurveGreen":[[in,out]],"pointCurveBlue":[[in,out]],"hslHue":[8],"hslSat":[8],"hslLum":[8],"gradeShadows":{"hue":deg,"sat":0..100,"lum":-100..100},"gradeMidtones":{},"gradeHighlights":{},"gradeGlobal":{},"gradeBlending":0..100=50,"gradeBalance":-100..100=0,"sharpenAmount":0..150=0,"sharpenRadius":0.5..3=1,"sharpenDetail":0..100=25,"sharpenMasking":0..100=0,"noiseLuminance":0..100=0,"noiseLuminanceDetail":0..100=50,"noiseColor":0..100=0,"noiseColorDetail":0..100=50,"grainAmount":0..100=0,"grainSize":0..100=25,"grainRoughness":0..100=50,"vignetteAmount":-100..100=0,"vignetteMidpoint":0..100=50,"vignetteRoundness":-100..100=0,"vignetteFeather":0..100=50,"vignetteHighlights":0..100=0,"vignetteStyle":"highlightPriority|colorPriority|paintOverlay","monochrome":bool=false,"grayMixer":[8 × -100..100],"whiteBalance":"asShot|auto|custom","curveRefineSaturation":0..100=100,"noiseLuminanceContrast":0..100=0,"noiseColorSmoothness":0..100=50,"lensDistortion":-100..100=0,"lensVignette":-100..100=0,"lensVignetteMidpoint":0..100=50,"defringePurpleAmount":0..20=0,"defringePurpleHue":[30,70],"defringeGreenAmount":0..20=0,"defringeGreenHue":[40,60],"upright":"off|auto|level|vertical|full|guided","transformVertical":-100..100=0,"transformHorizontal":-100..100=0,"transformRotate":-10..10=0,"transformAspect":-100..100=0,"transformScale":50..150=100,"transformOffsetX":-100..100=0,"transformOffsetY":-100..100=0,"processVersion":u32=6,"calibrationShadowsTint":-100..100=0,"calibrationRedHue":-100..100=0,"calibrationRedSat":-100..100=0,"calibrationGreenHue":-100..100=0,"calibrationGreenSat":-100..100=0,"calibrationBlueHue":-100..100=0,"calibrationBlueSat":-100..100=0,"seed":u32=0}"##,
             enabled: raw_enabled,
             run: camera_raw_cmd,
             journal: true,
@@ -484,6 +504,42 @@ pub fn specs() -> Vec<CommandSpec> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The tile-parallel write leaves the surface `from_rgba_into` and one `write_region` over the
+    /// area leave, alpha untouched, for every depth and model, over an area cutting tiles.
+    #[test]
+    fn camera_raw_writes_tiles_as_one_write_region() {
+        use photocraft_color::PixelFormat;
+        let area = Rect::new(-37, 100, 600, 389);
+        let (w, h) = (area.width() as usize, area.height() as usize);
+        let px: Vec<[f32; 4]> =
+            (0..w * h).map(|i| [((i * 7) % 1013) as f32 / 900.0 - 0.05, ((i * 13) % 997) as f32 / 997.0, ((i / w) % 37) as f32 / 36.0, 0.3]).collect();
+        for fmt in [
+            PixelFormat { mode: ColorMode::Rgb, sample: SampleType::U16, alpha: false },
+            PixelFormat::RGBA8,
+            PixelFormat { mode: ColorMode::Grayscale, sample: SampleType::U16, alpha: true },
+            PixelFormat { mode: ColorMode::Rgb, sample: SampleType::F32, alpha: true },
+            PixelFormat { mode: ColorMode::Cmyk, sample: SampleType::U8, alpha: false },
+        ] {
+            let mut surf = Surface::new(fmt);
+            let n = fmt.channels();
+            let seed: Vec<f32> = (0..700 * 400 * n).map(|i| ((i * 31) % 255) as f32 / 254.0).collect();
+            surf.write_region(Rect::new(-50, 90, 650, 490), &seed);
+            let mut expected = surf.clone();
+            let orig = surf.read_region(area);
+            let mut data = vec![0.0f32; w * h * n];
+            for (i, (q, o)) in px.iter().zip(data.chunks_exact_mut(n)).enumerate() {
+                from_rgba_into(&fmt, *q, o);
+                if fmt.alpha {
+                    o[n - 1] = orig[i * n + n - 1];
+                }
+            }
+            expected.write_region(area, &data);
+            let mut got = surf.clone();
+            write_rgba_keeping_alpha(&mut got, area, &px);
+            assert!(got == expected, "{fmt:?}");
+        }
+    }
 
     fn session(depth: u32) -> Session {
         let mut s = Session::new();
@@ -602,6 +658,45 @@ mod tests {
         s.execute(RAW, json!({"saturation": -100})).unwrap();
         let p = active_px(&s, 60, 40);
         assert!((p[0] - p[2]).abs() < 0.01, "{p:?}");
+    }
+
+    #[test]
+    fn camera_raw_clamps_and_renders_the_optics_geometry_and_calibration_controls() {
+        let p = raw_params(
+            RAW,
+            &json!({
+                "lensDistortion": 1e30, "transformScale": -1e30, "transformRotate": 45, "transformOffsetY": 1e39,
+                "defringePurpleHue": [90, 10], "defringeGreenAmount": 1e9, "grayMixer": [1e30, -1e30, 0, 0, 0, 0, 0, 0],
+                "calibrationRedHue": -1e30, "curveRefineSaturation": -5, "noiseColorSmoothness": 1e9, "lensVignetteMidpoint": -3
+            }),
+        )
+        .unwrap();
+        assert_eq!((p.lens_distortion, p.transform_scale, p.transform_rotate, p.transform_offset_y), (100.0, 50.0, 10.0, 0.0));
+        assert_eq!((p.defringe_purple_hue, p.defringe_green_amount, p.gray_mixer[0], p.gray_mixer[1]), ([10.0, 90.0], 20.0, 100.0, -100.0));
+        assert_eq!((p.calibration_red_hue, p.curve_refine_saturation, p.noise_color_smoothness, p.lens_vignette_midpoint), (-100.0, 0.0, 100.0, 0.0));
+        for depth in [8, 16, 32] {
+            let mut s = session(depth);
+            let r = s
+                .execute(
+                    RAW,
+                    json!({"monochrome": true, "grayMixer": [-40, 0, 0, 0, 0, 30, 0, 0], "transformRotate": 4, "transformVertical": -20, "lensDistortion": 15,
+                           "lensVignette": 40, "defringePurpleAmount": 8, "calibrationBlueSat": 40, "calibrationShadowsTint": 20, "upright": "auto"}),
+                )
+                .unwrap();
+            assert_eq!(r["identity"], false);
+            for (x, y) in [(0, 0), (60, 40), (119, 79), (5, 70)] {
+                let q = active_px(&s, x, y);
+                assert!(q[..3].iter().all(|v| v.is_finite()) && q[0] == q[1] && q[1] == q[2] && q[3] == 1.0, "depth {depth} ({x},{y}): {q:?}");
+            }
+        }
+        // Placeholders alone are an identity; unknown modes are refused.
+        let mut s = session(8);
+        let before = active_px(&s, 60, 40);
+        let r = s.execute(RAW, json!({"upright": "full", "whiteBalance": "custom", "processVersion": 5})).unwrap();
+        assert_eq!(r["identity"], true);
+        assert_eq!(active_px(&s, 60, 40), before);
+        assert!(s.execute(RAW, json!({"upright": "sideways"})).is_err());
+        assert!(s.execute(RAW, json!({"whiteBalance": "tungsten"})).is_err());
     }
 
     #[test]

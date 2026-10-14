@@ -44,6 +44,7 @@
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
 mod cameras;
+mod chroma;
 mod color;
 mod cr2;
 mod cr3;
@@ -71,15 +72,16 @@ mod tone;
 #[cfg(feature = "testgen")]
 pub mod testgen;
 
+pub use crate::chroma::{ChromaNoise, ColorNoise, NoiseFrame, estimate_color_noise, prophoto_luminance, reduce_color_noise};
 pub use crate::color::{Calibration, ColorInfo, Mat3};
 pub use crate::demosaic::Demosaic;
-pub use crate::develop::{DevelopOptions, Developed, RawInfo, WhiteBalance, develop_sensor};
+pub use crate::develop::{DevelopOptions, Developed, RawInfo, WhiteBalance, develop_sensor, white_balance_of};
 pub use crate::error::RawError;
 pub use crate::look::{CameraLook, LookRejected, PROXY_EDGE, Reference, ToneCurve, fit_look};
 pub use crate::opcodes::GainMap;
 pub use crate::preview::{Preview, PreviewColorSpace, embedded_preview, embedded_preview_color_space, embedded_previews};
 pub use crate::sensor::{BlackLevels, Cfa, Rect, Sensor};
-pub use crate::tone::{Tone, retone};
+pub use crate::tone::{RetoneCache, StageNoise, Tone, linear_of_codes, retone, retone_with};
 
 use crate::tiff::{Tiff, tag};
 
