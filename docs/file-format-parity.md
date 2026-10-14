@@ -31,7 +31,7 @@ missing (gap G10; JPEG XL read landed 2026-10-10, #2789). Remaining: 300–500 h
 | BMP | R/W | yes | yes | 8-bit; palette BMPs open in Indexed Color mode |
 | WebP | R/W | yes | yes | Lossless and our own lossy VP8 encoder; ICC/EXIF/XMP; Save keeps an opened file lossy (at its quality) or lossless (#2399) |
 | AVIF | R/W | no (#463) | optional feature, off by default | |
-| JPEG XL | R/W | yes (pure-Rust jxl-oxide, `jxl` feature, on in releases; #2789) | no | 8/16-bit, 16/32-bit float, gray/RGB + alpha, ICC, EXIF/XMP, orientation, first frame of animations, recompressed JPEGs; CMYK refused; fixtures from libjxl's cjxl (`crates/codecs/tests/jxl.rs`) |
+| JPEG XL | R/W | yes (pure-Rust jxl-oxide, `jxl` feature, on in desktop releases, not in the web build; #2789) | no | 8/16-bit, 16/32-bit float, gray/RGB + alpha, ICC, EXIF/XMP, orientation, first frame of animations, recompressed JPEGs; CMYK refused; fixtures from libjxl's cjxl (`crates/codecs/tests/jxl.rs`) |
 | HEIF/HEIC | R/W(HEIF) | yes (pure-Rust heic-rs, `heif` feature, on in releases) | no | 8/16-bit |
 | OpenEXR | R/W | yes | yes | f16/f32; deep EXR and Cryptomatte readers (`corpus/exr`) |
 | Radiance HDR | R/W | yes | yes | f32 |
