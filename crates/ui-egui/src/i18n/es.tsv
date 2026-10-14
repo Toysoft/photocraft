@@ -827,6 +827,9 @@
 	Add Layer Mask	Añadir máscara de capa
 	Add Stop	Añadir parada
 	Add a layer style	Añadir un estilo de capa
+	Move effect up	Subir efecto
+	Move effect down	Bajar efecto
+	Delete effect	Eliminar efecto
 	Add a mask  (from the selection; {key} inverts)	Añadir una máscara  (de la selección; {key} la invierte)
 	Add an adjustment	Añadir un ajuste
 	Add disk	Añadir disco
@@ -2431,6 +2434,8 @@ cameraRaw	Amount	Cantidad
 	Add to Swatches	Añadir a muestras
 # Layer Style > Blending Options (Advanced Blending)
 	Blend If:	Fusionar si:
+	Current Layer:	Capa actual:
+	Underlying Layer:	Capa subyacente:
 	Channels:	Canales:
 	Knockout	Extraer
 	Apply At Canvas Bounds	Aplicar en los límites del lienzo
