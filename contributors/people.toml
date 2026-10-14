@@ -158,3 +158,6 @@ sync_github_name = false
 [people.yeniufuklar-com]
 real_name = "Ufuk Efe"
 sync_github_name = true
+
+[people.TaylorBurke]
+sync_github_name = true
