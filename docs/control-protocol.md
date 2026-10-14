@@ -1,5 +1,6 @@
 # Control protocol
 
+- `ui.set {"strokeTrace": true|false|"stderr"|"<file.csv>"}`: turn the stroke latency trace on or off at runtime (the same as `PHOTOCRAFT_STROKE_TRACE` / `--stroke-trace`); each stroke's summary is in `ui.inspect` `perf.strokeTrace`
 Shape stroke defaults are drivable with `ui.set {shapeStroke: {width, align, cap, join,
 miterLimit, dashes, dashOffset, opacity}}`; partial fields merge, null disables the stroke.
 Values use the existing `shape.edit` names and units. Colour uses `tools.setColors`.

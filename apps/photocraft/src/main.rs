@@ -2,7 +2,13 @@
 //!
 //! Usage: `photocraft [--control <port>] [--control-token <64-hex> |
 //! --control-token-file <path>] [--automation-read-root <dir>]
-//! [--automation-write-root <dir>] [--safe-gpu] [--in-window-menus] [files…]`
+//! [--automation-write-root <dir>] [--safe-gpu] [--in-window-menus] [--present-mode <mode>]
+//! [--frame-latency <n>] [--stroke-trace <stderr|file.csv>] [files…]`
+//!
+//! `--present-mode` (`fifo`, `autovsync`, `novsync`) and `--frame-latency` (1–3) override how
+//! frames reach the display for this launch (`PHOTOCRAFT_PRESENT_MODE` / `…_FRAME_LATENCY`;
+//! `presentation`); `--stroke-trace` times each brush stroke's frames (`PHOTOCRAFT_STROKE_TRACE`;
+//! `photocraft_ui_egui::stroke_trace`).
 //!
 //! `--safe-gpu` starts with the CPU renderer (no GPU canvas; a software adapter for the window
 //! where the platform has one) for this launch, e.g. after a graphics driver crash. A start that
@@ -192,6 +198,7 @@ fn main() -> eframe::Result {
     // reported in a notice once the app is up; a control token is a usage error like a bad port.
     let mut unreadable_paths: Vec<String> = Vec::new();
     let mut safe_gpu = false;
+    let (mut present_mode_arg, mut frame_latency_arg, mut stroke_trace_arg): (Option<String>, Option<String>, Option<String>) = (None, None, None);
     let mut in_window_menus = std::env::var_os("PHOTOCRAFT_IN_WINDOW_MENUS").is_some_and(|v| !v.is_empty() && v != "0");
     let mut args = std::env::args_os().skip(1);
     while let Some(a) = args.next() {
@@ -212,6 +219,18 @@ fn main() -> eframe::Result {
             Some("--automation-read-root") => automation_read_root = args.next().map(std::path::PathBuf::from),
             Some("--automation-write-root") => automation_write_root = args.next().map(std::path::PathBuf::from),
             Some("--safe-gpu") => safe_gpu = true,
+            Some(flag @ ("--present-mode" | "--frame-latency" | "--stroke-trace")) => {
+                let flag = flag.to_string();
+                match args.next().map(std::ffi::OsString::into_string) {
+                    Some(Ok(v)) => match flag.as_str() {
+                        "--present-mode" => present_mode_arg = Some(v),
+                        "--frame-latency" => frame_latency_arg = Some(v),
+                        _ => stroke_trace_arg = Some(v),
+                    },
+                    // A bad value is reported and ignored; it never fails the launch.
+                    _ => eprintln!("photocraft: {flag}: missing or unreadable value; ignored"),
+                }
+            }
             Some("--in-window-menus") => in_window_menus = true,
             Some("--version") => {
                 println!("photocraft {}", photocraft_engine::build_info::long_version());
@@ -371,7 +390,7 @@ fn main() -> eframe::Result {
         options.wgpu_options.surface.present_mode = eframe::wgpu::PresentMode::AutoNoVsync;
     }
     // Testers' present mode and frame latency overrides (#1343), after the preference.
-    let present = presentation::Overrides::from_env();
+    let present = presentation::Overrides::from_args_or_env(present_mode_arg.as_deref(), frame_latency_arg.as_deref());
     options.wgpu_options.surface = present.apply(options.wgpu_options.surface);
     let present_desc = presentation::describe(&options.wgpu_options.surface, &present);
     log::info!("presentation: {present_desc}");
@@ -435,6 +454,9 @@ fn main() -> eframe::Result {
             let info = &mut app.perf.gpu_info;
             info.preference = pref.name().to_string();
             info.present = present_desc.clone();
+            if let Some(v) = &stroke_trace_arg {
+                app.stroke_trace.set(v);
+            }
             info.selected = if plan.env.is_some() { "env".into() } else { plan.backend.name().to_string() };
             info.fallback = match (plan.reason.clone(), gpu_note.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone()) {
                 (Some(reason), Some(note)) => Some(format!("{reason}. {note}")),

@@ -45,9 +45,12 @@ pub fn parse(mode: Option<&str>, latency: Option<&str>) -> (Overrides, Vec<Strin
 }
 
 impl Overrides {
-    /// Read `PHOTOCRAFT_PRESENT_MODE` and `PHOTOCRAFT_FRAME_LATENCY`, logging rejected values.
-    pub fn from_env() -> Self {
-        let (o, warnings) = parse(std::env::var("PHOTOCRAFT_PRESENT_MODE").ok().as_deref(), std::env::var("PHOTOCRAFT_FRAME_LATENCY").ok().as_deref());
+    /// `--present-mode` / `--frame-latency` when given, else `PHOTOCRAFT_PRESENT_MODE` /
+    /// `PHOTOCRAFT_FRAME_LATENCY`; rejected values are logged.
+    pub fn from_args_or_env(mode: Option<&str>, latency: Option<&str>) -> Self {
+        let env_mode = std::env::var("PHOTOCRAFT_PRESENT_MODE").ok();
+        let env_latency = std::env::var("PHOTOCRAFT_FRAME_LATENCY").ok();
+        let (o, warnings) = parse(mode.or(env_mode.as_deref()), latency.or(env_latency.as_deref()));
         for w in warnings {
             log::warn!("{w}");
         }
