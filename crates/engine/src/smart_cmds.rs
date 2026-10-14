@@ -411,6 +411,11 @@ pub fn render(doc: &Document, sm: &SmartObject) -> Result<Option<Surface>> {
 /// is cancelled. Gives the same pixels as [`apply_smart_filters`] on the placed source, but
 /// starts from the deepest stage of the stack already rendered (see [`stack_cache`]).
 fn render_in(doc: &Document, sm: &SmartObject, ctx: &JobCtx) -> Result<Option<Surface>> {
+    // Stored filters can come from a file or another layer. Check before looking up cached
+    // stages too: a trusted UI render may have populated this process-wide cache earlier.
+    for filter in sm.smart_filters.iter().filter(|f| sm.filters_enabled && f.visible) {
+        crate::jobs::authorize_render_command(&filter.command, &filter.params)?;
+    }
     let Some((name, bytes)) = source_bytes(&doc.metadata, &sm.source) else { return Ok(None) };
     let (fmt, canvas) = (doc.pixel_format(), doc.bounds());
     let placed_key = stack_cache::placed_key(&bytes, fmt, sm, canvas);
@@ -1034,6 +1039,7 @@ fn set_filter_visible(s: &mut Session, p: &Value) -> Result<Value> {
 fn set_filter_params(s: &mut Session, p: &Value) -> Result<Value> {
     const CMD: &str = "layer.smartFilter.setParams";
     let new = p.get("params").cloned().ok_or_else(|| bad(CMD, "pass `params` (merged into the filter's parameters)"))?;
+    let authorize = s.authorize;
     edit_filters(s, p, "Edit Smart Filter", |sm| {
         let i = filter_index(CMD, p, sm)?;
         let f = &mut sm.smart_filters[i];
@@ -1043,6 +1049,11 @@ fn set_filter_params(s: &mut Session, p: &Value) -> Result<Value> {
         match (&mut f.params, new) {
             (Value::Object(old), Value::Object(n)) => old.extend(n),
             (slot, n) => *slot = n,
+        }
+        // Authorize the underlying command with the complete merged params, including paths
+        // already stored in the document, before committing the edit or starting a worker.
+        if let Some(gate) = authorize {
+            gate(&f.command, &f.params)?;
         }
         Ok(())
     })
