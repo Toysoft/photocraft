@@ -120,7 +120,8 @@ impl StrokeTrace {
     }
 
     /// A trace set by value: `""`, `"0"` or `"off"` is off, `"1"` or `"stderr"` prints
-    /// summaries, anything else is a CSV path (`--stroke-trace`, `ui.set {"strokeTrace"}`).
+    /// summaries, anything else is a CSV path (`--stroke-trace`, `PHOTOCRAFT_STROKE_TRACE`; the
+    /// control channel's `ui.set {"strokeTrace"}` passes only on or off, never a path).
     pub fn from_value(v: &str) -> Self {
         let v = v.trim();
         let output = match v {
