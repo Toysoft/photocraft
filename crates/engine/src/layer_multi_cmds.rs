@@ -1270,11 +1270,16 @@ pub fn group_layers(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(EngineError::Other("no layer selected".into()));
     }
     let name = p.get("name").and_then(Value::as_str).map(str::to_string);
+    let expanded = p.get("expanded").and_then(Value::as_bool).unwrap_or(false);
     let gid = s.edit("Group Layers", |doc, active| {
         let ids = top_level(doc, &ids);
         let top = *ids.last().ok_or(EngineError::NoLayer(LayerId(0)))?;
         let name = name.unwrap_or_else(|| doc.next_layer_name("Group"));
-        let gid = doc.insert_above(Some(top), Layer::group(name, vec![]));
+        let mut group = Layer::group(name, vec![]);
+        if let LayerContent::Group(ref mut g) = group.content {
+            g.expanded = expanded;
+        }
+        let gid = doc.insert_above(Some(top), group);
         let mut children = Vec::with_capacity(ids.len());
         for id in &ids {
             children.push(doc.remove(*id).ok_or(EngineError::NoLayer(*id))?);
@@ -1479,7 +1484,7 @@ pub fn specs() -> Vec<CommandSpec> {
             link_layers(s)
         }),
         spec!("layer.mergeLayers", "Merge Layers", &["Layer"], Some("Cmd+E"), "{} (one layer selected: Merge Down)", has_layer, |s, _| merge_layers(s)),
-        spec!("layer.new.groupFromLayers", "Group from Layers…", &["Layer", "New"], None, r##"{"name":str?}"##, has_layer, group_layers),
+        spec!("layer.new.groupFromLayers", "Group from Layers…", &["Layer", "New"], None, r##"{"name":str?,"expanded":bool=false}"##, has_layer, group_layers),
         spec!("layer.arrange.reverse", "Reverse", &["Layer", "Arrange"], None, "{}", two_plus, |s, _| reverse(s)),
         spec!(
             "layer.lockLayers",
@@ -2267,6 +2272,10 @@ mod tests {
         let gl = docu.layer(g).unwrap();
         assert_eq!(gl.name, "Pair");
         assert_eq!(gl.children().unwrap().iter().map(|l| l.id).collect::<Vec<_>>(), vec![a, c]);
+        match &gl.content {
+            LayerContent::Group(grp) => assert!(!grp.expanded, "groupFromLayers must be collapsed by default"),
+            _ => panic!("expected group"),
+        }
         // Root (bottom-to-top): Background, b, Pair (where c was), d.
         assert_eq!(docu.layers.iter().map(|l| l.id).skip(1).collect::<Vec<_>>(), vec![b, g, d]);
         assert_eq!(sel(&s), vec![g]);
@@ -2274,7 +2283,12 @@ mod tests {
         assert_eq!(doc(&s).layers.len(), 5);
         // ⌘G with several selected groups them too.
         select_all(&mut s, &[b, d]);
-        s.execute("layer.groupLayers", json!({})).unwrap();
+        let g2 = LayerId(s.execute("layer.groupLayers", json!({})).unwrap()["layer"].as_u64().unwrap());
+        let gl2 = doc(&s).layer(g2).unwrap();
+        match &gl2.content {
+            LayerContent::Group(grp) => assert!(!grp.expanded, "groupLayers must be collapsed by default"),
+            _ => panic!("expected group"),
+        }
         assert_eq!(doc(&s).layers.len(), 4);
     }
 
@@ -2709,4 +2723,34 @@ mod tests {
         assert_eq!(v["selectedLayers"], json!([a.0, b.0]));
         assert_eq!(v["layers"][0]["selected"], true);
     }
+
+    /// #5571: Group Layers creates a collapsed group by default (expanded: false), matching Photoshop.
+    #[test]
+    fn group_layers_creates_collapsed_group_by_default() {
+        let mut s = session(8);
+        let a = rect_layer(&mut s, Rect::new(0, 0, 5, 5));
+        let b = rect_layer(&mut s, Rect::new(5, 5, 10, 10));
+        select_all(&mut s, &[a, b]);
+        let gid = LayerId(s.execute("layer.groupLayers", json!({})).unwrap()["layer"].as_u64().unwrap());
+        let l = doc(&s).layer(gid).unwrap();
+        match &l.content {
+            LayerContent::Group(g) => {
+                assert!(!g.expanded, "new group must be collapsed by default");
+                assert_eq!(g.children.len(), 2);
+            }
+            _ => panic!("expected group layer"),
+        }
+        // Explicit expanded: true is respected
+        s.undo();
+        select_all(&mut s, &[a, b]);
+        let gid2 = LayerId(s.execute("layer.groupLayers", json!({"expanded": true})).unwrap()["layer"].as_u64().unwrap());
+        let l2 = doc(&s).layer(gid2).unwrap();
+        match &l2.content {
+            LayerContent::Group(g) => {
+                assert!(g.expanded, "explicit expanded: true must be respected");
+            }
+            _ => panic!("expected group layer"),
+        }
+    }
 }
+
