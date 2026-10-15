@@ -25,6 +25,7 @@ pub mod build_info;
 mod canvas_geom;
 mod channel_clip;
 pub mod channel_cmds;
+pub mod channel_transform;
 mod clip_group;
 pub mod color_cmds;
 pub mod color_to_alpha_cmds;
@@ -210,6 +211,8 @@ pub struct DocState {
     pub coalesce: Option<String>,
     /// Channels panel: targeted channel and eye toggles (view state, not history).
     pub channel_view: channel_cmds::ChannelView,
+    /// Interactive single-channel transform; never saved or included in pixel history.
+    pub channel_transform: Option<channel_transform::Guard>,
     /// Select › Isolate Layers: the Layers panel lists only these layers (empty = off; view state).
     pub isolated_layers: Vec<LayerId>,
     /// Painting symmetry preset or sampled path (tool state, not document pixels).
@@ -267,6 +270,7 @@ impl DocState {
             last_damage: None,
             coalesce: None,
             channel_view: Default::default(),
+            channel_transform: None,
             isolated_layers: Vec::new(),
             symmetry: None,
             fx_collapsed: Vec::new(),
@@ -528,6 +532,12 @@ impl Session {
     pub fn active_mut(&mut self) -> Option<&mut DocState> {
         self.active.and_then(|i| self.docs.get_mut(i))
     }
+    /// Release an interactive channel target, including after its document was switched/closed.
+    pub fn clear_channel_transforms(&mut self) {
+        for st in &mut self.docs {
+            st.channel_transform = None;
+        }
+    }
     pub fn set_active(&mut self, index: usize) -> bool {
         if index < self.docs.len() {
             self.active = Some(index);
@@ -684,6 +694,15 @@ impl Session {
 
     /// The command's own precondition for a call with `params` (their target filled in).
     fn precondition(&self, spec: &commands::CommandSpec, params: &Value) -> std::result::Result<(), String> {
+        if let Some(reason) = channel_transform::refusal(self, spec.id, params, spec.journal) {
+            return Err(reason.into());
+        }
+        if warp_cmds::inline_edit(spec.id, params) {
+            return Ok(());
+        }
+        if channel_transform::geometric(spec.id) && channel_cmds::is_channel_target(params) {
+            return self.active().map(|_| ()).ok_or_else(|| "no document open".into());
+        }
         if self.names_existing_layer(spec.id, params) {
             return Ok(());
         }
@@ -723,6 +742,9 @@ impl Session {
 
     /// Apply an undoable edit to the active document.
     pub fn edit<R>(&mut self, label: &str, f: impl FnOnce(&mut Document, &mut Option<LayerId>) -> Result<R>) -> Result<R> {
+        if channel_transform::locked(self) {
+            return Err(EngineError::Other(channel_transform::LOCKED.into()));
+        }
         let restrict = self.color_restrict;
         let sampler_map = self.sampler_map.take();
         let st = self.active_mut().ok_or(EngineError::NoDocument)?;
@@ -734,7 +756,7 @@ impl Session {
         let mut active = st.active_layer;
         let r = f(&mut doc, &mut active)?;
         if let (Some(k), Some(id)) = (restrict, active) {
-            channel_cmds::restrict_to_color(&before, &mut doc, id, k);
+            channel_cmds::restrict_to_color(&before, &mut doc, id, k)?;
         }
         st.doc = Arc::new(doc);
         st.active_layer = active;
@@ -790,7 +812,11 @@ impl Session {
 
     /// Replace the active document's active layer without creating a history step.
     pub fn select_layer(&mut self, id: LayerId) -> Result<()> {
+        let target_locked = channel_transform::locked(self);
         let st = self.active_mut().ok_or(EngineError::NoDocument)?;
+        if target_locked && st.active_layer != Some(id) {
+            return Err(EngineError::Other(channel_transform::LOCKED.into()));
+        }
         if st.doc.layer(id).is_none() {
             return Err(EngineError::NoLayer(id));
         }
@@ -852,7 +878,7 @@ impl Session {
 
     pub fn undo(&mut self) -> bool {
         // A background job is computing from the current state: it must not move under it.
-        if self.active_job().is_some() {
+        if self.active_job().is_some() || self.active().is_some_and(|st| st.channel_transform.is_some()) {
             return false;
         }
         let Some(st) = self.active_mut() else { return false };
@@ -877,7 +903,7 @@ impl Session {
     }
 
     pub fn redo(&mut self) -> bool {
-        if self.active_job().is_some() {
+        if self.active_job().is_some() || self.active().is_some_and(|st| st.channel_transform.is_some()) {
             return false;
         }
         let Some(st) = self.active_mut() else { return false };

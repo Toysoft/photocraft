@@ -57,6 +57,8 @@ Triangle and Curvature Pen (minus legacy Rounded Rectangle and Targeted Adjustme
 
 ## Free Transform (⌘T) and transform handles
 
+> **Channel transform update · 2026-10-15 · minor:** captured targets remain locked while every channel eye stays usable, including during background commits. Native-depth previews, Warp coverage and linked masks have regression coverage; aggregate estimates are unchanged. Stretched thin Warp previews share the CPU destination-aware grid (#5793), with native-depth, feathered-selection and reduced-coordinate regressions. Pixel-centre edge ties and curved outlines affected by raster-grid rounding retain CPU coverage to match commit.
+
 `transform_tool.rs` (3,158 lines), behaviour summary in [`ui-design.md`](ui-design.md#interaction-models-match-photoshop-cc).
 
 | Behaviour | Status | Evidence |
@@ -79,7 +81,9 @@ Triangle and Curvature Pen (minus legacy Rounded Rectangle and Targeted Adjustme
 | Blend mode / opacity edits while transforming | missing | #1384 |
 | Locked layer refused before the drag | missing | fails only at commit (#2585) |
 | Transform a copy (⌥⌘T), step and repeat (⌥⇧⌘T) | done | 2026-10-07 |
-| Transform a targeted alpha channel | missing | BUG-207-4 |
+| Transform a targeted colour component, alpha/spot, Quick Mask or raster mask, including linked masks | done | 2026-10-12: `channel_transform` engine regressions across RGB/CMYK/Lab, native depths, selections, affine/projective/presets/Warp; follows up #2845 / BUG-207-4 |
+| Channel transform freezes its edit target while all eyes stay usable; visibility survives commit/cancel | done | 2026-10-12: `channel_transform_preview` tests and real canvas Ctrl/Cmd+T inside-drag regression |
+| Cached isolated RGB transform preview | partial | 2026-10-13: single visible raster layer on a supported GPU with an identity monitor transform; immutable native samples, geometry/eye uniforms, affine and unfolded Warp. Other stacks, modes, Bicubic reductions, Warp footprints needing multisampling, off-canvas selections and fractional Nearest retain the CPU oracle. Curved Warp shares the CPU sampling grid; sparse scalar edges and fractional proxy frames use matching lifted bounds. `channel_transform_gpu_bench` measures 24 MP CPU submission and completed offscreen frames against the same upstream harness; GPU readback regressions cover depths, selections, geometry and all eye combinations. |
 | Smart object perspective (non-affine) | done | FILE-215-6; #579 fixed by #426: Distort / Perspective keep a projective placement, re-rendered from the source, read and written as the PSD `nonAffineTransform` |
 | Type-layer transform while editing (⌘ held), no ⌘-corner distort on type | done | `ui-design.md` |
 | Puppet Warp mesh follows the outline | missing | block grid (TOOL-214-6) |
@@ -232,6 +236,10 @@ Paragraph; the rest open as in-app floating windows.
 | 2026-10-13 | minor | Stale "missing tool" rows corrected against main: Color Replacement (`paint.colorReplacement`), Red Eye (`paint.redEye`) and Add/Delete Anchor Point (the P flyout cycle) are live toolbar tools, so only Art History Brush is missing; no percentage or estimate changed |
 | 2026-10-13 | minor | Smart object perspective (non-affine) corrected to done: #426 landed four-corner placements with PSD round trip; scorecard FILE-215-6 flipped |
 | 2026-10-10 | major | First version, from a source audit against Photoshop 2026 27.11.0's shortcuts file and the open issues |
+| 2026-10-12 | minor | Isolated colour, alpha/spot, Quick Mask and linked/unlinked raster-mask transforms; captured target, live eyes, native-depth preview/commit and undo regressions |
+| 2026-10-15 | minor | Shared destination-aware Warp tessellation for isolated GPU previews; stretched thin channels tested at native depths with feathered selections and reduced coordinates; affine patches retain their fast path, with CPU coverage for pixel-centre edge ties and ambiguous curved outlines. Aggregate percentages unchanged. |
+| 2026-10-13 | minor | Cached GPU previews for isolated RGB transforms; scoped CPU fallback and reproducible 24 MP hardware benchmark; reviewed scalar coverage, curved Warp/footprint filtering and linked-mask frame regressions; aggregate percentages unchanged |
+| 2026-10-13 | minor | Integrated upstream Bicubic weights/reduction prefilter, background Free Transform commit/cancel and channel caches; isolated target remains locked while the job runs, with eyes usable; regression coverage expanded. Aggregate percentages unchanged. |
 | 2026-10-12 | minor | Closed #3632: Distort and Ctrl/Cmd corner drags snap actual corners to guides and intersections; shared guide snapping respects Extras and Canvas Guides visibility, with offset, visibility and constrained-alignment regressions |
 | 2026-10-10 | minor | Fixed Crop live resize snapping feedback and outdated-camera rendering, applied ratios immediately to centred inscribed previews, and removed two-point options-bar overflow; added pointer, rendering, dropdown/Enter, Swap/X and scrolling regressions |
 | 2026-10-11 | minor | Flick panning done: releasing a moving Hand drag (tool, Space or middle button) glides and decays, gated by Enable Flick Panning |

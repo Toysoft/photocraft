@@ -2964,10 +2964,14 @@ pub fn canvas_view(app: &mut PhotocraftApp, ui: &mut egui::Ui, idx: usize, rect:
         // Live adjustment previews on big documents use a downsampled proxy (see proxy.rs), unless
         // Preferences › Performance › Low Resolution Previews is off.
         let mut on_gpu = false;
+        let channel_texture = crate::channel_transform_preview::texture(app, &ctx, idx);
         // A flipped or pixel-aspect-corrected view draws through the CPU path (the GPU canvas shader
         // has no mirroring or non-square pixels). Rotation stays on the GPU: it is a view uniform.
         let gpu_ok = crate::gpu_canvas::gpu_view_ok(flip, view.rotation, aspect);
-        if app.gpu.is_some()
+        if let Some(tex) = channel_texture {
+            let checkerboard = app.session.prefs().transparency_and_gamut.square().map(|square| (checker(app, &ctx), square));
+            paint_cpu_document(&painter, &xf, doc.bounds(), view.rotation.abs() > 0.05, checkerboard, Some(tex));
+        } else if app.gpu.is_some()
             && gpu_ok
             && let Some((k, key, preview_size)) =
                 ensure_adjust_proxy(app, idx, view.zoom).or_else(|| ensure_filter_preview(app, idx, &ctx)).or_else(|| ensure_proxy_preview(app, idx, view.zoom))
@@ -3038,7 +3042,9 @@ pub fn canvas_view(app: &mut PhotocraftApp, ui: &mut egui::Ui, idx: usize, rect:
             }
         }
         // Channels panel: alpha / Quick Mask overlays and single-channel views (channel_view.rs).
-        if let Some(tex) = crate::channel_view::ensure(app, &ctx, idx) {
+        if channel_texture.is_none()
+            && let Some(tex) = crate::channel_view::ensure(app, &ctx, idx)
+        {
             if view.rotation.abs() > 0.05 {
                 paint_mapped_image(
                     &painter,
@@ -7421,6 +7427,75 @@ mod tests {
                 .unwrap()
             );
             delta.clear();
+        }
+    }
+
+    #[test]
+    fn colour_channel_strokes_stay_coloured_in_live_and_committed_canvas_caches() {
+        for depth in [8, 16, 32] {
+            for (channel, component) in [("red", 0), ("green", 1), ("blue", 2)] {
+                for tool in [Tool::Brush, Tool::Pencil] {
+                    let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), Default::default());
+                    app.run("file.new", json!({"width":160,"height":80,"depth":depth})).unwrap();
+                    app.run("edit.fill", json!({"color":"#000000"})).unwrap();
+                    app.run("channel.target", json!({"channel":channel})).unwrap();
+                    app.run("channel.setVisible", json!({"channel":"composite","visible":true})).unwrap();
+                    app.run("tools.setColors", json!({"foreground":"#ffffff"})).unwrap();
+                    app.run("tools.setBrush", json!({"brush":{"size":12,"hardness":1.0,"smoothing":{"amount":0.0}}})).unwrap();
+                    app.ui.tool = tool;
+                    let ctx = egui::Context::default();
+                    let tex = ensure_texture(&mut app, &ctx, 0, None).unwrap().0;
+                    let mut delta = ctx.tex_manager().write().take_delta();
+                    let egui::ImageData::Color(image) = &delta.set.get(&tex).unwrap()[0].image;
+                    let mut cached = (**image).clone();
+                    delta.clear();
+                    let original = app.session.active().unwrap().doc.clone();
+                    let layer = app.session.active().unwrap().active_layer.unwrap();
+                    let mut expected = [0.0, 0.0, 0.0, 1.0];
+                    expected[component] = 1.0;
+                    tool_event(&mut app, ToolEvent::Down { x: 10.0, y: 40.0, pressure: 1.0 }, egui::Modifiers::NONE);
+                    for x in [40.0, 80.0, 130.0] {
+                        tool_event(&mut app, ToolEvent::Move { x, y: 40.0, pressure: 1.0 }, egui::Modifiers::NONE);
+                        let shown = display_doc(&mut app, 0).0;
+                        assert_eq!(shown.layer(layer).unwrap().surface().unwrap().rgba(20, 40), expected, "{depth} {channel} {tool:?}: live data");
+                        ensure_texture(&mut app, &ctx, 0, None);
+                        let mut delta = ctx.tex_manager().write().take_delta();
+                        let upload = &delta.set.get(&tex).unwrap()[0];
+                        let pos = upload.pos.expect("live stroke only uploads damage");
+                        let egui::ImageData::Color(image) = &upload.image;
+                        for row in 0..image.size[1] {
+                            let dst = (pos[1] + row) * cached.size[0] + pos[0];
+                            cached.pixels[dst..dst + image.size[0]].copy_from_slice(&image.pixels[row * image.size[0]..(row + 1) * image.size[0]]);
+                        }
+                        delta.clear();
+                        let (display, _) = canvas_display(&app, &shown, None);
+                        assert_eq!(
+                            cached,
+                            display_image(display.as_deref(), &photocraft_compose::flatten(&shown)),
+                            "{depth} {channel} {tool:?}: partial uploads match full preview"
+                        );
+                        assert!(std::sync::Arc::ptr_eq(&original, &app.session.active().unwrap().doc));
+                    }
+                    let shown = display_doc(&mut app, 0).0;
+                    tool_event(&mut app, ToolEvent::Up { x: 130.0, y: 40.0 }, egui::Modifiers::NONE);
+                    let committed = app.session.active().unwrap().doc.clone();
+                    assert_eq!(
+                        shown.layer(layer).unwrap().surface().unwrap().try_to_interleaved(shown.bounds()).unwrap(),
+                        committed.layer(layer).unwrap().surface().unwrap().try_to_interleaved(committed.bounds()).unwrap(),
+                        "{depth} {channel} {tool:?}: commit must exactly match the preview retained by the cache"
+                    );
+                    ensure_texture(&mut app, &ctx, 0, None);
+                    let mut delta = ctx.tex_manager().write().take_delta();
+                    let uploaded = delta.set.contains_key(&tex);
+                    delta.clear();
+                    assert!(!uploaded, "a matching commit needs no corrective upload");
+                    assert_eq!(committed.layer(layer).unwrap().surface().unwrap().rgba(20, 40), expected);
+                    app.session.undo();
+                    assert_eq!(app.session.active().unwrap().doc.layers, original.layers);
+                    app.session.redo();
+                    assert_eq!(app.session.active().unwrap().doc.layers, committed.layers);
+                }
+            }
         }
     }
 

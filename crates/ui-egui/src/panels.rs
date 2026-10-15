@@ -2564,12 +2564,18 @@ fn layers(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
             crate::type_tool::commit(app);
         }
         if id == "ui.maskTarget" {
+            if photocraft_engine::channel_transform::locked(&app.session) {
+                continue;
+            }
             app.ui.mask_target = p.as_bool().unwrap_or(false);
             app.ui.vector_mask_target = false;
             app.sync_mask_targets();
             continue;
         }
         if id == "ui.vectorMaskTarget" {
+            if photocraft_engine::channel_transform::locked(&app.session) {
+                continue;
+            }
             app.ui.vector_mask_target = p.as_bool().unwrap_or(false);
             app.ui.mask_target = false;
             app.sync_mask_targets();
@@ -2918,7 +2924,13 @@ fn layer_row(
         actions.push(("select.loadSelection".into(), p));
     } else if let Some(cmd) = mask_toggle {
         actions.push(cmd);
-    } else if resp.clicked() && !eye_resp.clicked() && !toggled && !fx_toggled && !masks.clicked {
+    } else if resp.clicked()
+        && !eye_resp.clicked()
+        && !toggled
+        && !fx_toggled
+        && !masks.clicked
+        && app.session.active().is_none_or(|st| st.channel_transform.is_none())
+    {
         let mode = select_mode(ui.input(|i| i.modifiers));
         actions.push(("layer.select".into(), json!({"layer": l.id.0, "mode": mode})));
         crate::smart_ui::deselect(ctx, doc.id);

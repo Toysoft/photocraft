@@ -99,7 +99,7 @@ fn render_with_source(
     r: Rect,
     factor: u32,
     in_color: bool,
-    active: Option<photocraft_doc::LayerId>,
+    _active: Option<photocraft_doc::LayerId>,
     source: CompositeSource<'_>,
 ) -> Option<Vec<Color32>> {
     if v.is_plain(doc) || r.is_empty() {
@@ -152,9 +152,9 @@ fn render_with_source(
             solo_mask = true;
             gray(m)
         } else {
-            let m = active.and_then(|id| doc.layer(id)).and_then(|l| l.mask.as_ref())?;
-            solo_mask = true;
-            gray(&m.surface)
+            // Every eye may be off during a channel transform and after commit/cancel.
+            // Cover the composite so hidden channels never leak through.
+            vec![[1.0; 4]; n]
         }
     } else if vis < colors {
         let fmt = doc.pixel_format();
@@ -686,6 +686,10 @@ mod tests {
         let st = m.active().unwrap();
         assert_eq!(st.channel_view.visible_colors(3), 0);
         let px = render(&st.doc, &st.channel_view, st.doc.bounds(), 1, false, st.active_layer).unwrap();
-        assert_eq!(px[0], Color32::BLACK, "the hidden mask reads black, not the red layer");
+        assert_eq!(px[0], Color32::WHITE, "a mask with its eye off must not leak through");
+        m.execute("view.layerMask", json!({"mode":"overlay"})).unwrap();
+        let st = m.active().unwrap();
+        let px = render(&st.doc, &st.channel_view, st.doc.bounds(), 1, false, st.active_layer).unwrap();
+        assert_eq!(px[0], Color32::BLACK, "showing the mask eye reveals its grayscale values");
     }
 }

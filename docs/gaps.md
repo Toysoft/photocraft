@@ -179,6 +179,11 @@ what an agent can't finish alone.
 - **Estimate:** 100–180 h. **Human:** checking feel on real tablets.
 
 ### G5. Transform, handles and modifiers
+
+> **Channel transform update · 2026-10-15 · minor:** isolated native channel transforms retain their edit target through background commits and permit live eye toggles. Cached RGB GPU previews have scoped CPU fallbacks; remaining estimates are unchanged. Stretched thin Warp previews share the CPU destination-aware grid (#5793), with native-depth, feathered-selection and reduced-coordinate regressions. Pixel-centre edge ties and curved outlines affected by raster-grid rounding retain CPU coverage to match commit.
+
+- **Done 2026-10-12:** isolated RGB/CMYK/Lab colour components, alpha/spot channels, Quick Mask and raster masks (including linked) across native depths and selection states, including Warp. The captured edit target stays locked while every eye remains usable; visibility persists after commit/cancel and undo. Warp of selected raster pixels moves the same selected region of a linked mask, accounting for #4175 / #4176; whole Smart Objects and shapes carry their linked masks without selection clipping. Evidence: engine `channel_transform` and UI `channel_transform_preview` / canvas drag regressions. Remaining estimates and aggregate parity numbers unchanged.
+- **Partial 2026-10-13:** cached GPU dragging for isolated RGB transforms of one visible raster layer with an identity monitor transform. Other stacks/modes, Bicubic reductions, Warp footprints needing multisampling, off-canvas selections and fractional Nearest retain the CPU oracle; curved maps share CPU tessellation and sparse/fractional source coverage; no general transform-preview performance claim. Evidence: `channel_transform_gpu_bench` (24 MP release, CPU submission plus completed offscreen frames) and native-depth GPU/CPU readback comparisons; aggregate numbers unchanged.
 - **Missing:** the full interpolation list; blend mode/opacity edits during
   a transform (#1384); path-point nudge; autoscroll at the edge while selecting (#2231);
   wheel and pinch behaviour (#2485, #2463, #1989);
@@ -290,6 +295,10 @@ what an agent can't finish alone.
 | 2026-10-13 | minor | G6: stale "missing tool" list corrected against `main` — Color Replacement (`paint.colorReplacement`), Red Eye (`paint.redEye`) and Add/Delete Anchor Point (P flyout, #4144) are live tools, so the toolbox is 67 of 68 and Art History Brush is the only one missing; no percentage or estimate changed |
 | 2026-10-13 | minor | G4: Hue Jitter amount-track appearance (#3825, partial); no readiness percentage or estimate changed |
 | 2026-10-13 | minor | G4: minimum inputs in Shape Dynamics and Transfer follow their Control (#3825, partial); no readiness percentage or estimate changed |
+| 2026-10-12 | minor | G5: isolated channel transforms, live eye toggles and target lock; native depth, selection, Warp and undo regressions |
+| 2026-10-15 | minor | Shared destination-aware Warp tessellation for isolated GPU previews; stretched thin channels tested at native depths with feathered selections and reduced coordinates; affine patches retain their fast path, with CPU coverage for pixel-centre edge ties and ambiguous curved outlines. Aggregate percentages unchanged. |
+| 2026-10-13 | minor | Cached GPU previews for isolated RGB transforms; scoped CPU fallback and reproducible 24 MP hardware benchmark; reviewed scalar coverage, curved Warp/footprint filtering and linked-mask frame regressions; aggregate percentages unchanged |
+| 2026-10-13 | minor | Integrated upstream Bicubic weights/reduction prefilter, background Free Transform commit/cancel and channel caches; isolated target remains locked while the job runs, with eyes usable; regression coverage expanded. Aggregate percentages unchanged. |
 | 2026-10-12 | minor | G5: Free Transform options bar H/V skew fields done |
 | 2026-10-12 | minor | G11: `.atn` import maps 112 events (Select and Mask, Spatter, Ripple, Crystallize, Pattern Fill, mask targeting, Step Backward, points, Bitmap) |
 | 2026-10-12 | minor | G9: toolbar tool shortcut editing (#4086); the remaining workspace gaps stay open |
