@@ -61,6 +61,9 @@ struct Preview {
     wrap: bool,
     /// The text is only a sample of characters: keep fewer of them rather than draw them tiny.
     trim: bool,
+    /// The text samples a feature that changes this many characters: the preview says how many
+    /// it doesn't show ("+15").
+    changed: Option<usize>,
 }
 
 fn hover_id() -> egui::Id {
@@ -125,9 +128,9 @@ fn body(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     let hovered: Option<Preview> = ui.ctx().data(|d| d.get_temp::<Preview>(hover_id()));
     let shown = hovered.unwrap_or_else(|| {
         if variable {
-            Preview { text: AXIS_SAMPLE.into(), samples: vec![(String::new(), c.clone())], across: true, wrap: false, trim: false }
+            Preview { text: AXIS_SAMPLE.into(), samples: vec![(String::new(), c.clone())], across: true, wrap: false, trim: false, changed: None }
         } else {
-            Preview { text: PANGRAM.into(), samples: vec![(String::new(), c.clone())], across: false, wrap: true, trim: false }
+            Preview { text: PANGRAM.into(), samples: vec![(String::new(), c.clone())], across: false, wrap: true, trim: false, changed: None }
         }
     });
     preview(ui, &shown, &details, c.size_pt);
@@ -225,9 +228,37 @@ fn feature_text(tag: &str, d: &FaceDetails) -> String {
         return fixed.into();
     }
     match d.feature(tag) {
-        Some(f) if !f.sample.is_empty() => f.sample.clone(),
+        Some(f) if !f.sample.is_empty() => spaced(&f.sample),
         _ => FALLBACK_SAMPLE.into(),
     }
+}
+
+/// How many characters the feature changes, when the preview shows a sample of them.
+fn feature_changed(tag: &str, d: &FaceDetails) -> Option<usize> {
+    let f = d.feature(tag).filter(|f| !f.sample.is_empty())?;
+    (feature_text(tag, d) == spaced(&f.sample)).then_some(f.changed)
+}
+
+/// A feature's sample with a space wherever the kind of character changes (`012 ABC 345`), so its
+/// runs of figures, capitals and lower case read as groups.
+fn spaced(sample: &str) -> String {
+    let kind = |c: char| match c {
+        '0'..='9' => 0,
+        'A'..='Z' => 1,
+        'a'..='z' => 2,
+        c if c.is_alphanumeric() => 3,
+        _ => 4,
+    };
+    let mut out = String::new();
+    let mut last = None;
+    for c in sample.chars() {
+        if last.is_some_and(|k| k != kind(c)) {
+            out.push(' ');
+        }
+        out.push(c);
+        last = Some(kind(c));
+    }
+    out
 }
 
 /// Off-then-on preview of a feature.
@@ -238,6 +269,7 @@ fn feature_preview(c: &CharStyle, tag: &str, d: &FaceDetails) -> Preview {
         across: false,
         wrap: false,
         trim: true,
+        changed: feature_changed(tag, d),
     }
 }
 
@@ -412,7 +444,7 @@ fn choice_row(ui: &mut egui::Ui, id: &str, label: &str, text: &str, choices: Vec
         *change = Some(ch.props.clone());
     }
     if let Some(ch) = hovered.and_then(|i| choices.get(i)) {
-        *hover = Some(Preview { text: text.into(), samples: vec![(ch.tip.clone(), ch.style.clone())], across: true, wrap: false, trim: false });
+        *hover = Some(Preview { text: text.into(), samples: vec![(ch.tip.clone(), ch.style.clone())], across: true, wrap: false, trim: false, changed: None });
     }
 }
 
@@ -700,7 +732,7 @@ fn instance_row(ui: &mut egui::Ui, c: &CharStyle, d: &FaceDetails, hover: &mut O
                     s = with_axis(&s, tag, *v);
                 }
                 *hover =
-                    Some(Preview { text: AXIS_SAMPLE.into(), samples: vec![(String::new(), c.clone()), (inst.name.clone(), s)], across: true, wrap: false, trim: false });
+                    Some(Preview { text: AXIS_SAMPLE.into(), samples: vec![(String::new(), c.clone()), (inst.name.clone(), s)], across: true, wrap: false, trim: false, changed: None });
             }
         });
     });
@@ -758,6 +790,7 @@ fn axis_row(ui: &mut egui::Ui, c: &CharStyle, a: &photocraft_text::AxisDetail, h
             across: true,
             wrap: false,
             trim: false,
+            changed: None,
         });
     }
     if let Some(value) = set {
@@ -804,6 +837,8 @@ fn preview(ui: &mut egui::Ui, p: &Preview, d: &FaceDetails, doc_size: f32) {
         } else {
             (slot, None)
         };
+        // Room at the right for the count of characters not shown.
+        let ink = if p.changed.is_some() { Rect::from_min_max(ink.min, pos2(ink.right() - MORE_W, ink.bottom())) } else { ink };
         if let (Some(at), false) = (cap, caption.is_empty()) {
             let align = if p.across { egui::Align2::CENTER_CENTER } else { egui::Align2::LEFT_CENTER };
             ui.painter().text(at, align, caption, egui::FontId::proportional(10.5), t.text_faint);
@@ -813,6 +848,11 @@ fn preview(ui: &mut egui::Ui, p: &Preview, d: &FaceDetails, doc_size: f32) {
             let size = tex.size_vec2() / ui.ctx().pixels_per_point().ceil().max(1.0);
             let at = if p.wrap || !p.across && captions { pos2(ink.left(), ink.center().y - size.y / 2.0) } else { ink.center() - size / 2.0 };
             ui.painter().image(tex.id(), Rect::from_min_size(at, size), Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), t.text);
+            let hidden = p.changed.map_or(0, |n| n.saturating_sub(text.chars().filter(|c| !c.is_whitespace()).count()));
+            if hidden > 0 && i + 1 == p.samples.len() {
+                let at = pos2(at.x + size.x + 6.0, at.y + size.y / 2.0);
+                ui.painter().text(at, egui::Align2::LEFT_CENTER, format!("+{hidden}"), egui::FontId::proportional(10.5), t.text_faint);
+            }
         }
     }
 }
@@ -858,6 +898,9 @@ fn sample_texture(ctx: &egui::Context, text: &str, style: &CharStyle, slot: egui
     });
     tex
 }
+
+/// Width kept beside a sample for the count of characters it doesn't show ("+176").
+const MORE_W: f32 = 30.0;
 
 /// A sample drawn smaller than this share of the size that fills its slot's height reads as a
 /// row of specks (24 boxed characters on one line): it keeps fewer characters instead.
@@ -1165,6 +1208,22 @@ mod tests {
         assert_eq!(feature_props("calt", false), json!({"features": {"calt": 0}}));
         assert_eq!(feature_props("kern", false), json!({"kerning": "off"}));
         assert!(feature_shown_on(&c, "calt") && !feature_shown_on(&c, "ss01") && feature_shown_on(&c, "liga"));
+    }
+
+    /// A feature's sample groups its kinds of characters, and the preview knows how many the
+    /// feature changes in all; fixed texts (fractions) aren't samples.
+    #[test]
+    fn samples_group_kinds_and_count_what_they_change() {
+        assert_eq!(spaced("012ABC345DEFabc"), "012 ABC 345 DEF abc");
+        assert_eq!(spaced(""), "");
+        assert_eq!(spaced("①②"), "①②");
+        let mut e = photocraft_text::TextEngine::new();
+        let d = e.fonts.face_details(&CharStyle { font_family: "Inter".into(), ..Default::default() });
+        let cv11 = d.feature("cv11").unwrap();
+        assert_eq!(feature_changed("cv11", &d), Some(cv11.changed));
+        assert!(cv11.changed >= cv11.sample.chars().count());
+        assert_eq!(feature_changed("frac", &d), None, "a fixed text is not a sample");
+        assert_eq!(feature_changed("zzzz", &d), None);
     }
 
     /// Tooltips only where the caption is a symbol, not the tooltip's own words.
