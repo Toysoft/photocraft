@@ -125,6 +125,12 @@ jobs:
       - name: Dependency layering
         run: cargo xtask layers
 
+      # AGENTS.md rule 1: shell click handlers dispatch command ids (allowlist in
+      # xtask/src/panel_commands.rs). Static source scan, so one OS is enough.
+      - name: Panel buttons route through command ids
+        if: runner.os == 'Linux'
+        run: cargo xtask panel-commands
+
       # docs/scorecard.md must match its sources (checklists, budgets, baseline, corpus floors,
       # prefs audit). Static: it reads committed files only, no benchmarks run here.
       - name: Scorecard up to date

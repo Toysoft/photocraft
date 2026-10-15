@@ -8,6 +8,7 @@ mod corpus_pins;
 mod i18n_coverage;
 mod ico;
 mod layers;
+mod panel_commands;
 mod perf;
 mod pinned;
 mod scorecard;
@@ -23,8 +24,10 @@ usage: cargo xtask <command>
 
 commands:
   layers          enforce the crate dependency layering (plan/architecture.md §3)
+  panel-commands  fail on a shell click handler that changes the document or session directly instead of
+                  dispatching a command id (allowlist: xtask/src/panel_commands.rs)
   wasm            cargo check --target wasm32-unknown-unknown for the wasm-safe crates
-  ci              fmt --check, clippy -D warnings, test, layers, wasm (stops at first failure)
+  ci              fmt --check, clippy -D warnings, test, layers, panel-commands, wasm (stops at first failure)
   corpus [--all | --pngsuite | --psd | --psd-tools | --pixls | --photoshop] [--local] [--update-manifest]
                   show where test corpora live and their pins (xtask/src/corpus_pins.rs), or fetch
                   them into corpus/ (pinned commits, sha256-verified; --all = every corpus but pixls,
@@ -53,6 +56,7 @@ fn main() -> ExitCode {
     let rest: Vec<&str> = args.iter().skip(1).map(String::as_str).collect();
     let result = match args.first().map(String::as_str) {
         Some("layers") => cmd_layers(),
+        Some("panel-commands") => panel_commands::run(&root()),
         Some("wasm") => cmd_wasm(),
         Some("ci") => cmd_ci(),
         Some("corpus") => corpus::cmd(&rest),
@@ -214,6 +218,7 @@ fn cmd_ci() -> Result<(), String> {
             }),
         ),
         ("layers", Box::new(cmd_layers)),
+        ("panel-commands", Box::new(|| panel_commands::run(&root()))),
         ("wasm", Box::new(cmd_wasm)),
     ];
     let mut done = Vec::new();
