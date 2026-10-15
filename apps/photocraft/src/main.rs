@@ -26,6 +26,7 @@ mod appearance;
 #[cfg(target_os = "macos")]
 mod apple_events;
 mod caps_lock;
+mod numpad_enter;
 mod caption_style;
 mod control_server;
 mod crash_guard;
@@ -497,6 +498,7 @@ fn main() -> eframe::Result {
             // Caps Lock state (X11/Windows/macOS; `None` on native Wayland): the canvas shows the
             // precise crosshair for painting tools while it is toggled on (#1758).
             app.services.caps_lock = caps_lock::service(cc);
+            app.services.enter_keys = numpad_enter::service(cc);
             app.services.screen_pick = screen_color::service(cc, app.services.is_wayland);
             // Tablet pressure/tilt/eraser (winit drops them): the macOS monitor and the X11 reader
             // write into the stylus feed. The monitor goes in here, not before the event loop:
