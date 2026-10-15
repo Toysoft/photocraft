@@ -518,3 +518,10 @@ id = "P59"
 title = "Chisel bevel size change, 12 MP text paragraph, size 8 (CPU)"
 bench = "bevel_bench"
 row = "bevel size change to 8, text (CPU)"
+
+[[scenario]]
+id = "P61"
+title = "File > New 10 x 5 m at 200 ppi (3.1 GP) + first reduced canvas refresh"
+issue = 4017
+bench = "perf_scenarios"
+row = "new 3 GP document + first reduced canvas refresh"
