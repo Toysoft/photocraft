@@ -1653,3 +1653,6 @@ pub fn mosaic(rgb: &[[f32; 3]], width: usize, cfa: [u8; 4], black: u16, white: u
         })
         .collect()
 }
+
+/// Synthetic CR3 JPEG-preview containers with independent metadata.
+pub mod cr3;

@@ -1,10 +1,12 @@
-//! Bounded CR3 container reading, independently implemented from ISO BMFF and
-//! Laurent Clévy's public format description (canon_cr3/readme.md). This extracts
-//! camera JPEGs and orientation, not CRX sensor data. Never scan compressed data
-//! for JPEG signatures: offsets must come from a validated sample table or PRVW.
+//! Bounded CR3 JPEG previews and TIFF/XMP container metadata.
+//! No CRX sensor payload is interpreted or decoded.
 
 use crate::preview::{Preview, candidate};
 use crate::tiff::{Tiff, tag};
+
+#[path = "cr3/metadata.rs"]
+mod metadata;
+pub use metadata::Metadata;
 
 const META_UUID: &[u8] = &[0x85, 0xc0, 0xb6, 0x87, 0x82, 0x0f, 0x11, 0xe0, 0x81, 0x11, 0xf4, 0xce, 0x46, 0x2b, 0x6a, 0x48];
 const PREVIEW_UUID: &[u8] = &[0xea, 0xf4, 0x2b, 0x5e, 0x1c, 0x98, 0x4b, 0x88, 0xb9, 0xfb, 0xb7, 0xdc, 0x40, 0x6e, 0x4d, 0x16];
@@ -65,6 +67,7 @@ struct Track<'a> {
     sizes: Option<&'a [u8]>,
     offsets: Option<(&'a [u8], bool)>,
     mapping: bool,
+    timed: bool,
 }
 
 /// Accept only a single JPEG sample description, with CRAW's fixed sample-entry
@@ -94,7 +97,15 @@ fn track_boxes<'a>(b: &'a [u8], depth: usize, budget: &mut usize, t: &mut Track<
     }
     boxes(b, budget, |item, budget| match item.kind {
         b"mdia" | b"minf" | b"stbl" => track_boxes(item.body, depth + 1, budget, t),
-        b"stsd" => t.jpeg = jpeg_description(item.body, budget),
+        b"stsd" => {
+            t.jpeg = jpeg_description(item.body, budget);
+            if u32_at(item.body, 0) == Some(0)
+                && u32_at(item.body, 4) == Some(1)
+                && let Some(entries) = item.body.get(8..)
+            {
+                boxes(entries, budget, |entry, _| t.timed |= entry.kind == b"CTMD");
+            }
+        }
         b"stsz" => t.sizes = Some(item.body),
         b"co64" => t.offsets = Some((item.body, true)),
         b"stco" => t.offsets = Some((item.body, false)),
@@ -108,6 +119,14 @@ fn track_preview<'a>(raw: &'a [u8], track: &'a [u8], budget: &mut usize, media: 
     let mut t = Track::default();
     track_boxes(track, 0, budget, &mut t);
     if !t.jpeg || !t.mapping {
+        return None;
+    }
+    let (off, len) = sample_range(&t, media)?;
+    candidate(raw, off, len)
+}
+
+fn sample_range(t: &Track<'_>, media: &[(usize, usize)]) -> Option<(usize, usize)> {
+    if !t.mapping {
         return None;
     }
     let sizes = t.sizes?;
@@ -125,7 +144,7 @@ fn track_preview<'a>(raw: &'a [u8], track: &'a [u8], budget: &mut usize, media: 
     if !media.iter().any(|(start, stop)| off >= *start && end <= *stop) {
         return None;
     }
-    candidate(raw, off, len as usize)
+    Some((off, len as usize))
 }
 
 #[derive(Default)]
@@ -133,6 +152,7 @@ struct Found<'a> {
     previews: Vec<Preview<'a>>,
     orientation: Option<u16>,
     media: Vec<(usize, usize)>,
+    metadata: Metadata<'a>,
 }
 
 fn walk<'a>(raw: &'a [u8], b: &'a [u8], depth: usize, budget: &mut usize, found: &mut Found<'a>) {
@@ -145,8 +165,23 @@ fn walk<'a>(raw: &'a [u8], b: &'a [u8], depth: usize, budget: &mut usize, found:
             if found.previews.len() < 128 {
                 found.previews.extend(track_preview(raw, item.body, budget, &found.media));
             }
+            let mut track = Track::default();
+            track_boxes(item.body, 0, budget, &mut track);
+            if track.timed
+                && let Some((offset, len)) = sample_range(&track, &found.media)
+            {
+                found.metadata.read_timed(raw.get(offset..offset.saturating_add(len)).unwrap_or_default());
+            }
         }
         b"uuid" => {
+            if item.body.get(..16) == Some(&[0xbe, 0x7a, 0xcf, 0xcb, 0x97, 0xa9, 0x42, 0xe8, 0x9c, 0x71, 0x99, 0x94, 0x91, 0xe3, 0xaf, 0xac]) {
+                found.metadata.xmp = item
+                    .body
+                    .get(16..)
+                    .filter(|b| b.len() <= metadata::MAX_METADATA)
+                    .and_then(|b| std::str::from_utf8(b).ok())
+                    .map(|s| s.trim_end_matches('\0'));
+            }
             if item.body.get(..16) == Some(META_UUID)
                 && let Some(children) = item.body.get(16..)
             {
@@ -166,6 +201,7 @@ fn walk<'a>(raw: &'a [u8], b: &'a [u8], depth: usize, budget: &mut usize, found:
             }
         }
         b"CMT1" => {
+            found.metadata.set(0, item.body);
             if let Some(tiff) = Tiff::new(item.body)
                 && let Some(ifd) = tiff.ifd_at(tiff.first_ifd, 0)
                 && let Some(o) = tiff.tag_uint(&ifd, tag::ORIENTATION).filter(|o| (1..=8).contains(o))
@@ -173,6 +209,9 @@ fn walk<'a>(raw: &'a [u8], b: &'a [u8], depth: usize, budget: &mut usize, found:
                 found.orientation = Some(o as u16);
             }
         }
+        b"CMT2" => found.metadata.set(1, item.body),
+        b"CMT3" => found.metadata.set(2, item.body),
+        b"CMT4" => found.metadata.set(3, item.body),
         _ => {}
     });
 }
@@ -199,4 +238,9 @@ pub(crate) fn previews(raw: &[u8]) -> Vec<Preview<'_>> {
 }
 pub(crate) fn orientation(raw: &[u8]) -> Option<u16> {
     read(raw).orientation
+}
+
+/// All bounded HEVC preview candidates. The caller chooses a supported decoder.
+pub fn metadata(raw: &[u8]) -> Metadata<'_> {
+    read(raw).metadata
 }
