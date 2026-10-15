@@ -438,6 +438,13 @@ fn flat_grid_mesh(rect: Rect, n: usize, color: impl Fn(f32, f32) -> [f32; 3]) ->
 /// Room for both component columns, including units, without overflowing the title's width; with
 /// the frame and title the window fits Photoshop's (about 534 x 376 points).
 pub(crate) const CONTENT_WIDTH: f32 = 488.0;
+/// Translated action labels can be substantially wider than their English equivalents.
+pub(crate) fn content_width(ui: &egui::Ui) -> f32 {
+    let labels = ["OK", "Cancel", "Add to Swatches"];
+    let english = crate::i18n::with_language(crate::i18n::Lang::EN, || widgets::button_width(ui, &labels));
+    let translated = widgets::button_width(ui, &labels.map(crate::i18n::t));
+    CONTENT_WIDTH + (translated - english).max(0.0)
+}
 /// Side of the colour field (Photoshop's is about 256 points).
 const FIELD: f32 = 200.0;
 /// Width of the component fields.
@@ -445,7 +452,7 @@ const VALUE_W: f32 = 42.0;
 
 /// Draw the picker and its top-right actions. `Some(true)` confirms, `Some(false)` cancels.
 pub fn body(ui: &mut egui::Ui, f: &mut Map<String, Value>) -> Option<bool> {
-    ui.set_width(CONTENT_WIDTH);
+    ui.set_width(content_width(ui));
     ui.spacing_mut().item_spacing.y = 4.0;
     let mut outcome = None;
     ui.horizontal_top(|ui| {

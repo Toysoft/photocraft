@@ -805,6 +805,35 @@ fn eyedropper_and_alt_sampling_show_a_pipette() {
     assert_eq!(precise(&mut h), (egui::CursorIcon::Crosshair, desktop));
 }
 
+#[test]
+fn move_alt_copy_cursor_follows_the_latched_duplication_drag() {
+    let mut h = harness();
+    h.state_mut().run("shape.create", json!({"kind": "rect", "rect": [150, 100, 100, 100], "fill": "#ff0000"})).unwrap();
+    h.state_mut().ui.tool = crate::state::Tool::Move;
+    h.state_mut().ui.tool_options.move_show_transform = false;
+    let before = h.state().session.active().unwrap().doc.layers.len();
+    let p = h.state().last_canvas_rect.center();
+    h.hover_at(p);
+    h.run_steps(2);
+    assert_eq!(h.output().platform_output.cursor_icon, egui::CursorIcon::Default);
+    h.event(egui::Event::ModifiersChanged(Modifiers::ALT));
+    h.run_steps(2);
+    assert_eq!(h.output().platform_output.cursor_icon, egui::CursorIcon::Copy);
+    assert_eq!(h.state().session.active().unwrap().doc.layers.len(), before, "hovering never duplicates");
+    h.event(egui::Event::PointerButton { pos: p, button: egui::PointerButton::Primary, pressed: true, modifiers: Modifiers::ALT });
+    h.run_steps(1);
+    let end = p + vec2(25.0, 15.0);
+    h.hover_at(end);
+    h.run_steps(2);
+    h.event(egui::Event::ModifiersChanged(Modifiers::NONE));
+    h.run_steps(2);
+    assert_eq!(h.output().platform_output.cursor_icon, egui::CursorIcon::Copy, "releasing Alt does not undo an active copy");
+    h.event(egui::Event::PointerButton { pos: end, button: egui::PointerButton::Primary, pressed: false, modifiers: Modifiers::NONE });
+    h.run_steps(2);
+    assert_eq!(h.output().platform_output.cursor_icon, egui::CursorIcon::Default);
+    assert_eq!(h.state().session.active().unwrap().doc.layers.len(), before + 1);
+}
+
 /// The Paint Bucket shows a bucket instead of the crosshair (#3968); Precise Other Cursors keeps
 /// the crosshair.
 #[test]

@@ -1104,7 +1104,7 @@ pub fn form_body(ui: &mut egui::Ui, f: &mut Map<String, Value>) {
                     json!(b)
                 }
                 Value::String(s) => {
-                    ui.label(label(&k));
+                    let field_label = ui.label(label(&k));
                     let mut s = s.clone();
                     match choices.get(&k).and_then(Value::as_array) {
                         Some(opts) => {
@@ -1113,7 +1113,19 @@ pub fn form_body(ui: &mut egui::Ui, f: &mut Map<String, Value>) {
                             crate::widgets::dropdown(ui, &format!("form-{k}"), &mut s, &refs, 200.0);
                         }
                         None => {
-                            ui.add(egui::TextEdit::singleline(&mut s).desired_width(260.0));
+                            let multiline = f.get("__command").and_then(Value::as_str) == Some("file.fileInfo")
+                                && matches!(k.as_str(), "description" | "keywords" | "copyright");
+                            if multiline {
+                                egui::ScrollArea::vertical().id_salt(("form-text", &k)).max_height(80.0).show(ui, |ui| {
+                                    let response = ui.add(egui::TextEdit::multiline(&mut s).desired_rows(3).desired_width(260.0)).labelled_by(field_label.id);
+                                    // The dialog's default button must not consume a newline.
+                                    if response.has_focus() {
+                                        ui.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
+                                    }
+                                });
+                            } else {
+                                ui.add(egui::TextEdit::singleline(&mut s).desired_width(260.0));
+                            }
                         }
                     }
                     json!(s)

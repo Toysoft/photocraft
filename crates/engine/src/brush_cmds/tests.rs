@@ -1049,6 +1049,23 @@ fn clear_mode_erases_with_the_brush_or_pencil() {
     }
 }
 
+#[test]
+fn behind_brush_and_pencil_preserve_foreground_and_round_trip_history() {
+    for cmd in ["paint.stroke", "paint.pencil"] {
+        let mut s = session(40, 20);
+        s.execute(cmd, json!({"points": [[10, 10]], "size": 6, "color": "#ff0000", "hardness": 1.0})).unwrap();
+        let before = surface(&s);
+        s.execute(cmd, json!({"points": [[2, 10], [38, 10]], "size": 6, "color": "#0000ff", "mode": "behind", "hardness": 1.0})).unwrap();
+        assert_eq!(rgba(&s, 10, 10), [1.0, 0.0, 0.0, 1.0], "{cmd}: existing opaque paint");
+        assert_eq!(rgba(&s, 25, 10), [0.0, 0.0, 1.0, 1.0], "{cmd}: transparent pixels");
+        let painted = surface(&s);
+        s.execute("edit.undo", json!({})).unwrap();
+        assert!(same_pixels(&surface(&s), &before, Rect::new(0, 0, 40, 20)));
+        s.execute("edit.redo", json!({})).unwrap();
+        assert!(same_pixels(&surface(&s), &painted, Rect::new(0, 0, 40, 20)));
+    }
+}
+
 /// #4344: a foreground picked as CMYK 100/0/0/0 is painted into a CMYK document as those inks by
 /// the Brush and the Pencil, not as whatever its sRGB stand-in converts back to (100/28/0/17).
 #[test]
