@@ -706,6 +706,8 @@ pub struct PhotocraftApp {
     pub(crate) nudge_bundle: nudge_bundle::NudgeBundle,
     /// Live Layer Style dialog preview: (key over revision + style fields, preview or validation error).
     pub(crate) style_preview: Option<(u64, Result<std::sync::Arc<Document>, String>)>,
+    /// Timestamp (ms) of the last computed live Layer Style preview to throttle rapid slider dragging.
+    pub(crate) style_preview_time: f64,
     pub(crate) solid_fill_preview: Option<solid_fill_ui::Preview>,
     /// Live Pattern Fill dialog preview (pattern_fill_ui).
     pub(crate) pattern_fill_preview: Option<pattern_fill_ui::Preview>,
@@ -906,6 +908,7 @@ impl PhotocraftApp {
             move_mods: Default::default(),
             nudge_bundle: Default::default(),
             style_preview: None,
+            style_preview_time: 0.0,
             text_style_preview: None,
             solid_fill_preview: None,
             pattern_fill_preview: None,

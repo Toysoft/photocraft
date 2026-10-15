@@ -1179,6 +1179,7 @@ pub(crate) fn display_doc(app: &mut PhotocraftApp, idx: usize) -> (std::sync::Ar
     let preview_on = style.and_then(|d| d.fields.get("preview")).and_then(serde_json::Value::as_bool).unwrap_or(true);
     if style.is_none() || !preview_on {
         app.style_preview = None;
+        app.style_preview_time = 0.0;
     }
     if let Some(d) = style.filter(|_| preview_on)
         && app.session.active_index() == Some(idx)
@@ -1186,11 +1187,16 @@ pub(crate) fn display_doc(app: &mut PhotocraftApp, idx: usize) -> (std::sync::Ar
         let fields = crate::layer_style::color_picker::preview_fields(app, d.id, &d.fields);
         let key = (crate::layer_style::preview_hash(&fields) ^ st.revision.wrapping_mul(0x9e37_79b9_7f4a_7c15)) | 1 << 63;
         if app.style_preview.as_ref().map(|p| p.0) != Some(key) {
-            let shown = crate::layer_style::preview_document(&st.doc, &app.session.patterns, &fields).map(std::sync::Arc::new);
-            if let Err(error) = &shown {
-                log::warn!("Layer Style preview: {error}");
+            let now = crate::gpu_canvas::now_ms();
+            let elapsed = now - app.style_preview_time;
+            if app.style_preview.is_none() || elapsed >= 33.0 {
+                let shown = crate::layer_style::preview_document(&st.doc, &app.session.patterns, &fields).map(std::sync::Arc::new);
+                if let Err(error) = &shown {
+                    log::warn!("Layer Style preview: {error}");
+                }
+                app.style_preview = Some((key, shown));
+                app.style_preview_time = now;
             }
-            app.style_preview = Some((key, shown));
         }
         if let Some((_, Ok(doc))) = &app.style_preview {
             return (doc.clone(), key);
