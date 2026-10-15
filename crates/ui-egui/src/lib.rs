@@ -203,6 +203,7 @@ pub mod swap_arrow;
 pub mod swatches_ui;
 pub mod symmetry_ui;
 mod tab_strip;
+pub mod deviantart;
 pub mod targa_options_ui;
 pub mod text_field_menu;
 pub mod theme;
@@ -522,10 +523,23 @@ pub struct Services {
     /// while AppKit's run loop is still going crashes or hangs Touch Bar Macs (#1575, #1458).
     /// Without one, eframe closes the window and the app ends with it.
     pub quit: Option<QuitFn>,
+    /// File › Submit to DeviantArt. The refresh token is an argument, never a URL.
+    pub load_deviantart: Option<LoadTextFn>,
+    pub save_deviantart: Option<SaveTextFn>,
+    pub deviantart_connect: Option<DeviantArtConnectFn>,
+    pub deviantart_submit: Option<DeviantArtSubmitFn>,
+    pub deviantart_call: Option<DeviantArtCallFn>,
 }
 
 /// A document histogram being computed off the UI thread: (document, revision, receiver of
 /// (document, compute ms, histograms)).
+/// Browser login. Returns the refresh token. Must not log it.
+pub type DeviantArtConnectFn = std::sync::Arc<dyn Fn(&str) -> Result<String, String> + Send + Sync>;
+/// Sta.sh submit. Arguments: refresh token, app id, title, comments, tags, file name, bytes.
+pub type DeviantArtSubmitFn = std::sync::Arc<dyn Fn(&str, &str, &str, &str, &[String], &str, &[u8]) -> Result<String, String> + Send + Sync>;
+/// Publish, edit, gallery, download or avatar. Arguments: refresh token, app id, JSON request.
+pub type DeviantArtCallFn = std::sync::Arc<dyn Fn(&str, &str, &str) -> Result<String, String> + Send + Sync>;
+
 pub(crate) type HistJob = (DocId, u64, std::sync::mpsc::Receiver<(DocId, f64, std::sync::Arc<tone::Histograms>)>);
 
 /// The Info panel's cached sample: pixel x, y, document revision and Eyedropper Sample Size.
@@ -535,6 +549,9 @@ pub struct PhotocraftApp {
     pub session: Session,
     pub ui: UiState,
     pub services: Services,
+    /// File › Submit to DeviantArt. Not part of [`UiState`]: the control channel must not see the token.
+    pub deviantart: deviantart::Settings,
+    pub(crate) deviantart_job: Option<deviantart::Job>,
     /// Canvas caches per (document, display): CPU textures hold monitor values; the GPU
     /// canvas state is shared (`canvas::GPU_OUTPUT`).
     canvases: HashMap<(DocId, u32), canvas::CanvasCache>,
@@ -812,6 +829,8 @@ impl PhotocraftApp {
             session,
             ui: UiState::default(),
             services,
+            deviantart: deviantart::Settings::default(),
+            deviantart_job: None,
             canvases: HashMap::new(),
             navigator_textures: HashMap::new(),
             display_memo: HashMap::new(),
@@ -941,6 +960,9 @@ impl PhotocraftApp {
         };
         // Saved preferences are in place before the first frame; recovery starts in upkeep.
         prefs_ui::load(&mut app);
+        if let Some(text) = app.services.load_deviantart.as_mut().and_then(|load| load()) {
+            app.deviantart = deviantart::settings_from_json(&text);
+        }
         // After the saved preferences, which say whether the set was already offered.
         kys_import::offer_import(&mut app);
         notices::wayland_file_drop_guidance(&mut app);
@@ -1448,8 +1470,9 @@ impl PhotocraftApp {
         if self.save_options_open() {
             return Err("Answer TIFF or Targa Options before starting another save".into());
         }
-        let r = self.write_save(path, None, None)?;
+        let r = self.write_save(path.clone(), None, None)?;
         self.session.journal.push(("file.save".into(), Value::Object(Default::default())));
+        deviantart::arm_after_save(self, &path, deviantart::WriteKind::Save, &r);
         Ok(r)
     }
 
@@ -1465,6 +1488,7 @@ impl PhotocraftApp {
             step["tgaBits"] = bits.bits().into();
         }
         self.session.journal.push(("file.saveAs".into(), step));
+        deviantart::arm_after_save(self, &path, deviantart::WriteKind::SaveAs, &r);
         Ok(r)
     }
 
@@ -1816,6 +1840,7 @@ impl eframe::App for PhotocraftApp {
         discard_ui::guard_window_close(self, ctx);
         // Background jobs: apply finished ones, keep frames coming, Esc cancels (before the
         // shortcuts see Esc).
+        crate::deviantart::poll(self, ctx);
         if !screen_picker::tick(self, ctx) {
             jobs_ui::tick(self, ctx);
             #[cfg(not(target_arch = "wasm32"))]

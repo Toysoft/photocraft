@@ -365,6 +365,13 @@ pub fn show(app: &mut PhotocraftApp, ctx: &egui::Context) {
                     }
                 }
                 DialogKind::Command if crate::new_guide_ui::owns(&fields) => crate::new_guide_ui::body(ui, &mut fields),
+                DialogKind::Command if crate::deviantart::owns(&fields) => {
+                    let room = (ctx.content_rect().height() - DIALOG_CHROME).max(120.0);
+                    egui::ScrollArea::vertical().id_salt(id.with("body")).max_height(room).show(ui, |ui| {
+                        crate::deviantart::body(app, ui, &mut fields);
+                    });
+                }
+                DialogKind::Command if crate::deviantart::result_owns(&fields) => crate::deviantart::result_body(app, ui, &fields),
                 DialogKind::Command if fields.contains_key("__form") => crate::view_cmds::form_body(ui, &mut fields),
                 DialogKind::Command => {}
                 DialogKind::LayerStyle => crate::layer_style::body(app, ui, &mut fields),
@@ -624,6 +631,8 @@ pub fn confirm(app: &mut PhotocraftApp, id: u64) -> Result<Value, String> {
         DialogKind::Command if crate::crop_presets::owns(&d.fields) => crate::crop_presets::confirm(app, &d.fields),
         DialogKind::Command if crate::variables_ui::owns(&d.fields) => crate::variables_ui::confirm(app, &d.fields),
         DialogKind::Command if crate::file_ui::owns(&d.fields) => crate::file_ui::confirm(app, &d.fields),
+        DialogKind::Command if crate::deviantart::result_owns(&d.fields) => Ok(Value::Null),
+        DialogKind::Command if crate::deviantart::owns(&d.fields) => crate::deviantart::confirm(app, &d.fields),
         DialogKind::Command if crate::new_guide_ui::owns(&d.fields) => crate::new_guide_ui::confirm(app, &d.fields),
         DialogKind::Command if crate::color_picker_ui::owns(&d.fields) => crate::color_picker_ui::confirm(app, &d.fields),
         DialogKind::Command if crate::color_range_ui::owns(&d.fields) => crate::color_range_ui::confirm(app, &d.fields),
@@ -683,6 +692,12 @@ pub fn cancel(app: &mut PhotocraftApp, id: u64) -> Result<Value, String> {
 /// schema dialog for filters, the Color Range dialog for `select.colorRange`, otherwise a bare
 /// confirm dialog.
 pub fn open_command_dialog(app: &mut PhotocraftApp, command: &str, label: &str) -> u64 {
+    if command == "file.submitDeviantArt"
+        && let Ok(value) = crate::deviantart::command(app)
+        && let Some(id) = value.get("dialog").and_then(serde_json::Value::as_u64)
+    {
+        return id;
+    }
     if command == "view.newGuideLayout" {
         return crate::guide_layout_ui::open(app);
     }

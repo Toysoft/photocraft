@@ -496,7 +496,71 @@ pub fn native(automation: Option<photocraft_automation::AuthorizedWorkspace>) ->
         // Set by main, which starts loading the store before the window opens.
         preset_store: None,
         is_wayland: false,
+        load_deviantart: Some(Box::new(load_deviantart_file)),
+        save_deviantart: Some(Box::new(|text: &str| save_deviantart_file(text))),
+        deviantart_connect: Some(std::sync::Arc::new(crate::deviantart_api::connect)),
+        deviantart_submit: Some(std::sync::Arc::new(|refresh, client_id, title, comments, tags, filename, bytes| {
+            crate::deviantart_api::submit(refresh, client_id, title, comments, tags, filename, bytes)
+        })),
+        deviantart_call: Some(std::sync::Arc::new(crate::deviantart_api::call)),
         ..recovery_services(recovery_dir())
+    }
+}
+
+const DEVIANTART_KEYCHAIN: &str = "ai.storyteller.photocraft";
+const DEVIANTART_KEYCHAIN_USER: &str = "deviantart-refresh-token";
+
+/// App id, title and switches on disk. A settings save must not put an older refresh token
+/// back over the one DeviantArt just issued.
+fn save_deviantart_file(text: &str) -> Result<(), String> {
+    let (rest, token) = photocraft_ui_egui::deviantart::without_token(text)?;
+    let path = config_dir().ok_or_else(|| "no config directory".to_string())?.join("deviantart.json");
+    write_atomic(&path, rest.as_bytes())?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+    }
+    if token.is_empty() {
+        crate::deviantart_api::clear_login();
+        return Ok(());
+    }
+    if crate::deviantart_api::current_refresh().is_empty() {
+        crate::deviantart_api::adopt_login(&token);
+    }
+    Ok(())
+}
+
+fn load_deviantart_file() -> Option<String> {
+    let path = config_dir()?.join("deviantart.json");
+    let text = std::fs::read_to_string(&path).ok()?;
+    let (_, embedded) = photocraft_ui_egui::deviantart::without_token(&text).ok()?;
+    let stored = load_deviantart_token().unwrap_or_default();
+    let token = if stored.is_empty() { embedded.clone() } else { stored };
+    if !embedded.is_empty() {
+        let _ = save_deviantart_file(&photocraft_ui_egui::deviantart::with_token(&text, &token));
+    }
+    Some(photocraft_ui_egui::deviantart::with_token(&text, &token))
+}
+
+pub(crate) fn store_deviantart_token(token: &str) -> Result<(), String> {
+    let entry = keyring::Entry::new(DEVIANTART_KEYCHAIN, DEVIANTART_KEYCHAIN_USER).map_err(|error| error.to_string())?;
+    if token.is_empty() {
+        return match entry.delete_credential() {
+            Ok(()) => Ok(()),
+            Err(keyring::Error::NoEntry) => Ok(()),
+            Err(error) => Err(error.to_string()),
+        };
+    }
+    entry.set_password(token).map_err(|error| error.to_string())
+}
+
+fn load_deviantart_token() -> Result<String, String> {
+    let entry = keyring::Entry::new(DEVIANTART_KEYCHAIN, DEVIANTART_KEYCHAIN_USER).map_err(|error| error.to_string())?;
+    match entry.get_password() {
+        Ok(token) => Ok(token),
+        Err(keyring::Error::NoEntry) => Ok(String::new()),
+        Err(error) => Err(error.to_string()),
     }
 }
 
