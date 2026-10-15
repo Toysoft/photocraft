@@ -29,6 +29,8 @@ pub(crate) struct BlendPreview {
     area: Option<Rect>,
     /// The document shown for `mode`, with its key.
     shown: Option<(u64, Arc<Document>)>,
+    /// GPU preview key, affected region (including effects), and the area last refreshed.
+    covered: Option<(u64, Rect, Rect)>,
 }
 
 /// The Layers panel, each frame it draws `layer`'s blend-mode dropdown: the mode under the
@@ -47,7 +49,7 @@ pub(crate) fn hover(app: &mut PhotocraftApp, layer: LayerId, mode: Option<BlendM
     }
     app.blend_preview = mode.and_then(|mode| {
         let area = photocraft_compose::change_bounds(st.doc.layer(layer)?, st.doc.bounds());
-        Some(BlendPreview { doc, revision, layer, mode: Some(mode), frame, area, shown: None })
+        Some(BlendPreview { doc, revision, layer, mode: Some(mode), frame, area, shown: None, covered: None })
     });
 }
 
@@ -79,6 +81,36 @@ pub(crate) fn damage(app: &PhotocraftApp, doc: DocId, revision: u64, seen: u64, 
     let p = app.blend_preview.as_ref().filter(|p| p.doc == doc && p.revision == revision)?;
     let ours = |k: u64| k == 0 || is_preview_key(k);
     (seen != now && ours(seen) && ours(now) && (is_preview_key(seen) || is_preview_key(now))).then_some(p.area)?
+}
+
+/// Limit an active preview to the view. Returning to the document restores the whole region.
+pub(crate) fn clip_damage(app: &mut PhotocraftApp, doc: DocId, revision: u64, key: u64, region: Rect, visible: Rect) -> Rect {
+    let Some(p) = app.blend_preview.as_mut().filter(|p| p.doc == doc && p.revision == revision) else { return region };
+    if !p.shown.as_ref().is_some_and(|(shown, _)| *shown == key) {
+        p.covered = None;
+        return region;
+    }
+    let shown = region.intersect(&visible);
+    // `covered` records only this refresh, including an empty intersection; it is not cumulative.
+    // Keep `region` so `uncovered` can recompute the next visible area. Forgetting older coverage
+    // can cause a redundant refresh, but cannot skip newly exposed pixels for this key.
+    p.covered = Some((key, region, shown));
+    shown
+}
+
+/// A pan or zoom can expose pixels not yet rendered for the current preview key.
+pub(crate) fn uncovered(app: &mut PhotocraftApp, doc: DocId, revision: u64, key: u64, visible: Rect) -> Option<Rect> {
+    let p = app.blend_preview.as_mut().filter(|p| p.doc == doc && p.revision == revision)?;
+    let (covered_key, region, covered) = p.covered?;
+    if covered_key != key {
+        return None;
+    }
+    let want = region.intersect(&visible);
+    if want.is_empty() || covered.contains_rect(&want) {
+        return None;
+    }
+    p.covered = Some((key, region, want));
+    Some(want)
 }
 
 fn is_preview_key(key: u64) -> bool {
