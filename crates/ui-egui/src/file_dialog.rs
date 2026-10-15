@@ -54,14 +54,24 @@ pub enum FileDialogAnswer {
 /// Hands a dialog's answer to the app and wakes it, from any thread. Dropping it unanswered
 /// (a dialog that failed to show) counts as Cancel.
 pub struct FileDialogReply {
-    tx: Sender<Option<FileDialogAnswer>>,
+    tx: Sender<Delivery>,
     ctx: egui::Context,
+}
+
+struct Delivery {
+    answer: Option<FileDialogAnswer>,
+    _guard: Box<dyn Send>,
 }
 
 impl FileDialogReply {
     pub fn send(self, answer: Option<FileDialogAnswer>) {
+        self.send_with_guard(answer, ());
+    }
+
+    /// Keep a platform resource reservation alive until the answer is consumed or discarded.
+    pub fn send_with_guard(self, answer: Option<FileDialogAnswer>, guard: impl Send + 'static) {
         // Nothing is waiting any more when the app has quit meanwhile.
-        let _ = self.tx.send(answer);
+        let _ = self.tx.send(Delivery { answer, _guard: Box::new(guard) });
         self.ctx.request_repaint();
     }
 }
@@ -77,7 +87,7 @@ type Then = Box<dyn FnOnce(&mut PhotocraftApp, Option<FileDialogAnswer>) -> Resu
 pub(crate) struct Pending {
     /// Not shown yet: it is shown at the end of the frame, which has the window to parent it to.
     request: Option<FileDialogRequest>,
-    answer: Option<Receiver<Option<FileDialogAnswer>>>,
+    answer: Option<Receiver<Delivery>>,
     then: Then,
 }
 
@@ -286,9 +296,10 @@ impl PhotocraftApp {
             Some(Err(TryRecvError::Empty)) => return,
             Some(Ok(answer)) => answer,
             // The reply was dropped unanswered: the dialog couldn't be shown.
-            Some(Err(TryRecvError::Disconnected)) | None => None,
+            Some(Err(TryRecvError::Disconnected)) | None => Delivery { answer: None, _guard: Box::new(()) },
         };
         let Some(Pending { then, .. }) = self.file_dialog.take() else { return };
+        let Delivery { answer, _guard } = answer;
         if let Err(e) = then(self, answer)
             && e != CANCELLED
         {
