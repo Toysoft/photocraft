@@ -177,6 +177,25 @@ impl PartialEq for LiquifyField {
     }
 }
 
+/// A local affine move for [`LiquifyField::apply_warp`]: at full strength a point `p` goes to
+/// `center + offset + m · (p - center)`.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct LocalWarp {
+    pub center: [f64; 2],
+    pub radius: f64,
+    /// Row-major 2×2 matrix.
+    pub m: [[f64; 2]; 2],
+    pub offset: [f64; 2],
+}
+
+impl LocalWarp {
+    /// Where `p` goes at full strength.
+    pub fn map(&self, p: [f64; 2]) -> [f64; 2] {
+        let (dx, dy) = (p[0] - self.center[0], p[1] - self.center[1]);
+        [self.center[0] + self.offset[0] + self.m[0][0] * dx + self.m[0][1] * dy, self.center[1] + self.offset[1] + self.m[1][0] * dx + self.m[1][1] * dy]
+    }
+}
+
 /// The brush stroke in progress: the point its last segment ended at, its last dab and how far
 /// the brush has travelled along the path since that dab.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -559,6 +578,52 @@ impl LiquifyField {
         for (idx, d, f) in writes {
             self.d[idx] = d;
             self.freeze[idx] = f;
+        }
+        let pad = r.ceil() as i32 + 2;
+        Rect::new(c[0].floor() as i32 - pad, c[1].floor() as i32 - pad, c[0].ceil() as i32 + pad, c[1].ceil() as i32 + pad).intersect(&self.bounds)
+    }
+
+    /// A smooth local warp (Face-Aware Liquify): inside the circle of radius `w.radius` about
+    /// `w.center` content moves toward `w.map(p)`, weighted by [`falloff`] (Density 50 %) and
+    /// held back by the freeze mask, so it fades to nothing at the rim. Composed with the field as
+    /// the brush tools are (`d'(p) = q + d(q) - p`, with `q` the first-order inverse of the
+    /// move). Returns the document area that changed.
+    pub fn apply_warp(&mut self, w: &LocalWarp) -> Rect {
+        let r = w.radius;
+        if !(r.is_finite() && r > 0.5) || !w.center.iter().all(|v| v.is_finite()) {
+            return Rect::EMPTY;
+        }
+        let c = w.center;
+        let (gx0, gy0) = self.to_grid(c[0] - r, c[1] - r);
+        let (gx1, gy1) = self.to_grid(c[0] + r, c[1] + r);
+        let i0 = gx0.floor().max(0.0) as usize;
+        let j0 = gy0.floor().max(0.0) as usize;
+        let i1 = (gx1.ceil().max(-1.0) as isize).min(self.w as isize - 1);
+        let j1 = (gy1.ceil().max(-1.0) as isize).min(self.h as isize - 1);
+        if i1 < i0 as isize || j1 < j0 as isize {
+            return Rect::EMPTY;
+        }
+        let (i1, j1) = (i1 as usize, j1 as usize);
+        let old = self.d.clone();
+        let inv_cell = 1.0 / self.cell;
+        for j in j0..=j1 {
+            for i in i0..=i1 {
+                let p = self.node_pos(i, j);
+                let (dx, dy) = (p[0] - c[0], p[1] - c[1]);
+                let t2 = (dx * dx + dy * dy) / (r * r);
+                if t2 >= 1.0 {
+                    continue;
+                }
+                let idx = j * self.w + i;
+                let k = falloff(t2, 0.5) * (1.0 - f64::from(self.freeze[idx]));
+                let t = w.map(p);
+                let q = [p[0] - k * (t[0] - p[0]), p[1] - k * (t[1] - p[1])];
+                if !(q[0].is_finite() && q[1].is_finite()) {
+                    continue;
+                }
+                let dq = bilinear(&old, self.w, self.h, (q[0] - p[0]) * inv_cell + i as f64, (q[1] - p[1]) * inv_cell + j as f64);
+                self.d[idx] = [(q[0] + dq[0] - p[0]) as f32, (q[1] + dq[1] - p[1]) as f32];
+            }
         }
         let pad = r.ceil() as i32 + 2;
         Rect::new(c[0].floor() as i32 - pad, c[1].floor() as i32 - pad, c[0].ceil() as i32 + pad, c[1].ceil() as i32 + pad).intersect(&self.bounds)

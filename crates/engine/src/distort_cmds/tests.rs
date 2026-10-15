@@ -473,3 +473,46 @@ fn unlocked_or_position_locked_smart_objects_take_distortions() {
         }
     }
 }
+
+#[test]
+fn face_aware_liquify_with_given_landmarks_one_step_undo_and_replay() {
+    // A "face" on the patterned block: eyes, nose and mouth corners.
+    let lm = json!([[25, 20], [45, 20], [35, 27], [29, 33], [41, 33]]);
+    let mut s = session(8);
+    let before = active_surface(&s);
+    let r = s.execute(LIQUIFY, json!({"faces": [{"landmarks": lm, "eyeSize": 0}]})).unwrap();
+    assert_eq!(r["changed"], false, "neutral sliders are a no-op");
+    let hist = s.active().unwrap().history.past_len();
+    let p = json!({"faces": [{"landmarks": lm, "eyeSize": 100, "smile": 60}]});
+    let r = s.execute(LIQUIFY, p.clone()).unwrap();
+    assert_eq!(r["changed"], true);
+    assert_eq!(r["faces"], json!([[[25.0, 20.0], [45.0, 20.0], [35.0, 27.0], [29.0, 33.0], [41.0, 33.0]]]));
+    assert_eq!(s.active().unwrap().history.past_len(), hist + 1, "one history step");
+    let after = active_surface(&s);
+    assert!(worst(&after, &before, Rect::new(20, 15, 30, 25)) > 0.2, "around the eye");
+    assert!(worst(&after, &before, Rect::new(0, 50, 80, 60)) == 0.0, "far from the face");
+    // The smart-filter path gives the same pixels.
+    let canvas = Rect::new(0, 0, 80, 60);
+    assert_eq!(apply_to_surface(LIQUIFY, &p, &before, canvas).unwrap(), after);
+    s.undo();
+    assert_eq!(active_surface(&s), before);
+}
+
+#[test]
+fn face_aware_liquify_refuses_bad_faces() {
+    let mut s = session(8);
+    let lm = json!([[25, 20], [45, 20], [35, 27], [29, 33], [41, 33]]);
+    for bad in [
+        json!({"faces": {"smile": 10}}),
+        json!({"faces": [{"landmarks": lm, "smile": 150}]}),
+        json!({"faces": [{"landmarks": lm, "smiel": 10}]}),
+        json!({"faces": [{"landmarks": [[1, 2], [3, 4]], "smile": 10}]}),
+        json!({"faces": [{"landmarks": lm, "eyeSize": [10, "x"]}]}),
+        json!({"faces": [{"face": -1, "smile": 10}]}),
+    ] {
+        assert!(s.execute(LIQUIFY, bad.clone()).is_err(), "{bad}");
+    }
+    // A face to detect that isn't there.
+    let e = s.execute(LIQUIFY, json!({"faces": [{"smile": 10}]})).unwrap_err();
+    assert!(e.to_string().contains("no face 0 (found 0)"), "{e}");
+}
