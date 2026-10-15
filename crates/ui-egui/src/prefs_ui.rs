@@ -1072,6 +1072,9 @@ fn humanize(key: &str) -> String {
     if key == "notificationDurationSeconds" {
         return "Notification Duration (seconds)".into();
     }
+    if key == "collapseLayerEffectsOnOpen" {
+        return "Collapse Layer Effects on Open".into();
+    }
     // Tools: arrow-key nudges bundle into one History state (#2259).
     if key == "bundleNudges" {
         return "Bundle Arrow-Key Nudges".into();
@@ -3377,6 +3380,20 @@ mod tests {
         let fields = app.ui.dialogs.iter().find(|d| d.id == id).map(|d| d.fields.clone()).unwrap();
         confirm(&mut app, &fields).unwrap();
         assert!(!app.session.prefs().type_.smart_quotes);
+    }
+
+    #[test]
+    fn collapse_effects_preference_is_a_visible_checkbox() {
+        use egui_kittest::{Harness, kittest::Queryable};
+        let mut obj = prefs::Preferences::default().to_json()["interface"].as_object().unwrap().clone();
+        let order = vec!["collapseLayerEffectsOnOpen".to_string()];
+        let mut h = Harness::new_ui_state(
+            move |ui, obj| section_fields(ui, "interface", obj, &order, crate::i18n::Lang::EN, None, "collapse"),
+            std::mem::take(&mut obj),
+        );
+        h.get_by_label("Collapse Layer Effects on Open").click();
+        h.run();
+        assert_eq!(h.state()["collapseLayerEffectsOnOpen"], json!(true));
     }
 
     #[test]

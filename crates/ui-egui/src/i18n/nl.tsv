@@ -3931,6 +3931,7 @@ curves	Smooth	Vloeiend maken
 	Chisel Hard	Beitel hard
 	Chisel Soft	Beitel zacht
 	Open color-less EXR as ACEScg	EXR zonder kleurruimte als ACEScg openen
+	Collapse Layer Effects on Open	Laageffecten inklappen bij openen
 
 # View › Guides › right-click a guide
 	Edit Selected Guides	Geselecteerde hulplijnen bewerken

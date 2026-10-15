@@ -3657,6 +3657,7 @@ curves	Smooth	Làm mượt
 	Chisel Hard	Đục cứng
 	Chisel Soft	Đục mềm
 	Open color-less EXR as ACEScg	Mở EXR không khai báo màu sắc dưới dạng ACEScg
+	Collapse Layer Effects on Open	Thu gọn hiệu ứng lớp khi mở
 
 # View › Guides › right-click a guide
 	Edit Selected Guides	Sửa đường căn đã chọn

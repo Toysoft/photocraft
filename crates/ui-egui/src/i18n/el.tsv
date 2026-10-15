@@ -3869,6 +3869,7 @@ curves	Smooth	Εξομάλυνση
 	Chisel Hard	Σκληρή σμίλευση
 	Chisel Soft	Μαλακή σμίλευση
 	Open color-less EXR as ACEScg	Άνοιγμα EXR χωρίς χρωματική δήλωση ως ACEScg
+	Collapse Layer Effects on Open	Σύμπτυξη εφέ επιπέδων κατά το άνοιγμα
 # Export As metadata and profile options
 	EXIF	EXIF
 

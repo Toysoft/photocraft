@@ -3769,6 +3769,7 @@ curves	Smooth	Wygładź
 	Chisel Hard	Dłuto twarde
 	Chisel Soft	Dłuto miękkie
 	Open color-less EXR as ACEScg	Otwieraj EXR bez profilu koloru jako ACEScg
+	Collapse Layer Effects on Open	Zwijaj efekty warstw przy otwieraniu
 
 # View › Guides › right-click a guide
 	Edit Selected Guides	Edytuj zaznaczone prowadnice

@@ -4293,6 +4293,7 @@ layerLabel	Red	Rosso
 layers	Fill	Riempimento
 layers	Fill:	Riempimento:
 shape	Appearance	Aspetto
+	Collapse Layer Effects on Open	Comprimi gli effetti livello all’apertura
 # View › Guides › right-click a guide
 	Edit Selected Guides	Modifica guide selezionate
 	Clear Selected Guides	Cancella guide selezionate

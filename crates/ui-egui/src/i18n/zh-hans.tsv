@@ -2783,6 +2783,7 @@ curves	Smooth	平滑
 	Chisel Hard	雕刻清晰
 	Chisel Soft	雕刻柔和
 	Open color-less EXR as ACEScg	将无色彩空间信息的 EXR 以 ACEScg 打开
+	Collapse Layer Effects on Open	打开文档时折叠图层效果
 # Export As metadata and profile options
 	Color Profile	颜色配置文件
 	EXIF	EXIF

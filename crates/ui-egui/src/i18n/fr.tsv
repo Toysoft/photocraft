@@ -3175,6 +3175,7 @@ curves	Smooth	Lisser
 	Chisel Hard	Ciselage dur
 	Chisel Soft	Ciselage doux
 	Open color-less EXR as ACEScg	Ouvrir les EXR sans espace colorimétrique en ACEScg
+	Collapse Layer Effects on Open	Réduire les effets de calque à l’ouverture
 
 # View › Guides › right-click a guide
 	Edit Selected Guides	Modifier les repères sélectionnés
