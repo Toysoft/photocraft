@@ -3038,6 +3038,34 @@ fn effect_identity_is_built_once_per_layer_not_per_tile() {
 }
 
 #[test]
+fn concurrent_tiles_build_each_layer_identity_once() {
+    let mut d = identity_doc(SampleType::U8);
+    d.layers.pop();
+    let patterns = pattern::PreparedPatterns::new(&d.patterns, pattern::PREPARED_PATTERN_BYTES);
+    // Many rounds, each a fresh context with every thread released onto the same layers at
+    // once: a check-then-insert memo lets two of them miss and build the same identity twice.
+    for _ in 0..50 {
+        let cx = Ctx::for_doc(&d, &patterns);
+        let threads = 8;
+        let start = std::sync::Barrier::new(threads);
+        let ids: Vec<Vec<u64>> = std::thread::scope(|s| {
+            let handles: Vec<_> = (0..threads)
+                .map(|_| {
+                    s.spawn(|| {
+                        start.wait();
+                        d.layers.iter().map(|l| cx.layer_keys.identity(l, Some(&d))).collect::<Vec<_>>()
+                    })
+                })
+                .collect();
+            handles.into_iter().map(|h| h.join().unwrap()).collect()
+        });
+        assert!(ids.windows(2).all(|w| w[0] == w[1]), "threads disagree on an identity");
+        let built = cx.layer_keys.built.load(std::sync::atomic::Ordering::Relaxed);
+        assert_eq!(built, d.layers.len(), "built {built} identities for {} layers", d.layers.len());
+    }
+}
+
+#[test]
 fn render_refuses_rects_beyond_the_pixel_cap() {
     let doc = Document::new("c", Size::new(4, 4), ColorMode::Rgb, SampleType::U8);
     // 2^32 - 1 px wide: the width wraps negative as an i32, which once took the single-tile path.
