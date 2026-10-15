@@ -3865,3 +3865,64 @@ curves	Smooth	スムーズ
 	There are too many sets: delete one first.	セットが多すぎます。先に 1 つ削除してください。
 	set name	セット名
 	{set} (modified)	{set}（変更あり）
+
+# Type Details: OpenType features and variable axes
+	Type Details	テキストの詳細
+	Type Details…	テキストの詳細…
+	OpenType features and variable font axes, with a live preview	OpenType 機能とバリアブルフォントの軸 (ライブプレビュー付き)
+	Variable	バリアブル
+	Set optical size automatically	オプティカルサイズを自動設定
+	On	オン
+	Additional axes	その他の軸
+	Alternate annotation forms	注釈字形
+	Alternate CJK forms	CJK 異体字
+	Alternative fractions	代替分数
+	Capital spacing	大文字スペーシング
+	Capitals to petite capitals	大文字をプチキャップに
+	Capitals to small capitals	大文字をスモールキャップに
+	Case	大文字/小文字
+	Case-sensitive forms	大文字用字形
+	Character variant {n}	文字バリアント {n}
+	Character variants	文字バリアント
+	Contextual swash	前後関係に依存するスワッシュ
+	Denominators	分母
+	Expert forms	エキスパート字形
+	Figure spacing	数字の幅
+	Figure style	数字のスタイル
+	Full widths	全角
+	Half widths	半角
+	Historical forms	歴史的字形
+	Historical ligatures	歴史的合字
+	Horizontal spacing	水平方向の間隔
+	Instance	インスタンス
+	Italics	イタリック
+	Justification alternates	ジャスティフィケーション代替字形
+	Kerning pairs	カーニングペア
+	Left bounds	左側の境界
+	Letter case	大文字と小文字
+	Letterforms	字形
+	Lining	ライニング
+	Lining figures	ライニング数字
+	Mathematical Greek	数学用ギリシャ文字
+	More features	その他の機能
+	Numerators	分子
+	Oldstyle figures	オールドスタイル数字
+	Optical bounds	オプティカル境界
+	Optical size	オプティカルサイズ
+	Petite capitals	プチキャップ
+	Proportional	プロポーショナル
+	Proportional alternate widths	プロポーショナル代替幅
+	Proportional figures	プロポーショナル数字
+	Proportional widths	プロポーショナル幅
+	Reset All Axes	すべての軸をリセット
+	Right bounds	右側の境界
+	Ruby notation forms	ルビ用字形
+	Scientific inferiors	科学用下付き文字
+	Slashed zero	スラッシュ付きゼロ
+	Small capitals	スモールキャップ
+	Stylistic set {n}	スタイルセット {n}
+	Stylistic sets	スタイルセット
+	Tabular	等幅
+	Tabular figures	等幅数字
+	This font has no variable axes.	このフォントにはバリアブル軸がありません。
+	Unicase	ユニケース

@@ -1318,7 +1318,8 @@ fn variable_faces_list_the_weights_of_their_axis() {
     assert_eq!(super::style_names(&[face(700.0, false, Vec::new())]), ["Bold"]);
 }
 
-/// A variable font's axes become sliders (optical size excepted: it follows the type size), and
+/// A variable font's registered axes become sliders (optical size excepted: it follows the type
+/// size; the others are in Type Details), and
 /// each shows the style's value for it, or what the layout draws without one (#2985).
 #[test]
 fn variable_font_axes_become_sliders_with_the_drawn_value() {
@@ -1333,10 +1334,11 @@ fn variable_font_axes_become_sliders_with_the_drawn_value() {
     };
     let ax = |tag: &str, min: f32, def: f32, max: f32| (tag.to_string(), min, def, max);
     let faces = [
-        face(false, vec![ax("opsz", 8.0, 14.0, 144.0), ax("wght", 100.0, 400.0, 1000.0), ax("wdth", 25.0, 100.0, 151.0)]),
+        face(false, vec![ax("opsz", 8.0, 14.0, 144.0), ax("wght", 100.0, 400.0, 1000.0), ax("GRAD", -200.0, 0.0, 150.0), ax("wdth", 25.0, 100.0, 151.0)]),
         face(true, vec![ax("slnt", -10.0, 0.0, 0.0)]),
     ];
     let tags = |v: Vec<super::Axis>| v.into_iter().map(|a| a.0).collect::<Vec<_>>();
+    // Parametric axes (GRAD) are in Type Details › Variable, not inline.
     assert_eq!(tags(super::slider_axes(&faces, false)), ["wght", "wdth"]);
     assert_eq!(tags(super::slider_axes(&faces, true)), ["slnt"]);
     let c = CharStyle { weight: 700, variations: vec![FontVariation { axis: "wdth".into(), value: 300.0 }], ..Default::default() };
@@ -1632,6 +1634,20 @@ mod multi_layer_formatting {
         assert!(!swash(&h, 0) && swash(&h, 1) && swash(&h, 2) && !swash(&h, 3));
         h.run();
         assert_eq!(shown(&h, "Swash"), Some(Toggled::True), "shown at the selection start");
+    }
+
+    /// The Character section opens and closes Type Details (OpenType features and variable axes).
+    #[test]
+    fn character_section_opens_type_details() {
+        let (app, _) = fixture();
+        let mut h = controls(app, true);
+        assert!(!h.state().ui.type_panels.details);
+        h.get_by_label("Type Details…").click();
+        h.run();
+        assert!(h.state().ui.type_panels.details);
+        h.get_by_label("Type Details…").click();
+        h.run();
+        assert!(!h.state().ui.type_panels.details);
     }
 
     /// Type › Anti-Alias and Type › Orientation check the edited (else selected) layer's value.

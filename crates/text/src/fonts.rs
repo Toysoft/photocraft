@@ -194,6 +194,8 @@ pub struct FontDb {
     /// [`Self::fallback_stack`] (#1909). Off, only the default family shapes the text.
     missing_glyph_protection: bool,
     face_cache: HashMap<String, Vec<FaceInfo>>,
+    /// [`Self::face_details`] by (family, PostScript name, weight, italic).
+    details_cache: HashMap<(String, Option<String>, u16, bool), Arc<crate::FaceDetails>>,
     face_aliases: HashMap<(String, usize), String>,
     /// This is the shared engine's database: registrations also move [`shared_generation`].
     shared: bool,
@@ -216,6 +218,7 @@ impl FontDb {
             fallbacks: Vec::new(),
             missing_glyph_protection: true,
             face_cache: HashMap::new(),
+            details_cache: HashMap::new(),
             face_aliases: HashMap::new(),
             shared: false,
         };
@@ -267,6 +270,7 @@ impl FontDb {
             }
             self.ps_cache.clear();
             self.face_cache.clear();
+            self.details_cache.clear();
             self.refresh_generics();
         }
     }
@@ -297,6 +301,7 @@ impl FontDb {
         names.sort_by_key(|n| (is_hidden_family(n), n.to_lowercase()));
         self.ps_cache.clear();
         self.face_cache.clear();
+        self.details_cache.clear();
         self.refresh_generics();
         GENERATION.fetch_add(1, Ordering::Relaxed);
         if self.shared {
@@ -422,6 +427,35 @@ impl FontDb {
             .ok()
             .and_then(|gsub| gsub.feature_list().ok())
             .is_some_and(|features| features.feature_records().iter().any(|record| record.feature_tag() == feature))
+    }
+
+    /// Axes (with the font's names), named instances and layout features of the face a character
+    /// style draws with: the exact face its PostScript name picks, else the family's closest match
+    /// for its weight and italic (as layout does). An unknown family reads the default family.
+    /// Cached; a face that can't be read gives empty details.
+    pub fn face_details(&mut self, style: &photocraft_doc::text::CharStyle) -> Arc<crate::FaceDetails> {
+        let family = if style.font_family.is_empty() || !self.has_family(&style.font_family) { DEFAULT_FAMILY.to_string() } else { style.font_family.clone() };
+        let key = (family.clone(), style.postscript_name.clone(), style.weight, style.italic);
+        if let Some(d) = self.details_cache.get(&key) {
+            return d.clone();
+        }
+        let exact = style.postscript_name.as_ref().and_then(|ps| self.faces(&family).iter().position(|f| f.postscript_name.as_ref() == Some(ps)));
+        let details = (|| {
+            let info = self.fcx.collection.family_by_name(&family)?;
+            let font = match exact {
+                Some(i) => info.fonts().get(i).cloned(),
+                None => {
+                    let it = if style.italic { FontStyle::Italic } else { FontStyle::Normal };
+                    info.match_font(FontWidth::default(), it, FontWeight::new(style.weight.clamp(1, 1000) as f32), true).cloned()
+                }
+            }?;
+            let blob = font.load(Some(&mut self.fcx.source_cache))?;
+            craft_font_info::read(blob.as_ref(), font.index()).ok()
+        })()
+        .unwrap_or_default();
+        let details = Arc::new(details);
+        self.details_cache.insert(key, details.clone());
+        details
     }
 
     /// Faces of a family, preserving names even when multiple faces share CSS attributes.

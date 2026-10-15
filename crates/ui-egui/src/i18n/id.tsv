@@ -3181,3 +3181,65 @@ curves	Smooth	Haluskan
 	set name	nama set
 	{set} (modified)	{set} (diubah)
 	Random	Acak
+
+# Type Details: OpenType features and variable axes
+	Type Details	Detail Teks
+	Type Details…	Detail Teks…
+	OpenType features and variable font axes, with a live preview	Fitur OpenType dan sumbu font variabel, dengan pratinjau langsung
+	Variable	Variabel
+	Set optical size automatically	Atur ukuran optik secara otomatis
+	On	Aktif
+	Additional axes	Sumbu tambahan
+	Alternate annotation forms	Bentuk anotasi alternatif
+	Alternate CJK forms	Bentuk CJK alternatif
+	Alternative fractions	Pecahan alternatif
+	Capital spacing	Spasi huruf kapital
+	Capitals to petite capitals	Kapital ke kapital petite
+	Capitals to small capitals	Kapital ke kapital kecil
+	Case	Huruf besar/kecil
+	Case-sensitive forms	Bentuk peka huruf besar
+	Character variant {n}	Varian karakter {n}
+	Character variants	Varian karakter
+	Contextual swash	Swash kontekstual
+	Denominators	Penyebut
+	Expert forms	Bentuk ahli
+	Figure spacing	Spasi angka
+	Figure style	Gaya angka
+	Full widths	Lebar penuh
+	Half widths	Lebar setengah
+	Historical forms	Bentuk historis
+	Historical ligatures	Ligatur historis
+	Horizontal spacing	Spasi horizontal
+	Instance	Instans
+	Italics	Miring
+	Justification alternates	Alternatif perataan
+	Kerning pairs	Pasangan kerning
+	Left bounds	Batas kiri
+	Letter case	Huruf besar dan kecil
+	Letterforms	Bentuk huruf
+	Lining	Lining
+	Lining figures	Angka lining
+	Mathematical Greek	Yunani matematika
+	More features	Fitur lainnya
+	Numbers	Angka
+	Numerators	Pembilang
+	Oldstyle figures	Angka gaya lama
+	Optical bounds	Batas optik
+	Optical size	Ukuran optik
+	Petite capitals	Kapital petite
+	Proportional	Proporsional
+	Proportional alternate widths	Lebar proporsional alternatif
+	Proportional figures	Angka proporsional
+	Proportional widths	Lebar proporsional
+	Reset All Axes	Atur ulang semua sumbu
+	Right bounds	Batas kanan
+	Ruby notation forms	Bentuk notasi ruby
+	Scientific inferiors	Subskrip ilmiah
+	Slashed zero	Nol bergaris miring
+	Small capitals	Kapital kecil
+	Stylistic set {n}	Set gaya {n}
+	Stylistic sets	Set gaya
+	Tabular	Tabular
+	Tabular figures	Angka tabular
+	This font has no variable axes.	Font ini tidak memiliki sumbu variabel.
+	Unicase	Unicase

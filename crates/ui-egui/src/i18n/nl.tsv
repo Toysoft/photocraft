@@ -3949,3 +3949,64 @@ curves	Smooth	Vloeiend maken
 	There are too many sets: delete one first.	Er zijn te veel sets: verwijder er eerst een.
 	set name	naam van de set
 	{set} (modified)	{set} (gewijzigd)
+
+# Type Details: OpenType features and variable axes
+	Type Details	Tekstdetails
+	Type Details…	Tekstdetails…
+	OpenType features and variable font axes, with a live preview	OpenType-functies en assen van variabele lettertypen, met live voorvertoning
+	Variable	Variabel
+	Set optical size automatically	Optische grootte automatisch instellen
+	Additional axes	Extra assen
+	Alternate annotation forms	Alternatieve annotatievormen
+	Alternate CJK forms	Alternatieve CJK-vormen
+	Alternative fractions	Alternatieve breuken
+	Capital spacing	Hoofdletterspatiëring
+	Capitals to petite capitals	Hoofdletters naar petite kapitalen
+	Capitals to small capitals	Hoofdletters naar kleinkapitalen
+	Case	Hoofdletters
+	Case-sensitive forms	Hoofdlettergevoelige vormen
+	Character variant {n}	Tekenvariant {n}
+	Character variants	Tekenvarianten
+	Contextual swash	Contextuele swash
+	Denominators	Noemers
+	Expert forms	Expertvormen
+	Figure spacing	Cijferbreedte
+	Figure style	Cijferstijl
+	Full widths	Volle breedte
+	Half widths	Halve breedte
+	Historical forms	Historische vormen
+	Historical ligatures	Historische ligaturen
+	Horizontal spacing	Horizontale spatiëring
+	Instance	Instantie
+	Italics	Cursief
+	Justification alternates	Uitvulalternatieven
+	Kerning pairs	Kerningparen
+	Left bounds	Linkergrenzen
+	Letter case	Hoofd- en kleine letters
+	Letterforms	Lettervormen
+	Lining	Kapitaal
+	Lining figures	Kapitaalcijfers
+	Mathematical Greek	Wiskundig Grieks
+	More features	Meer functies
+	Numbers	Getallen
+	Numerators	Tellers
+	Oldstyle figures	Mediaevalcijfers
+	Optical bounds	Optische grenzen
+	Optical size	Optische grootte
+	Petite capitals	Petite kapitalen
+	Proportional	Proportioneel
+	Proportional alternate widths	Alternatieve proportionele breedten
+	Proportional figures	Proportionele cijfers
+	Proportional widths	Proportionele breedten
+	Reset All Axes	Alle assen herstellen
+	Right bounds	Rechtergrenzen
+	Ruby notation forms	Ruby-notatievormen
+	Scientific inferiors	Wetenschappelijk onderschrift
+	Slashed zero	Nul met schuine streep
+	Small capitals	Kleinkapitalen
+	Stylistic set {n}	Stilistische set {n}
+	Stylistic sets	Stilistische sets
+	Tabular	Tabulair
+	Tabular figures	Tabulaire cijfers
+	This font has no variable axes.	Dit lettertype heeft geen variabele assen.
+	Unicase	Unicase

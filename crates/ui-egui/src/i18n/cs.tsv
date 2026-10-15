@@ -3797,3 +3797,66 @@ navigator	Zoom	Zvětšení
 	There are too many sets: delete one first.	Sad je příliš mnoho: nejprve jednu smažte.
 	set name	název sady
 	{set} (modified)	{set} (změněno)
+
+# Type Details: OpenType features and variable axes
+	Type Details	Podrobnosti písma
+	Type Details…	Podrobnosti písma…
+	OpenType features and variable font axes, with a live preview	Funkce OpenType a osy variabilního písma s živým náhledem
+	Variable	Variabilní
+	Set optical size automatically	Nastavit optickou velikost automaticky
+	Additional axes	Další osy
+	Alternate annotation forms	Alternativní anotační tvary
+	Alternate CJK forms	Alternativní tvary CJK
+	Alternative fractions	Alternativní zlomky
+	Capital spacing	Prostrkání verzálek
+	Capitals to petite capitals	Verzálky na petitní kapitálky
+	Capitals to small capitals	Verzálky na kapitálky
+	Case	Velikost písmen
+	Case-sensitive forms	Tvary citlivé na velikost písmen
+	Character variant {n}	Varianta znaku {n}
+	Character variants	Varianty znaků
+	Contextual swash	Kontextové ozdobné tvary
+	Denominators	Jmenovatele
+	Expert forms	Expertní tvary
+	Figure spacing	Šířka číslic
+	Figure style	Styl číslic
+	Full widths	Plné šířky
+	Half widths	Poloviční šířky
+	Historical forms	Historické tvary
+	Historical ligatures	Historické ligatury
+	Horizontal spacing	Vodorovné rozestupy
+	Instance	Instance
+	Italics	Kurzíva
+	Justification alternates	Alternativy pro zarovnání
+	Kerning pairs	Páry kerningu
+	Left bounds	Levé okraje
+	Letter case	Velikost písmen
+	Letterforms	Tvary písmen
+	Lining	Verzálkové
+	Lining figures	Verzálkové číslice
+	Mathematical Greek	Matematická řečtina
+	More features	Další funkce
+	Numbers	Čísla
+	Numerators	Čitatelé
+	Oldstyle figures	Minuskové číslice
+	Optical bounds	Optické okraje
+	Optical size	Optická velikost
+	Petite capitals	Petitní kapitálky
+	Proportional	Proporcionální
+	Proportional alternate widths	Alternativní proporcionální šířky
+	Proportional figures	Proporcionální číslice
+	Proportional widths	Proporcionální šířky
+	Reset All Axes	Obnovit všechny osy
+	Right bounds	Pravé okraje
+	Ruby notation forms	Tvary pro ruby
+	Scientific inferiors	Vědecké dolní indexy
+	Slashed zero	Přeškrtnutá nula
+	Small capitals	Kapitálky
+	Stylistic set {n}	Stylistická sada {n}
+	Stylistic sets	Stylistické sady
+	Subscript	Dolní index
+	Superscript	Horní index
+	Tabular	Tabulkové
+	Tabular figures	Tabulkové číslice
+	This font has no variable axes.	Toto písmo nemá žádné variabilní osy.
+	Unicase	Unicase

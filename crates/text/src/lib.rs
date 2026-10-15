@@ -36,6 +36,7 @@ use photocraft_color::PixelFormat;
 use photocraft_doc::TextLayer;
 
 pub use craft_fonts::{CRAFT_FONTS, CraftFont};
+pub use craft_font_info::{AxisDetail, FaceDetails, FeatureDetail, InstanceDetail};
 pub use fonts::{FaceInfo, FontDb, ResolvedFont};
 pub use layout::{
     ClusterInfo, LineInfo, PlacedGlyph, TextLayout, byte_index, char_index, hit_char, line_edge, line_index, line_step, text_point_inside, word_boundary,

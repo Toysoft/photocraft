@@ -4310,3 +4310,63 @@ shape	Appearance	Aspetto
 	There are too many sets: delete one first.	Ci sono troppi set: eliminane prima uno.
 	set name	nome del set
 	{set} (modified)	{set} (modificato)
+
+# Type Details: OpenType features and variable axes
+	Type Details	Dettagli testo
+	Type Details…	Dettagli testo…
+	OpenType features and variable font axes, with a live preview	Funzioni OpenType e assi dei font variabili, con anteprima dal vivo
+	Variable	Variabile
+	Set optical size automatically	Imposta dimensione ottica automaticamente
+	Additional axes	Assi aggiuntivi
+	Alternate annotation forms	Forme di annotazione alternative
+	Alternate CJK forms	Forme CJK alternative
+	Alternative fractions	Frazioni alternative
+	Capital spacing	Spaziatura maiuscole
+	Capitals to petite capitals	Maiuscole in maiuscoletto piccolo
+	Capitals to small capitals	Maiuscole in maiuscoletto
+	Case	Maiuscole/minuscole
+	Case-sensitive forms	Forme sensibili alle maiuscole
+	Character variant {n}	Variante carattere {n}
+	Character variants	Varianti carattere
+	Contextual swash	Svolazzi contestuali
+	Denominators	Denominatori
+	Expert forms	Forme expert
+	Figure spacing	Spaziatura cifre
+	Figure style	Stile cifre
+	Full widths	Larghezza piena
+	Half widths	Mezza larghezza
+	Historical forms	Forme storiche
+	Historical ligatures	Legature storiche
+	Horizontal spacing	Spaziatura orizzontale
+	Instance	Istanza
+	Italics	Corsivi
+	Justification alternates	Alternative per giustificazione
+	Kerning pairs	Coppie di crenatura
+	Left bounds	Limiti sinistri
+	Letter case	Maiuscole e minuscole
+	Letterforms	Forme delle lettere
+	Lining	Allineate
+	Lining figures	Cifre allineate
+	Mathematical Greek	Greco matematico
+	More features	Altre funzioni
+	Numerators	Numeratori
+	Oldstyle figures	Cifre in stile antico
+	Optical bounds	Limiti ottici
+	Optical size	Dimensione ottica
+	Petite capitals	Maiuscoletto piccolo
+	Proportional	Proporzionali
+	Proportional alternate widths	Larghezze proporzionali alternative
+	Proportional figures	Cifre proporzionali
+	Proportional widths	Larghezze proporzionali
+	Reset All Axes	Ripristina tutti gli assi
+	Right bounds	Limiti destri
+	Ruby notation forms	Forme di notazione ruby
+	Scientific inferiors	Pedici scientifici
+	Slashed zero	Zero barrato
+	Small capitals	Maiuscoletto
+	Stylistic set {n}	Set stilistico {n}
+	Stylistic sets	Set stilistici
+	Tabular	Tabulari
+	Tabular figures	Cifre tabulari
+	This font has no variable axes.	Questo font non ha assi variabili.
+	Unicase	Unicase

@@ -39,6 +39,8 @@ photocraft-tablet = { path = "crates/tablet" }
 
 # external
 craft-print = { git = "https://github.com/storytold/craft-libs", rev = "3d37da389a3618ab9b76109da11416e9ca4ea719" }
+# Pinned to the fork until storytold/craft-libs#154 merges; then repin to storytold/craft-libs.
+craft-font-info = { git = "https://github.com/Arecsu/craft-libs", rev = "38b767930135df01f5a4ba359ec9b8d3d6ed9357" }
 thiserror = "2"
 serde = { version = "1", features = ["derive", "rc"] }
 serde_json = "1"

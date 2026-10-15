@@ -3787,3 +3787,65 @@ curves	Smooth	Wygładź
 	There are too many sets: delete one first.	Zestawów jest za dużo: najpierw usuń jeden.
 	set name	nazwa zestawu
 	{set} (modified)	{set} (zmieniony)
+
+# Type Details: OpenType features and variable axes
+	Type Details	Szczegóły tekstu
+	Type Details…	Szczegóły tekstu…
+	OpenType features and variable font axes, with a live preview	Funkcje OpenType i osie fontów zmiennych, z podglądem na żywo
+	Variable	Zmienny
+	Set optical size automatically	Ustaw rozmiar optyczny automatycznie
+	On	Wł.
+	Additional axes	Dodatkowe osie
+	Alternate annotation forms	Alternatywne formy adnotacji
+	Alternate CJK forms	Alternatywne formy CJK
+	Alternative fractions	Alternatywne ułamki
+	Capital spacing	Odstępy wersalików
+	Capitals to petite capitals	Wersaliki na kapitaliki petite
+	Capitals to small capitals	Wersaliki na kapitaliki
+	Case	Wielkość liter
+	Case-sensitive forms	Formy zależne od wielkości liter
+	Character variant {n}	Wariant znaku {n}
+	Character variants	Warianty znaków
+	Contextual swash	Kontekstowe ozdobniki
+	Denominators	Mianowniki
+	Expert forms	Formy eksperckie
+	Figure spacing	Szerokość cyfr
+	Figure style	Styl cyfr
+	Full widths	Pełna szerokość
+	Half widths	Połowa szerokości
+	Historical forms	Formy historyczne
+	Historical ligatures	Ligatury historyczne
+	Horizontal spacing	Odstępy poziome
+	Instance	Instancja
+	Italics	Kursywa
+	Justification alternates	Alternatywy wyjustowania
+	Kerning pairs	Pary kerningowe
+	Left bounds	Lewe granice
+	Letter case	Wielkość liter
+	Letterforms	Kształty liter
+	Lining	Wersalikowe
+	Lining figures	Cyfry wersalikowe
+	Mathematical Greek	Grecki matematyczny
+	More features	Więcej funkcji
+	Numbers	Liczby
+	Numerators	Liczniki
+	Oldstyle figures	Cyfry nautyczne
+	Optical bounds	Granice optyczne
+	Optical size	Rozmiar optyczny
+	Petite capitals	Kapitaliki petite
+	Proportional	Proporcjonalne
+	Proportional alternate widths	Alternatywne szerokości proporcjonalne
+	Proportional figures	Cyfry proporcjonalne
+	Proportional widths	Szerokości proporcjonalne
+	Reset All Axes	Resetuj wszystkie osie
+	Right bounds	Prawe granice
+	Ruby notation forms	Formy notacji ruby
+	Scientific inferiors	Indeksy dolne naukowe
+	Slashed zero	Przekreślone zero
+	Small capitals	Kapitaliki
+	Stylistic set {n}	Zestaw stylistyczny {n}
+	Stylistic sets	Zestawy stylistyczne
+	Tabular	Tabelaryczne
+	Tabular figures	Cyfry tabelaryczne
+	This font has no variable axes.	Ten font nie ma osi zmiennych.
+	Unicase	Unicase

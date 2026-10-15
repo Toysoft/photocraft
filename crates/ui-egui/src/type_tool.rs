@@ -1293,14 +1293,15 @@ fn style_names(faces: &[photocraft_text::FaceInfo]) -> Vec<String> {
 /// A variable-font axis: (tag, min, default, max), as [`photocraft_text::FaceInfo::axes`].
 pub(crate) type Axis = (String, f32, f32, f32);
 
-/// The axes the Character section shows as sliders (#2985): those of the faces matching the
-/// style's italic, else of any face. Optical size has none: it follows the type size.
+/// The axes the Character section shows as sliders (#2985): the registered weight, width, slant
+/// and italic axes of the faces matching the style's italic, else of any face. Optical size has
+/// none (it follows the type size); every other axis is in Type Details › Variable.
 pub(crate) fn slider_axes(faces: &[photocraft_text::FaceInfo], italic: bool) -> Vec<Axis> {
     let pick = |want: Option<bool>| {
         let mut v: Vec<Axis> = Vec::new();
         for f in faces.iter().filter(|f| want.is_none_or(|w| f.italic == w)) {
             for a in &f.axes {
-                let usable = a.0 != "opsz" && a.1.is_finite() && a.3.is_finite() && a.1 < a.3;
+                let usable = matches!(a.0.as_str(), "wght" | "wdth" | "slnt" | "ital") && a.1.is_finite() && a.3.is_finite() && a.1 < a.3;
                 if usable && !v.iter().any(|b| b.0 == a.0) {
                     v.push(a.clone());
                 }
@@ -1324,18 +1325,6 @@ pub(crate) fn axis_value(c: &photocraft_doc::text::CharStyle, (tag, min, default
     if v.is_finite() { v.clamp(*min, *max) } else { d }
 }
 
-/// Slider label for an axis: the registered axes by name, others by their tag (as the font
-/// names them in its `fvar` table, e.g. `GRAD`).
-fn axis_label(tag: &str) -> String {
-    match tag {
-        "wght" => tl!("Weight").to_string(),
-        "wdth" => tl!("Width").to_string(),
-        "slnt" => tl!("Slant").to_string(),
-        "ital" => tl!("Italic").to_string(),
-        _ => tag.to_string(),
-    }
-}
-
 /// One slider row per variable-font axis of the style's font, below the font style (#2985).
 fn axis_sliders(app: &mut PhotocraftApp, ui: &mut egui::Ui, c: &photocraft_doc::text::CharStyle) {
     // Drawn every frame: no sliders until the background font scan is done (#3021).
@@ -1351,7 +1340,7 @@ fn axis_sliders(app: &mut PhotocraftApp, ui: &mut egui::Ui, c: &photocraft_doc::
         let mut changed = false;
         ui.push_id(("type-axis", &axis.0), |ui| {
             ui.horizontal(|ui| {
-                ui.label(egui::RichText::new(axis_label(&axis.0)).color(t.text_dim));
+                ui.label(egui::RichText::new(crate::type_details_ui::axis_name(&axis.0, None)).color(t.text_dim));
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     changed |= crate::widgets::value_field(ui, &mut v, min..=max, "", 74.0).changed();
                 });
@@ -1653,7 +1642,7 @@ fn drag_key(ctx: &egui::Context) -> Option<String> {
 }
 
 /// Apply only the supplied properties to the text-edit scope or selected type layers.
-fn apply(app: &mut PhotocraftApp, ctx: &egui::Context, props: serde_json::Value) {
+pub(crate) fn apply(app: &mut PhotocraftApp, ctx: &egui::Context, props: serde_json::Value) {
     let Some(mut p) = formatting_params(app) else { return };
     if let Some(props) = props.as_object() {
         for (key, value) in props {
@@ -2100,6 +2089,16 @@ fn opentype_glyph(p: &egui::Painter, r: egui::Rect, tag: &str, col: Color32) {
     }
 }
 
+/// Opens Type Details: every OpenType feature and variable axis of the face, with a live preview.
+fn type_details_button(app: &mut PhotocraftApp, ui: &mut egui::Ui, full: f32) {
+    let open = app.ui.type_panels.details;
+    let resp =
+        crate::widgets::secondary_button(ui, tl!("Type Details…"), full).on_hover_text(tl!("OpenType features and variable font axes, with a live preview"));
+    if resp.clicked() {
+        app.ui.type_panels.details = !open;
+    }
+}
+
 /// Width of each of `n` equal cells filling `avail` with 2 pt gaps.
 fn cell_width(avail: f32, n: usize) -> f32 {
     let n = n.max(1) as f32;
@@ -2275,6 +2274,8 @@ fn type_sections(app: &mut PhotocraftApp, ui: &mut egui::Ui, character: bool, pa
         });
         ui.add_space(ROW_GAP);
         opentype_row(app, ui, &c, full);
+        ui.add_space(ROW_GAP);
+        type_details_button(app, ui, full);
         ui.add_space(ROW_GAP);
     }
     if paragraph && section(ui, "paragraph", tl!("Paragraph")) {
