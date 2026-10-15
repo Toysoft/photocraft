@@ -203,6 +203,10 @@ fn created_text_layer_roundtrips_through_psd() {
             .map(|mut r| {
                 r.style.postscript_name = None;
                 r.style.color.c = r.style.color.c.map(|c| (c * 1000.0).round() / 1000.0);
+                // PSD materializes the shaper's implicit calt ON as an explicit 1. Only that
+                // default-on spelling is equivalent; explicit calt 0 must remain distinct.
+                // psd_calt_save proves the actual bundled-font glyphs survive both saves.
+                r.style.features.retain(|feature| feature.tag != "calt" || feature.value != 1);
                 r
             })
             .collect::<Vec<_>>()

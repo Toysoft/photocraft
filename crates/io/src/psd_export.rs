@@ -68,6 +68,8 @@ struct Ex {
     /// `TextIndex`, others get the next free number; see `photocraft_text::psd::build_txt2`),
     /// written into the `TySh` data this export re-serializes.
     text_index: std::collections::HashMap<photocraft_doc::LayerId, i32>,
+    /// Objects whose local description changed, including style-only edits and new layers.
+    changed_text: std::collections::HashSet<i32>,
     canvas: photocraft_geom::Rect,
     records: Vec<LayerRecord>,
     warnings: Vec<String>,
@@ -640,6 +642,11 @@ impl Ex {
                 let rewrite = styled.as_ref().or(generated.as_ref()).or_else(|| src.filter(|d| photocraft_text::psd::text_index(d.as_slice()) != Some(idx)));
                 let fresh = rewrite.and_then(|d| photocraft_text::psd::set_text_index(d.as_slice(), idx)).map(std::sync::Arc::new);
                 set_principal(&mut raw, &[b"TySh"], fresh.as_ref().or(styled.as_ref().or(src)));
+                let original = l.psd_blocks.iter().find(|(k, _)| k == b"TySh").map(|(_, d)| d.as_slice());
+                let emitted = raw.iter().find(|(k, _)| k == b"TySh").map(|(_, d)| d.as_slice());
+                if original.is_none() || original != emitted {
+                    self.changed_text.insert(idx);
+                }
                 if !raw.iter().any(|(k, _)| k == b"TySh") {
                     self.warnings.push(format!("layer \"{}\": text layer written as pixels (no TySh data)", l.name));
                 }
@@ -998,8 +1005,11 @@ impl Ex {
                 return Err(format!("smart objects nest more than {MAX_NESTING} deep"));
             }
             let doc = photocraft_format::load_from_bytes(bytes).map_err(|e| format!("its contents can't be read: {e}"))?;
-            let (file, warnings) =
+            let (file, warnings, error) =
                 document_to_psd_nested(&doc, &PsdExportOptions { force_psb: true, ..Default::default() }, self.smart.depth + 1, &Interrupt::NONE);
+            if let Some(error) = error {
+                return Err(error);
+            }
             let data = file.to_bytes().map_err(|e| format!("its contents can't be written: {e}"))?;
             let stem = file_name.rsplit_once('.').map_or(file_name, |(a, _)| a);
             self.warnings.extend(warnings.into_iter().map(|w| format!("smart object {stem}: {w}")));
@@ -1369,14 +1379,22 @@ pub fn document_to_psd(doc: &Document) -> PsdFile {
 /// anything that could not be represented. The merged composite is rendered
 /// with `photocraft_compose::flatten`.
 pub fn document_to_psd_with(doc: &Document, opts: &PsdExportOptions) -> (PsdFile, Vec<String>) {
-    document_to_psd_nested(doc, opts, 0, &Interrupt::NONE)
+    let (file, mut warnings, error) = document_to_psd_nested(doc, opts, 0, &Interrupt::NONE);
+    if let Some(error) = error {
+        warnings.push(format!("PSD text cannot be represented: {error}"));
+    }
+    (file, warnings)
 }
 
 /// [`document_to_psd_with`] for a background save (#3389): reports progress through `ctl` after
 /// each layer record and each band of the merged composite. Once `ctl` is cancelled it stops
 /// early and returns an **incomplete** model: callers check `ctl` and discard it.
-pub(crate) fn document_to_psd_interruptible(doc: &Document, opts: &PsdExportOptions, ctl: &Interrupt) -> (PsdFile, Vec<String>) {
-    document_to_psd_nested(doc, opts, 0, ctl)
+pub(crate) fn document_to_psd_interruptible(doc: &Document, opts: &PsdExportOptions, ctl: &Interrupt) -> Result<(PsdFile, Vec<String>), crate::IoError> {
+    let (file, warnings, error) = document_to_psd_nested(doc, opts, 0, ctl);
+    match error {
+        Some(error) => Err(crate::IoError::Unsupported(format!("PSD text cannot be represented: {error}"))),
+        None => Ok((file, warnings)),
+    }
 }
 
 /// How much of a PSD conversion the merged composite weighs, in layer records: rendering it
@@ -1496,6 +1514,66 @@ fn block_signature(sig: [u8; 4], version: Version) -> [u8; 4] {
     if version == Version::Psd && sig == *b"8B64" { *b"8BIM" } else { sig }
 }
 
+/// Import folds a global frame anchor into the model, but keeps the original TySh bytes.
+/// Rebuilt objects use identity global frames, so make their local descriptions independent.
+/// Already independent TySh blocks stay byte-for-byte, preserving unknown local fields.
+fn materialize_text_frames(doc: &Document, ex: &mut Ex) -> std::collections::HashSet<i32> {
+    let mut patches = Vec::new();
+    let mut anchors = std::collections::HashSet::new();
+    let mut valid = true;
+    for (_, _, layer) in doc.walk() {
+        let LayerContent::Text(t) = &layer.content else { continue };
+        let Some(index) = ex.text_index.get(&layer.id).copied().filter(|i| ex.changed_text.contains(i)) else {
+            continue;
+        };
+        let candidate = (|| {
+            let id = ex.layer_ids.get(&layer.id).copied()?;
+            let at = ex.records.iter().position(|r| r.layer_id() == Some(id))?;
+            let block = ex.records.get(at)?.block(b"TySh")?;
+            let local = photocraft_text::psd::text_layer_from_tysh(&block.data, ex.dpi)?;
+            if local.transform == t.transform {
+                return Some((at, None));
+            }
+            anchors.insert(index);
+            let raw = photocraft_text::psd::parse_tysh(&block.data)?;
+            if !local.transform.m.iter().chain(t.transform.m.iter()).chain(raw.transform.m.iter()).all(|v| v.is_finite()) {
+                return None;
+            }
+            let inverse = local.transform.inverse()?;
+            // Fold only the model-space delta into the raw matrix. Unknown local data stays.
+            let transform = t.transform.mul(&inverse).mul(&raw.transform);
+            if !transform.m.iter().all(|v| v.is_finite()) {
+                return None;
+            }
+            let mut data = block.data.clone();
+            let matrix = data.get_mut(2..50)?;
+            for (bytes, value) in matrix.chunks_exact_mut(8).zip(transform.m) {
+                bytes.copy_from_slice(&value.to_be_bytes());
+            }
+            let decoded = photocraft_text::psd::text_layer_from_tysh(&data, ex.dpi)?;
+            decoded.transform.m.iter().zip(t.transform.m).all(|(a, b)| a.is_finite() && (a - b).abs() <= 1e-9 * b.abs().max(1.0)).then_some((at, Some(data)))
+        })();
+        match candidate {
+            Some((at, Some(data))) => patches.push((at, data)),
+            Some((_, None)) => {}
+            None => {
+                valid = false;
+                anchors.insert(index);
+            }
+        }
+    }
+    // On failure keep the existing native geometry for every uncommitted frame.
+    if !valid {
+        return anchors;
+    }
+    for (at, data) in patches {
+        if let Some(block) = ex.records.get_mut(at).and_then(|r| r.block_mut(b"TySh")) {
+            block.data = data;
+        }
+    }
+    Default::default()
+}
+
 pub(crate) fn psd_version(doc: &Document, force_psb: bool, size_exceeds_limit: bool) -> Version {
     let exceeds_dimensions = doc.size.width > 30_000 || doc.size.height > 30_000;
     if force_psb || exceeds_dimensions || size_exceeds_limit { Version::Psb } else { Version::Psd }
@@ -1506,9 +1584,10 @@ pub(crate) fn psd_size_exceeds_limit(doc: &Document) -> bool {
 }
 
 /// [`document_to_psd_with`] for a document embedded `depth` smart objects deep.
-fn document_to_psd_nested(doc: &Document, opts: &PsdExportOptions, depth: u32, ctl: &Interrupt) -> (PsdFile, Vec<String>) {
+fn document_to_psd_nested(doc: &Document, opts: &PsdExportOptions, depth: u32, ctl: &Interrupt) -> (PsdFile, Vec<String>, Option<String>) {
     if doc.mode == ColorMode::Multichannel {
-        return crate::multichannel_map::document_to_psd(doc, opts.force_psb);
+        let (file, warnings) = crate::multichannel_map::document_to_psd(doc, opts.force_psb);
+        return (file, warnings, None);
     }
     let fmt = doc.pixel_format();
     let sample = fmt.sample;
@@ -1521,6 +1600,7 @@ fn document_to_psd_nested(doc: &Document, opts: &PsdExportOptions, depth: u32, c
         dpi: doc.resolution_dpi,
         text_styles: doc.text_styles.clone(),
         text_index: Default::default(),
+        changed_text: Default::default(),
         mask_fmt: PixelFormat::new(ColorMode::Grayscale, sample, false),
         cc,
         cmyk: fmt.mode == ColorMode::Cmyk,
@@ -1545,6 +1625,7 @@ fn document_to_psd_nested(doc: &Document, opts: &PsdExportOptions, depth: u32, c
     if fmt.mode != doc.mode {
         ex.warnings.push(format!("{:?} document written as {:?}", doc.mode, fmt.mode));
     }
+    let mut type_error = None;
     // Assign layer ids up front (stable across round trips): keep unique
     // `psd_id`s, number the rest after them; dividers come after all.
     {
@@ -1573,24 +1654,48 @@ fn document_to_psd_nested(doc: &Document, opts: &PsdExportOptions, depth: u32, c
         // number it already names — its `Txt2` object must sit at that slot for `apply_txt2` —
         // and new layers get the next free number.
         let mut used_txt = std::collections::HashSet::new();
-        let mut next_txt = 0i32;
         ex.text_index = Default::default();
+        // Reserve every imported index before assigning new layers. Otherwise a front-inserted
+        // layer can steal a later sibling's native object and frame.
         for (_, _, l) in &walk {
-            let LayerContent::Text(t) = &l.content else {
+            let LayerContent::Text(_) = &l.content else {
                 continue;
             };
-            let kept = t.psd_raw.as_deref().and_then(|d| photocraft_text::psd::text_index(d));
-            let index = match kept {
-                Some(i) if used_txt.insert(i) => i,
-                _ => {
-                    while used_txt.contains(&next_txt) {
-                        next_txt += 1;
-                    }
-                    used_txt.insert(next_txt);
-                    next_txt
+            // A new layer's freshly built TySh also starts at index 0. Only an imported
+            // principal block establishes ownership of an existing global object.
+            let kept = l.psd_blocks.iter().find(|(key, _)| key == b"TySh").and_then(|(_, d)| photocraft_text::psd::text_index(d));
+            if let Some(i) = kept.filter(|i| used_txt.insert(*i)) {
+                ex.text_index.insert(l.id, i);
+            }
+        }
+        // Global objects without a visible layer can still carry native information.
+        // Keep their occupied slots available to their existing owners only.
+        if let Some(global) =
+            doc.metadata.psd_global_blocks.iter().find(|(_, key, _)| key == b"Txt2").and_then(|(_, _, bytes)| photocraft_text::psd::parse_txt2(bytes))
+            && let Some(objects) = global.path(&["1", "1"]).and_then(photocraft_text::engine_data::Value::as_array)
+        {
+            for (i, object) in objects.iter().enumerate().take(photocraft_text::psd::MAX_TEXT_INDEX as usize + 1) {
+                if !matches!(object, photocraft_text::engine_data::Value::Dict(entries) if entries.is_empty()) {
+                    used_txt.insert(i as i32);
                 }
-            };
-            ex.text_index.insert(l.id, index);
+            }
+        }
+        let mut next_txt = 0i32;
+        for (_, _, l) in &walk {
+            if !matches!(l.content, LayerContent::Text(_)) || ex.text_index.contains_key(&l.id) {
+                continue;
+            }
+            while next_txt <= photocraft_text::psd::MAX_TEXT_INDEX && used_txt.contains(&next_txt) {
+                next_txt += 1;
+            }
+            if next_txt > photocraft_text::psd::MAX_TEXT_INDEX {
+                // Orphan native objects occupy slots too. Never assign a number the global
+                // writer cannot represent, even when only one visible text layer remains.
+                type_error = Some("all PSD text object slots are occupied".into());
+                break;
+            }
+            used_txt.insert(next_txt);
+            ex.text_index.insert(l.id, next_txt);
         }
     }
     // Progress: one unit per layer record, then the merged composite (#3389).
@@ -1715,12 +1820,43 @@ fn document_to_psd_nested(doc: &Document, opts: &PsdExportOptions, depth: u32, c
         })
         .collect();
     let previous = (!text_layers.is_empty()).then(|| preserved.iter().find(|(_, key, _)| key == b"Txt2").map(|(_, _, data)| data.to_vec())).flatten();
-    // A fresh document of ordinary (Metrics) text has nothing to put in `Txt2`, and Photoshop never
-    // writes its empty `<< /0 << >> >>` stub — readers such as Photopea reject it (#3514). Keep the
-    // block when the file had one (round-trip its pen positions/extras) or a layer is Optical (the
-    // one mode EngineData can't carry; #1348).
-    let txt2 =
-        (previous.is_some() || photocraft_text::psd::needs_txt2(&text_layers)).then(|| photocraft_text::psd::build_txt2(&text_layers, previous.as_deref()));
+    ex.changed_text.extend(photocraft_text::psd::incomplete_txt2_objects(&text_layers, previous.as_deref()));
+    let preserve_frames = materialize_text_frames(doc, &mut ex);
+    // Style-sheet export and frame materialization may change the local EngineData.
+    // Build global properties from the exact TySh being emitted, retaining the current
+    // document geometry and typed properties for values the local format cannot express.
+    let emitted_text: Vec<(i32, photocraft_doc::TextLayer)> = doc
+        .walk()
+        .into_iter()
+        .filter_map(|(_, _, layer)| {
+            let LayerContent::Text(text) = &layer.content else { return None };
+            let index = ex.text_index.get(&layer.id).copied().unwrap_or(0);
+            let mut emitted = text.clone();
+            if let Some(block) = ex
+                .layer_ids
+                .get(&layer.id)
+                .and_then(|id| ex.records.iter().find(|record| record.layer_id() == Some(*id)))
+                .and_then(|record| record.block(b"TySh"))
+            {
+                emitted.psd_raw = Some(std::sync::Arc::new(block.data.clone()));
+            }
+            Some((index, emitted))
+        })
+        .collect();
+    let text_layers: Vec<_> = emitted_text.iter().map(|(index, text)| (*index, text)).collect();
+    // A complete cacheless view is valid native text data. Dropping the whole Txt2 block
+    // instead makes Photoshop classify every layer as old text requiring an update.
+    let txt2 = if text_layers.is_empty() || type_error.is_some() {
+        None
+    } else {
+        match photocraft_text::psd::build_complete_txt2(&text_layers, previous.as_deref(), ex.dpi, &ex.changed_text, &preserve_frames) {
+            Ok(bytes) => Some(bytes),
+            Err(error) => {
+                type_error = Some(error);
+                None
+            }
+        }
+    };
     for (sig, key, data) in preserved {
         if txt2.is_some() && key == *b"Txt2" {
             continue;
@@ -1808,7 +1944,7 @@ fn document_to_psd_nested(doc: &Document, opts: &PsdExportOptions, depth: u32, c
         layer_mask_trailing: Vec::new(),
         image_data,
     };
-    (file, ex.warnings)
+    (file, ex.warnings, type_error)
 }
 
 /// PSD mask parameters for a user mask's and a vector mask's (density, feather); `None` when

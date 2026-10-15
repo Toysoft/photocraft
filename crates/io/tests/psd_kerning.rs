@@ -101,23 +101,38 @@ fn optical_kerning_round_trips_through_psd() {
     }
 }
 
-/// #3514: a fresh document of ordinary Metrics type writes no document `Txt2` block — Photoshop
-/// never writes its empty `<< /0 << >> >>` stub, and readers such as Photopea reject it — while an
-/// Optical layer still does, because its mode lives only in `Txt2`.
+/// #3514: a fresh document must never write an empty global text resources stub. Both Metrics
+/// and Optical type now carry complete current models, font resources and native frame views.
 #[test]
-fn fresh_metrics_text_writes_no_txt2_block() {
+fn fresh_metrics_text_writes_complete_txt2_without_an_empty_stub() {
     use photocraft_doc::text::Kerning;
-    let saves_txt2 = |kerning: Kerning| {
+    for kerning in [Kerning::Metrics, Kerning::Optical] {
         let t = layer("AV", &[(2, kerning, 0.0)]);
         let mut doc = Document::new("k", photocraft_geom::Size::new(64, 32), photocraft_color::ColorMode::Rgb, photocraft_color::SampleType::U8);
         let mut r = t.clone();
         photocraft_text::TextEngine::new().render_layer(&mut r, doc.resolution_dpi, doc.pixel_format());
         doc.layers.push(Layer::new("t", LayerContent::Text(r)));
         let bytes = photocraft_io::export(&doc, "k.psd", &Default::default()).unwrap().bytes;
-        photocraft_psd::PsdFile::from_bytes(&bytes).unwrap().global_blocks.iter().any(|b| &b.key == b"Txt2")
-    };
-    assert!(!saves_txt2(Kerning::Metrics), "a plain Metrics layer must not write the empty Txt2 stub");
-    assert!(saves_txt2(Kerning::Optical), "Optical lives only in Txt2");
+        let file = photocraft_psd::PsdFile::from_bytes(&bytes).unwrap();
+        let block = file.global_blocks.iter().find(|b| &b.key == b"Txt2").expect("fresh live type must have complete global text data");
+        let global = photocraft_text::psd::parse_txt2(&block.data).unwrap();
+        let fonts = global.path(&["0", "1", "0"]).and_then(E::as_array).expect("global font resources must exist");
+        assert!(!fonts.is_empty(), "font resources must not be an empty stub");
+        let frames = global.path(&["0", "8", "0"]).and_then(E::as_array).expect("global frame resources must exist");
+        assert!(!frames.is_empty());
+        let object = &global.path(&["1", "1"]).and_then(E::as_array).unwrap()[0];
+        assert_eq!(object.path(&["0", "0"]).and_then(E::as_str), Some("AV\r"));
+        let view = object.get("1").expect("fresh text requires a native view");
+        let frame = view.get("0").and_then(E::as_array).unwrap()[0].get("0").and_then(E::as_i64).unwrap();
+        assert!(frame >= 0 && (frame as usize) < frames.len());
+        assert!(view.get("4").is_some());
+        assert!(view.get("5").is_some());
+        assert!(view.get("2").is_none(), "new text has no old cached glyph output to preserve");
+        let back = photocraft_io::import("k.psd", &bytes).unwrap().document;
+        let LayerContent::Text(actual) = &back.layers[0].content else { panic!("expected live type") };
+        assert_eq!(actual.text, "AV");
+        assert!(actual.char_runs().iter().all(|run| run.style.kerning == kerning));
+    }
 }
 
 /// Two imported layers can name the same Txt2 object; export must update the second
@@ -186,7 +201,12 @@ fn txt2_extras_survive_a_resave_of_unchanged_text() {
         let mut doc = Document::new("k", photocraft_geom::Size::new(64, 32), photocraft_color::ColorMode::Rgb, photocraft_color::SampleType::U8);
         let mut r = t.clone();
         photocraft_text::TextEngine::new().render_layer(&mut r, doc.resolution_dpi, doc.pixel_format());
-        doc.layers.push(Layer::new("kept", LayerContent::Text(r)));
+        // This layer owns native object 0; an unreferenced global object is preserved separately.
+        r.psd_raw = Some(std::sync::Arc::new(photocraft_text::psd::build_tysh(&r, doc.resolution_dpi, None)));
+        let raw = r.psd_raw.clone().unwrap();
+        let mut kept = Layer::new("kept", LayerContent::Text(r));
+        kept.psd_blocks.push((*b"TySh", raw));
+        doc.layers.push(kept);
         doc.metadata.psd_global_blocks.push((*b"8BIM", *b"Txt2", std::sync::Arc::new(prev.clone())));
         let bytes = photocraft_io::export(&doc, "k.psd", &Default::default()).unwrap().bytes;
         let file = photocraft_psd::PsdFile::from_bytes(&bytes).unwrap();

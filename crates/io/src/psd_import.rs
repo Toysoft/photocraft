@@ -369,7 +369,7 @@ impl Ctx<'_> {
                 TextLayer { text, transform, ..Default::default() }
             });
             if let Some(txt2) = &self.txt2 {
-                photocraft_text::psd::apply_txt2(&mut t, &data, txt2);
+                photocraft_text::psd::apply_txt2_with_dpi(&mut t, &data, txt2, self.dpi);
                 photocraft_text::psd::apply_txt2_frame(&mut t, &data, txt2);
             }
             // Photoshop's pixels are the cache only when the file has some: ag-psd, GIMP and

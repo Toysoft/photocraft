@@ -5806,14 +5806,12 @@ pub(crate) fn finish_gesture(app: &mut PhotocraftApp, d: Drag) {
                 let _ = app.run("select.deselect", json!({}));
             }
         }
-        Tool::Gradient => {
-            if (end[0] - d.start[0]).abs() + (end[1] - d.start[1]).abs() >= 2.0 {
-                let o = app.ui.tool_options.clone();
-                let _ = app.run(
-                    "paint.gradient",
-                    json!({"from": [d.start[0], d.start[1]], "to": [end[0], end[1]], "style": o.gradient_style, "reverse": o.gradient_reverse, "dither": o.gradient_dither, "opacity": o.fill_opacity, "mode": o.gradient_blend_mode.label(), "target": paint_target(app)}),
-                );
-            }
+        Tool::Gradient if (end[0] - d.start[0]).abs() + (end[1] - d.start[1]).abs() >= 2.0 => {
+            let o = app.ui.tool_options.clone();
+            let _ = app.run(
+                "paint.gradient",
+                json!({"from": [d.start[0], d.start[1]], "to": [end[0], end[1]], "style": o.gradient_style, "reverse": o.gradient_reverse, "dither": o.gradient_dither, "opacity": o.fill_opacity, "mode": o.gradient_blend_mode.label(), "target": paint_target(app)}),
+            );
         }
         Tool::Move => {
             let (dx, dy) = ((end[0] - d.start[0]).round(), (end[1] - d.start[1]).round());
@@ -6068,6 +6066,23 @@ mod tests {
         let d = color.canvas_display(&doc).unwrap();
         assert!(!d.is_identity());
         assert_eq!(super::display_image(Some(&d), &buf).pixels, reference(d.to_rgba8(&buf)).pixels);
+    }
+
+    #[test]
+    fn lint_cleanup_gradient_release_commits_only_at_the_minimum_drag_distance() {
+        for (end, committed) in [([11.5, 10.0], false), ([12.0, 10.0], true), ([11.0, 11.0], true), ([30.0, 10.0], true)] {
+            let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), Default::default());
+            app.run("file.new", json!({"width": 40, "height": 24})).unwrap();
+            app.ui.tool = Tool::Gradient;
+            app.ui.tool_options.gradient_classic = true;
+            let history = app.session.active().unwrap().history.past_len();
+            let revision = app.session.active().unwrap().revision;
+            finish_gesture(&mut app, Drag::new(Tool::Gradient, [10.0, 10.0], vec![[10.0, 10.0, 1.0], [end[0], end[1], 1.0]], egui::Modifiers::NONE, false));
+            let active = app.session.active().unwrap();
+            assert_eq!(active.history.past_len() - history, usize::from(committed), "gradient release at {end:?}");
+            assert_eq!(active.revision > revision, committed, "a short drag must not change the document");
+            assert!(!app.ui.status_error, "gradient command failed: {}", app.ui.status);
+        }
     }
 
     #[cfg(not(target_arch = "wasm32"))]

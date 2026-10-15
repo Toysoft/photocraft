@@ -1056,6 +1056,23 @@ mod tests {
     use super::*;
 
     #[test]
+    fn lint_cleanup_liquify_resize_gesture_accepts_only_the_documented_button_and_modifier_combinations() {
+        for (alt, ctrl, secondary, resize) in [
+            (false, false, false, false),
+            (false, false, true, false),
+            (false, true, false, false),
+            (false, true, true, false),
+            (true, false, false, false),
+            (true, false, true, true),
+            (true, true, false, true),
+            (true, true, true, true),
+        ] {
+            let modifiers = egui::Modifiers { alt, ctrl, ..Default::default() };
+            assert_eq!(brush_resize_gesture(modifiers, secondary), resize, "alt={alt}, ctrl={ctrl}, secondary={secondary}");
+        }
+    }
+
+    #[test]
     fn alt_right_drag_resizes_the_liquify_brush_and_does_not_paint() {
         assert!(brush_resize_gesture(egui::Modifiers::ALT, true));
         assert!(brush_resize_gesture(egui::Modifiers::CTRL | egui::Modifiers::ALT, false));

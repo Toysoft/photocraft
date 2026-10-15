@@ -1,16 +1,42 @@
 //! Photoshop's `EngineData`: the PostScript-like text engine document stored in `TySh`.
 //!
 //! Syntax (from observation of real files and public notes): dictionaries `<< /Key value … >>`,
-//! arrays `[ … ]`, strings `( … )` holding UTF-16BE with a `FE FF` byte-order mark and `\`
-//! escapes, numbers (`12`, `-1.5`, `.5`), `true`/`false`, and `/Name` values.
+//! arrays `[ … ]`, strings `( … )` holding UTF-16BE with a `FE FF` byte-order mark or opaque
+//! bytes, `\` escapes, numbers (`12`, `-1.5`, `.5`), `true`/`false`, and `/Name` values.
 
 use std::fmt::Write as _;
+
+/// An eight-bit string whose bytes must not be re-encoded as Unicode. The text view keeps
+/// the parser's historical Latin-1 interpretation for existing callers of [`Value::as_str`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ByteString {
+    bytes: Vec<u8>,
+    text: String,
+}
+
+impl ByteString {
+    pub fn new(bytes: Vec<u8>) -> Self {
+        let text = bytes.iter().map(|&byte| char::from(byte)).collect();
+        Self { bytes, text }
+    }
+
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.bytes
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.text
+    }
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
     Dict(Vec<(String, Value)>),
     Array(Vec<Value>),
+    /// A Unicode string, serialized with a UTF-16BE byte-order mark.
     String(String),
+    /// A byte string, including malformed UTF-16 that cannot be decoded losslessly.
+    ByteString(ByteString),
     Int(i64),
     Real(f64),
     Bool(bool),
@@ -68,6 +94,14 @@ impl Value {
     pub fn as_str(&self) -> Option<&str> {
         match self {
             Value::String(s) | Value::Name(s) => Some(s),
+            Value::ByteString(s) => Some(s.as_str()),
+            _ => None,
+        }
+    }
+    /// Original byte-string payload, before the string literal's delimiter escaping.
+    pub fn as_raw_bytes(&self) -> Option<&[u8]> {
+        match self {
+            Value::ByteString(s) => Some(s.as_bytes()),
             _ => None,
         }
     }
@@ -173,7 +207,7 @@ impl Parser<'_> {
                         }
                     }
                 }
-                Ok(Value::String(decode_string(&raw)))
+                Ok(decode_string(raw))
             }
             Some(b'/') => Ok(Value::Name(self.name())),
             Some(_) => {
@@ -205,13 +239,19 @@ impl Parser<'_> {
     }
 }
 
-fn decode_string(raw: &[u8]) -> String {
-    if raw.len() >= 2 && raw[0] == 0xFE && raw[1] == 0xFF {
-        let u: Vec<u16> = raw[2..].as_chunks::<2>().0.iter().map(|c| u16::from_be_bytes([c[0], c[1]])).collect();
-        String::from_utf16_lossy(&u)
-    } else {
-        raw.iter().map(|&c| c as char).collect()
+fn decode_string(raw: Vec<u8>) -> Value {
+    if let Some(utf16) = raw.strip_prefix(&[0xFE, 0xFF]) {
+        let (units, remainder) = utf16.as_chunks::<2>();
+        if remainder.is_empty() {
+            let units: Vec<u16> = units.iter().map(|c| u16::from_be_bytes(*c)).collect();
+            if let Ok(text) = String::from_utf16(&units) {
+                return Value::String(text);
+            }
+        }
     }
+    // Txt2 also carries binary bitsets here. Losing their byte-string encoding (or replacing
+    // malformed UTF-16) changes their meaning even when no caller edited those fields.
+    Value::ByteString(ByteString::new(raw))
 }
 
 /// Parses an EngineData document (the top-level dictionary).
@@ -294,19 +334,13 @@ fn write_value(v: &Value, depth: usize, out: &mut Vec<u8>) {
             out.extend_from_slice(b" ]");
         }
         Value::String(s) => {
-            out.push(b'(');
             let mut raw = vec![0xFE, 0xFF];
             for u in s.encode_utf16() {
                 raw.extend_from_slice(&u.to_be_bytes());
             }
-            for c in raw {
-                if matches!(c, b'(' | b')' | b'\\') {
-                    out.push(b'\\');
-                }
-                out.push(c);
-            }
-            out.push(b')');
+            write_string(&raw, out);
         }
+        Value::ByteString(s) => write_string(s.as_bytes(), out),
         Value::Int(i) => {
             let _ = write!(Wrap(out), "{i}");
         }
@@ -317,6 +351,17 @@ fn write_value(v: &Value, depth: usize, out: &mut Vec<u8>) {
             out.extend_from_slice(n.as_bytes());
         }
     }
+}
+
+fn write_string(raw: &[u8], out: &mut Vec<u8>) {
+    out.push(b'(');
+    for &byte in raw {
+        if matches!(byte, b'(' | b')' | b'\\') {
+            out.push(b'\\');
+        }
+        out.push(byte);
+    }
+    out.push(b')');
 }
 
 struct Wrap<'a>(&'a mut Vec<u8>);

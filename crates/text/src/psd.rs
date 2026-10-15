@@ -18,6 +18,29 @@ use photocraft_psd::descriptor::{Descriptor, Id, UnicodeString, Value as D, Vers
 use crate::engine_data::{self as ed, Value as E};
 use crate::fonts::guess_from_postscript;
 
+#[path = "psd_txt2.rs"]
+mod complete_txt2;
+
+#[path = "psd_txt2_import.rs"]
+mod global_txt2_import;
+
+/// Objects that must be regenerated, using the writer's exact text/view validation.
+pub fn incomplete_txt2_objects(objects: &[(i32, &TextLayer)], previous: Option<&[u8]>) -> Vec<i32> {
+    complete_txt2::incomplete_objects(objects, previous)
+}
+
+/// Writes current text models and valid native views, discarding only obsolete glyph caches.
+/// Unchanged imported objects and document resources are preserved.
+pub fn build_complete_txt2(
+    objects: &[(i32, &TextLayer)],
+    previous: Option<&[u8]>,
+    dpi: f32,
+    changed: &std::collections::HashSet<i32>,
+    preserve_frames: &std::collections::HashSet<i32>,
+) -> Result<Vec<u8>, String> {
+    complete_txt2::build(objects, previous, dpi, changed, preserve_frames)
+}
+
 /// Parsed `TySh` contents.
 #[derive(Clone, Debug, PartialEq)]
 pub struct TySh {
@@ -151,8 +174,17 @@ pub fn parse_txt2(data: &[u8]) -> Option<E> {
 /// with `/0` the text (`\r` breaks, trailing `\r`) and `/6 /0` its style runs, each
 /// `<< /0 << /0 << … /6 <<style>> >> >> /1 utf16-length >>`; style key `/11` is the auto-kern
 /// mode of the pair after each character: 0 manual, 1 metrics, 2 optical.
+/// Uses 72 DPI when recovering a missing local model; document importers should call
+/// [`apply_txt2_with_dpi`] with their resolution instead.
 pub fn apply_txt2(layer: &mut TextLayer, tysh: &[u8], txt2: &E) {
-    let Some(index) = parse_tysh(tysh).and_then(|t| match t.text.get("TextIndex") {
+    apply_txt2_with_dpi(layer, tysh, txt2, 72.0);
+}
+
+/// Applies document text data at `dpi`, recovering its full current model only when local
+/// EngineData is absent or malformed. Valid local models always retain their styles and geometry.
+pub fn apply_txt2_with_dpi(layer: &mut TextLayer, tysh: &[u8], txt2: &E, dpi: f32) {
+    let Some(tysh) = parse_tysh(tysh) else { return };
+    let Some(index) = (match tysh.text.get("TextIndex") {
         Some(D::Integer(i)) => usize::try_from(*i).ok(),
         _ => None,
     }) else {
@@ -167,7 +199,15 @@ pub fn apply_txt2(layer: &mut TextLayer, tysh: &[u8], txt2: &E) {
     if text.strip_suffix('\r').unwrap_or(text).replace('\r', "\n") != layer.text {
         return;
     }
-    let Some(style_runs) = model.path(&["6", "0"]).and_then(E::as_array) else {
+    let local_model_present = global_txt2_import::local_model_present(&tysh);
+    let resolved = global_txt2_import::apply(layer, &tysh, txt2, model, index, dpi);
+    // A valid local model still needs the global-only flags. A rejected global-only
+    // model must not partially change the layer through this legacy flags overlay.
+    if resolved.is_none() && !local_model_present {
+        return;
+    }
+    let inherited = local_model_present.then(|| global_txt2_import::resolved_character_flags(txt2, model)).flatten();
+    let Some(style_runs) = resolved.as_deref().or(inherited.as_deref()).or_else(|| model.path(&["6", "0"]).and_then(E::as_array)) else {
         return;
     };
     let styles: Vec<(f64, Option<&E>)> = style_runs.iter().map(|r| (r.get("1").and_then(E::as_f64).unwrap_or(0.0), r.path(&["0", "0", "6"]))).collect();
@@ -215,8 +255,9 @@ pub fn apply_txt2(layer: &mut TextLayer, tysh: &[u8], txt2: &E) {
 /// The frame (`Txt2 /0 /8 /0` entry) of text object `index`: its rendered frame's `/10` names it.
 fn txt2_frame(txt2: &E, index: usize) -> Option<&E> {
     let object = txt2.path(&["1", "1"]).and_then(E::as_array)?.get(index)?;
-    let frame =
-        object.path(&["1", "2"]).and_then(E::as_array)?.first()?.get("6").and_then(E::as_array)?.iter().find_map(|f| f.get("10").and_then(E::as_i64))?;
+    let frame = object.path(&["1", "0"]).and_then(E::as_array).and_then(|r| r.first()).and_then(|r| r.get("0")).and_then(E::as_i64).or_else(|| {
+        object.path(&["1", "2"]).and_then(E::as_array)?.first()?.get("6").and_then(E::as_array)?.iter().find_map(|f| f.get("10").and_then(E::as_i64))
+    })?;
     txt2.path(&["0", "8", "0"]).and_then(E::as_array)?.get(usize::try_from(frame).ok()?)?.get("0")
 }
 
@@ -272,8 +313,13 @@ pub fn apply_txt2_frame(layer: &mut TextLayer, tysh: &[u8], txt2: &E) {
                     )
                 })
                 .unwrap_or_default();
-            let [x, y, ..] = b[..] else { return };
-            Point::new(x, y)
+            match b.as_slice() {
+                [x, y, ..] => Point::new(*x, *y),
+                _ => match layer.shape {
+                    TextShape::Box { x, y, .. } => Point::new(f64::from(x), f64::from(y)),
+                    TextShape::Point | TextShape::Path { .. } => return,
+                },
+            }
         }
     };
     let Some([l, top, r, bottom]) = descriptor_rect(&t.text, "bounds") else { return };

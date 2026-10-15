@@ -204,7 +204,7 @@ pub(crate) fn export_layered(doc: &Document, opts: &ExportOptions, ctl: &photocr
     // keeps straight alpha) and uncompressed (its planes are interleaved below).
     let psd_opts =
         PsdExportOptions { force_psb: opts.force_psb || big, merged_matte: false, merged_compression: Compression::Raw, maximize_compatibility: true };
-    let (file, w) = crate::with_span(ctl, 0.0, TIFF_MODEL_DONE, |ctl| crate::psd_export::document_to_psd_interruptible(doc, &psd_opts, ctl));
+    let (file, w) = crate::with_span(ctl, 0.0, TIFF_MODEL_DONE, |ctl| crate::psd_export::document_to_psd_interruptible(doc, &psd_opts, ctl))?;
     // A cancelled conversion stops early with an incomplete model: never encode it.
     ctl.check().map_err(|_| IoError::Cancelled)?;
     warnings.extend(w);
