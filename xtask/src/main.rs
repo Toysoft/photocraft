@@ -24,7 +24,7 @@ usage: cargo xtask <command>
 commands:
   layers          enforce the crate dependency layering (plan/architecture.md §3)
   wasm            cargo check --target wasm32-unknown-unknown for the wasm-safe crates
-  ci              fmt --check, clippy -D warnings, test, layers, wasm (stops at first failure)
+  ci              fmt --check, clippy -D warnings, test, layers, wasm, i18n (stops at first failure)
   corpus [--all | --pngsuite | --psd | --psd-tools | --pixls | --photoshop] [--local] [--update-manifest]
                   show where test corpora live and their pins (xtask/src/corpus_pins.rs), or fetch
                   them into corpus/ (pinned commits, sha256-verified; --all = every corpus but pixls,
@@ -36,7 +36,8 @@ commands:
                   --local takes corpus/photoshop from the photocraft-corpus authoring clone
   stats [--exact] count tests and lines per crate (--exact: ask the test harness via `-- --list`)
   parity          Photoshop menu parity; rewrites docs/parity-checklist.md
-  i18n-coverage   report stable UI translation coverage for registered languages
+  i18n-coverage   report stable UI translation coverage for registered languages, and check
+                  docs/localization.md's Supported languages table against the registry
   perf [--quick] [--update-baseline] [--threshold PCT] [--bench NAME]... [--skip-build] [--reuse]
                   run the release benches, merge them by scenario id into target/perf/results.json,
                   check perf/budgets.toml and perf/baseline.json (non-zero on a broken budget or regression)
@@ -215,6 +216,7 @@ fn cmd_ci() -> Result<(), String> {
         ),
         ("layers", Box::new(cmd_layers)),
         ("wasm", Box::new(cmd_wasm)),
+        ("i18n", Box::new(|| i18n_coverage::run(&root()))),
     ];
     let mut done = Vec::new();
     for (name, f) in &steps {

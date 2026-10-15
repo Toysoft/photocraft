@@ -43,8 +43,43 @@ pub fn run(root: &Path) -> Result<(), String> {
     if english_keys.is_empty() {
         return Err("no source-derived English UI translation keys were found".into());
     }
+    let doc_path = root.join("docs/localization.md");
+    let doc = fs::read_to_string(&doc_path).map_err(|e| format!("{}: {e}", doc_path.display()))?;
+    check_documented_languages(&languages, &doc)?;
     print!("{}", format_report(&languages, &english_keys, &translations));
     Ok(())
+}
+
+/// The "Supported languages" table in `docs/localization.md` lists every registered language and
+/// nothing else. A language shipped without its row (Turkish, #1373) is otherwise invisible there.
+fn check_documented_languages(languages: &[Language], doc: &str) -> Result<(), String> {
+    let table = doc
+        .split("## Supported languages")
+        .nth(1)
+        .ok_or_else(|| "docs/localization.md has no `## Supported languages` section".to_string())?
+        .split("\n#")
+        .next()
+        .unwrap_or_default();
+    let mut documented = BTreeSet::new();
+    for line in table.lines().filter(|line| line.starts_with('|')) {
+        if let Some(code) = line.split('|').nth(2).and_then(|cell| cell.trim().strip_prefix('`')).and_then(|cell| cell.strip_suffix('`')) {
+            documented.insert(code.to_string());
+        }
+    }
+    let registered: BTreeSet<String> = languages.iter().map(|language| language.code.clone()).collect();
+    let missing: Vec<&str> = registered.difference(&documented).map(String::as_str).collect();
+    let extra: Vec<&str> = documented.difference(&registered).map(String::as_str).collect();
+    if missing.is_empty() && extra.is_empty() {
+        return Ok(());
+    }
+    let mut message = String::from("docs/localization.md's Supported languages table is out of date:");
+    if !missing.is_empty() {
+        message.push_str(&format!("\n  registered but not listed: {}", missing.join(", ")));
+    }
+    if !extra.is_empty() {
+        message.push_str(&format!("\n  listed but not registered: {}", extra.join(", ")));
+    }
+    Err(message)
 }
 
 fn source_keys(root: &Path) -> Result<BTreeSet<Key>, String> {

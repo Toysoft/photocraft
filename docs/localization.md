@@ -27,6 +27,7 @@ contextual, command-ID and plural translations; missing entries fall back to Eng
 | Nederlands | `nl` | one / other |
 | Magyar | `hu` | one form |
 | Tiếng Việt | `vi` | one form |
+| Türkçe | `tr` | one form |
 | Srpski | `sr` | one / few / many (teens use many) |
 
 Languages registered with `complete_menus` cover the current menu labels, `tl!` literals, blend
