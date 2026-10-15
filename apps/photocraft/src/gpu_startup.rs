@@ -443,7 +443,6 @@ pub fn read_display_server(path: Option<&Path>) -> photocraft_engine::prefs::Lin
         .unwrap_or_default()
 }
 
-/// Read the policy leniently at startup, including old settings without renderingMode.
 /// Preferences › Performance › Low-Latency Drawing (`performance.lowLatencyDrawing`, on unless
 /// set off), read before the window opens: it picks the surface's present mode.
 pub fn read_low_latency(path: Option<&Path>) -> bool {
@@ -452,6 +451,7 @@ pub fn read_low_latency(path: Option<&Path>) -> bool {
     v.get("performance").and_then(|p| p.get("lowLatencyDrawing")).and_then(Value::as_bool).unwrap_or(default)
 }
 
+/// Read the policy leniently at startup, including old settings without renderingMode.
 pub fn read_rendering_prefs(path: Option<&Path>) -> (GpuBackend, RenderingMode) {
     let v: Value = path.and_then(|p| std::fs::read_to_string(p).ok()).and_then(|t| serde_json::from_str(&t).ok()).unwrap_or(Value::Null);
     let perf = v.get("performance");

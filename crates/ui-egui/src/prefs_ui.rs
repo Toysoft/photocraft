@@ -1520,6 +1520,8 @@ fn field_visible(section: &str, obj: &Map<String, Value>, k: &str, query: &str) 
         // View › Rulers (⌘R) sets it, as in Photoshop.
         || path == "unitsAndRulers.showRulers"
         || (section == "performance" && matches!(k, "useGpu" | "gpuBackend" | "renderingMode"))
+        // The browser presents frames itself: Low-Latency Drawing does nothing there.
+        || (cfg!(target_arch = "wasm32") && path == "performance.lowLatencyDrawing")
         || (section == "export" && !export_field_visible(obj, k))
         || (section == "tools" && !tools_field_visible(obj, k));
     (query.is_empty() || preference_matches(section, k, query))

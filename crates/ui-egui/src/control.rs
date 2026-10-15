@@ -493,13 +493,18 @@ fn dispatch(app: &mut PhotocraftApp, ctx: &egui::Context, req: &ControlRequest) 
                     None => None,
                 };
                 let gradient_classic = bool_field(p, "gradientClassic")?;
-                // The stroke latency trace (`stroke_trace`), at runtime: false/true, "stderr", or
-                // a CSV path to append each stroke's frames to.
+                // The stroke latency trace (`stroke_trace`), at runtime: on (stderr) or off. A CSV
+                // file is only for the user's own launch (`--stroke-trace <path>`): a path over the
+                // control channel would write outside the automation write root.
                 let stroke_trace = match p.get("strokeTrace") {
                     None | Some(Value::Null) => None,
-                    Some(Value::Bool(b)) => Some(if *b { "stderr".to_string() } else { "off".to_string() }),
-                    Some(Value::String(v)) => Some(v.clone()),
-                    Some(_) => return Err("strokeTrace must be true, false, \"stderr\" or a CSV path".into()),
+                    Some(Value::Bool(b)) => Some(if *b { "stderr" } else { "off" }),
+                    Some(Value::String(v)) => match v.trim() {
+                        "stderr" | "on" | "true" => Some("stderr"),
+                        "off" | "false" => Some("off"),
+                        _ => return Err("strokeTrace must be true, false, \"stderr\" or \"off\"; a CSV file is set at launch (--stroke-trace <path>)".into()),
+                    },
+                    Some(_) => return Err("strokeTrace must be true, false, \"stderr\" or \"off\"".into()),
                 };
                 // The Eyedropper's options bar (#1649): Sample Size, Sample, Show Sampling Ring.
                 let eyedropper_size = match p.get("eyedropperSampleSize") {
@@ -1408,6 +1413,12 @@ mod tests {
         assert!(!app.stroke_trace.enabled());
         let bad = call(&mut app, &ctx, "ui.set", json!({"strokeTrace": 3, "tool": "Pencil"}));
         assert_eq!(bad["ok"], false);
+        // A file path isn't accepted over the channel (it would write outside the automation
+        // write root); nothing is created.
+        let path = std::env::temp_dir().join(format!("photocraft-trace-{}.csv", std::process::id()));
+        let bad = call(&mut app, &ctx, "ui.set", json!({"strokeTrace": path.to_str().unwrap(), "tool": "Pencil"}));
+        assert_eq!(bad["ok"], false);
+        assert!(!path.exists());
         assert!(!app.stroke_trace.enabled() && app.ui.tool != crate::state::Tool::Pencil, "a rejected call applies nothing");
     }
 
