@@ -783,6 +783,9 @@ pub fn confirm(app: &mut PhotocraftApp, f: &Map<String, Value>) -> Result<Value,
     if crate::layer_style::color_picker::owns(f) {
         return crate::layer_style::color_picker::confirm(app, f);
     }
+    if crate::solid_fill_ui::owns_new(f) {
+        return crate::solid_fill_ui::confirm_new(app, f);
+    }
     if crate::solid_fill_ui::owns(f) {
         return crate::solid_fill_ui::confirm(app, f);
     }
