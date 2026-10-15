@@ -50,9 +50,9 @@ echo "==> PhotoCraft $VERSION for Linux $ARCH ($FORMATS)"
 
 if [ "$SKIP_BUILD" = 0 ]; then
   if [ -n "${CROSS_TARGET:-}" ]; then
-    (cd "$ROOT" && cargo build --release --locked -p photocraft -p photocraft-cli --features heif --target "$CROSS_TARGET")
+    (cd "$ROOT" && cargo build --release --locked -p photocraft -p photocraft-cli --features heif,jxl --target "$CROSS_TARGET")
   else
-    (cd "$ROOT" && cargo build --release --locked -p photocraft -p photocraft-cli --features heif)
+    (cd "$ROOT" && cargo build --release --locked -p photocraft -p photocraft-cli --features heif,jxl)
   fi
 fi
 BIN="$CARGO_TARGET_DIR/${CROSS_TARGET:+$CROSS_TARGET/}release"
