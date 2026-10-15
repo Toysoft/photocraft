@@ -650,7 +650,7 @@ pub(crate) fn title_row(ui: &mut egui::Ui, title: &str) -> bool {
 pub(crate) fn panel_window(app: &PhotocraftApp, ctx: &egui::Context, id: &str, title: &str, offset: egui::Vec2, width: f32, body: impl FnOnce(&mut egui::Ui)) {
     let t = Tokens::get(ctx);
     let canvas = app.last_canvas_rect;
-    egui::Window::new(title)
+    let win = egui::Window::new(title)
         .id(egui::Id::new(id))
         .title_bar(false)
         .resizable(false)
@@ -664,6 +664,9 @@ pub(crate) fn panel_window(app: &PhotocraftApp, ctx: &egui::Context, id: &str, t
             ui.set_max_width(width);
             body(ui);
         });
+    if let Some(win) = win {
+        crate::theme::upgrade_shadow(ctx, win.response.layer_id, crate::theme::ShadowElevation::High, t.shadow);
+    }
 }
 
 /// Draws the open panels and dialogs.
@@ -868,7 +871,7 @@ fn dialog(app: &mut PhotocraftApp, ctx: &egui::Context) {
         _ => "Measurement Scale Marker",
     };
     let mut result: Option<bool> = None;
-    egui::Window::new(title)
+    let win = egui::Window::new(title)
         .id(egui::Id::new("analysis-dialog"))
         .collapsible(false)
         .resizable(false)
@@ -955,6 +958,9 @@ fn dialog(app: &mut PhotocraftApp, ctx: &egui::Context) {
                 });
             });
         });
+    if let Some(win) = win {
+        crate::theme::upgrade_shadow(ctx, win.response.layer_id, crate::theme::ShadowElevation::Modal, t.modal_shadow);
+    }
     match result {
         Some(true) => {
             app.ui.analysis.dialog = None;
