@@ -91,13 +91,13 @@ pub fn classify(i: Input) -> Option<Wheel> {
     match (i.alt, i.zoom_with_wheel) {
         // ⇧ + ⌥ + scroll: snap to the zoom ladder instead of continuous ×1.1.
         (true, false) if i.shift => snap(i.raw.y + i.raw.x),
-        // ⌥ + scroll: continuous ×1.1 zoom. The smoothed tail of a notch is ignored.
-        (true, false) => step(i.raw.y + i.raw.x),
+        // ⌥ + scroll: continuous ×1.1 zoom. Follow the smoothed delta across frames.
+        (true, false) if i.scroll.x.is_finite() && i.scroll.y.is_finite() => step(i.scroll.y + i.scroll.x),
         // ⇧ + scroll wheel with the preference on: snap to the zoom ladder.
         // Some systems deliver Shift+wheel as horizontal (delta in x, y = 0).
         (false, true) if i.shift => snap(i.raw.y + i.raw.x),
         // ⌘/Ctrl folds the wheel into x: those still scroll sideways.
-        (false, true) if i.raw.y != 0.0 || i.scroll.y != 0.0 => step(i.raw.y),
+        (false, true) if i.scroll.y.is_finite() && i.scroll.y != 0.0 => step(i.scroll.y),
         _ if !(i.scroll.x.is_finite() && i.scroll.y.is_finite()) || i.scroll == Vec2::ZERO => None,
         _ => Some(Wheel::Pan(i.scroll)),
     }
@@ -435,11 +435,11 @@ mod tests {
     #[test]
     fn a_notch_zooms_the_frame_it_arrives_and_its_smoothed_tail_does_nothing() {
         // egui keeps feeding a smoothed delta for several frames after the wheel event. Zooming
-        // must not follow it (that would ease the zoom), nor turn it into a pan.
+        // follows that smoothed tail smoothly and never turns it into a pan.
         let tail = Input { raw: Vec2::ZERO, ..input(Vec2::new(0.0, 12.0), true) };
-        assert_eq!(classify(tail), None);
+        assert!(matches!(classify(tail), Some(Wheel::Zoom(f)) if f > 1.0));
         let tail = Input { raw: Vec2::ZERO, zoom_with_wheel: true, ..input(Vec2::new(0.0, 12.0), false) };
-        assert_eq!(classify(tail), None);
+        assert!(matches!(classify(tail), Some(Wheel::Zoom(f)) if f > 1.0));
         // Plain scrolling without the preference still pans from the smoothed delta.
         let pan = Input { raw: Vec2::ZERO, ..input(Vec2::new(0.0, 12.0), false) };
         assert_eq!(classify(pan), Some(Wheel::Pan(Vec2::new(0.0, 12.0))));
