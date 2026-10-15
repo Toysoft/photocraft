@@ -117,6 +117,64 @@ fn web_download_and_automation_saves_use_the_same_identity_completion() {
     assert_eq!(app.session.active().unwrap().doc.name, "agent save.psd");
 }
 
+#[test]
+fn automation_save_keeps_an_absolute_desktop_identity_and_scoped_write_requests() {
+    use crate::AutomationPathKind;
+    let mut app = app();
+    // Background mode without an automation worker must use the same identity resolution.
+    app.background_jobs = true;
+    app.services.automation_path = Some(Box::new(|kind, path| match kind {
+        AutomationPathKind::Read | AutomationPathKind::Write => Ok(format!("/workspace/{path}")),
+        AutomationPathKind::WriteBack => path.strip_prefix("/workspace/").map(str::to_string).ok_or("outside write root".into()),
+    }));
+    let written = Rc::new(RefCell::new(Vec::new()));
+    let capture = written.clone();
+    app.services.automation_write = Some(Box::new(move |path, _| {
+        capture.borrow_mut().push(path.to_string());
+        Ok(())
+    }));
+    app.save_automation(Some("poster.pcraft".into())).unwrap();
+    assert_eq!(app.session.active().unwrap().path.as_deref(), Some("/workspace/poster.pcraft"));
+    app.save_automation(None).unwrap();
+    assert_eq!(*written.borrow(), ["poster.pcraft", "poster.pcraft"]);
+    let capture = written.clone();
+    app.services.write = Some(Box::new(move |path, _| {
+        capture.borrow_mut().push(path.to_string());
+        Ok(())
+    }));
+    menus::invoke(&mut app, &egui::Context::default(), "file.save", json!({})).unwrap();
+    assert_eq!(written.borrow().last().unwrap(), "/workspace/poster.pcraft");
+    app.session.active_mut().unwrap().path = Some("/read-only/poster.pcraft".into());
+    assert!(app.save_automation(None).is_err());
+    assert_eq!(written.borrow().len(), 3);
+}
+
+#[test]
+fn automation_flat_copy_preserves_the_canonical_layered_save_destination() {
+    use crate::AutomationPathKind;
+    let mut app = app();
+    app.services.automation_path = Some(Box::new(|kind, path| match kind {
+        AutomationPathKind::Read | AutomationPathKind::Write => Ok(format!("/workspace/{path}")),
+        AutomationPathKind::WriteBack => path.strip_prefix("/workspace/").map(str::to_string).ok_or("outside write root".into()),
+    }));
+    let written = Rc::new(RefCell::new(Vec::new()));
+    let capture = written.clone();
+    app.services.automation_write = Some(Box::new(move |path, _| {
+        capture.borrow_mut().push(path.to_string());
+        Ok(())
+    }));
+    app.save_automation(Some("poster.pcraft".into())).unwrap();
+    app.run("edit.fill", json!({"color": "#ff0000"})).unwrap();
+    let before = identity(&app);
+    app.save_automation(Some("copy.png".into())).unwrap();
+    assert_eq!(identity(&app), before, "a flat copy must leave the layered document dirty");
+    app.save_automation(None).unwrap();
+    assert_eq!(*written.borrow(), ["poster.pcraft", "copy.png", "poster.pcraft"]);
+    let state = app.session.active().unwrap();
+    assert_eq!(state.path.as_deref(), Some("/workspace/poster.pcraft"));
+    assert!(!state.is_dirty());
+}
+
 /// Save As to a flat format writes a copy when the flat file can't hold the document: its layers,
 /// or the layered file it already lives in. The document keeps its file, so Save still writes the
 /// layered original and the edits stay unsaved (#2550).
@@ -253,4 +311,85 @@ fn save_settings_start_at_the_opened_files_encoding() {
     let lossless = photocraft_codecs::encode(&img, Format::WebP, &EncodeOptions::default()).unwrap();
     app.open_bytes("art.webp", &lossless).unwrap();
     assert!(app.save_settings().webp_lossless);
+}
+
+#[test]
+fn background_automation_save_records_identity_and_keeps_requests_scoped() {
+    use crate::AutomationPathKind;
+    use std::sync::{Arc, Mutex};
+    let mut app = app();
+    app.background_jobs = true;
+    app.services.automation_path = Some(Box::new(|kind, path| match kind {
+        AutomationPathKind::Read | AutomationPathKind::Write => Ok(format!("/workspace/{path}")),
+        AutomationPathKind::WriteBack => path.strip_prefix("/workspace/").map(str::to_string).ok_or("outside write root".into()),
+    }));
+    let written: Arc<Mutex<Vec<String>>> = Arc::default();
+    let capture = Arc::clone(&written);
+    app.services.automation_save = Some(Arc::new(move |_, path, _, ctl| {
+        ctl.commit()?;
+        capture.lock().unwrap().push(path.to_owned());
+        Ok(vec![])
+    }));
+    // No synchronous exporter or ambient writer is available to hide a broken worker path.
+    app.services.export = None;
+    app.services.write = None;
+    app.services.automation_write = None;
+    let original = identity(&app);
+    let revision = app.session.active().unwrap().revision;
+    let doc = app.active_doc_id().unwrap();
+    let started = app.save_automation(Some("poster.pcraft".into())).unwrap();
+    assert_eq!(started["pending"], true);
+    assert_eq!(started["path"], "poster.pcraft");
+    assert_eq!(identity(&app), original, "completion alone adopts the saved identity");
+    let finish = |app: &mut PhotocraftApp| {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while app.saving() {
+            assert!(std::time::Instant::now() < deadline, "background save timed out");
+            crate::jobs_ui::tick(app, &egui::Context::default());
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+    };
+    // Completion must update the saved document even when another tab became active.
+    app.run("file.new", json!({"width": 4, "height": 4, "name": "Other"})).unwrap();
+    let other = app.active_doc_id().unwrap();
+    finish(&mut app);
+    assert_eq!(app.active_doc_id().unwrap(), other);
+    let saved = app.session.documents().iter().find(|st| st.doc.id == doc).unwrap();
+    assert_eq!(saved.path.as_deref(), Some("/workspace/poster.pcraft"));
+    assert_eq!(saved.doc.name, "poster.pcraft");
+    assert_eq!(saved.saved_revision, revision);
+    assert!(!saved.is_dirty());
+    assert!(app.ui.recent_files.is_empty(), "automation saves do not change the recent list");
+    app.session.set_active(0);
+    app.save_automation(None).unwrap();
+    finish(&mut app);
+    assert_eq!(*written.lock().unwrap(), ["poster.pcraft", "poster.pcraft"]);
+    app.run("layer.new.layer", json!({})).unwrap();
+    let before = identity(&app);
+    app.save_automation(Some("copy.png".into())).unwrap();
+    finish(&mut app);
+    assert_eq!(identity(&app), before, "flat export preserves the layered destination and dirty revision");
+    app.session.active_mut().unwrap().path = Some("/read-only/poster.pcraft".into());
+    assert!(app.save_automation(None).is_err());
+    assert_eq!(written.lock().unwrap().len(), 3, "read-only identities never reach the worker");
+    assert!(!app.saving());
+}
+
+#[test]
+fn failed_background_automation_save_preserves_the_previous_identity() {
+    use std::sync::Arc;
+    let mut app = app();
+    app.services.automation_path = Some(Box::new(|_, path| Ok(format!("/workspace/{path}"))));
+    app.background_jobs = true;
+    app.services.automation_save = Some(Arc::new(|_, _, _, _| Err("disk full".into())));
+    let before = identity(&app);
+    app.save_automation(Some("failed.pcraft".into())).unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while app.saving() {
+        assert!(std::time::Instant::now() < deadline);
+        crate::jobs_ui::tick(&mut app, &egui::Context::default());
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+    assert_eq!(identity(&app), before);
+    assert!(app.ui.status.contains("disk full"), "{}", app.ui.status);
 }

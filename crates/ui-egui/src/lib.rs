@@ -356,11 +356,11 @@ pub type SaveFileFn = std::sync::Arc<dyn Fn(&Document, &str, &ExportSettings, &j
 
 /// Who a finished save serves.
 #[derive(Clone, Copy)]
-pub(crate) enum SaveKind {
+pub(crate) enum SaveKind<'a> {
     /// Interactive: arm the document's file and fire user-configured hooks.
     User,
     /// Automation: flat formats stay copies (#2579) and hooks never fire.
-    Automation,
+    Automation(&'a str),
 }
 /// Read bytes through the desktop control session's authorized read root.
 pub type AutomationReadFn = Box<dyn FnMut(&str) -> Result<(String, Vec<u8>), String>>;
@@ -370,6 +370,17 @@ pub type AutomationWriteFn = Box<dyn FnMut(&str, &[u8]) -> Result<(), String>>;
 /// name (the file name) and the loaded document. `Ok(None)` marks a regular file: the
 /// caller falls back to the bytes path for the zip form.
 pub type AutomationOpenPcraftFn = Box<dyn FnMut(&str) -> Result<Option<(String, Document)>, String>>;
+/// Translate between scoped automation requests and desktop document identities.
+#[derive(Clone, Copy)]
+pub enum AutomationPathKind {
+    /// Read-root-relative request to absolute desktop identity.
+    Read,
+    /// Write-root-relative request to absolute desktop identity.
+    Write,
+    /// Existing desktop identity to a write-root-relative request.
+    WriteBack,
+}
+pub type AutomationPathFn = Box<dyn Fn(AutomationPathKind, &str) -> Result<String, String>>;
 /// Reject engine commands which still perform ambient filesystem I/O.
 pub type AutomationCommandFn = Box<dyn Fn(&str, &Value) -> Result<(), String>>;
 /// Open a URL in the system browser (native) — reliable cross-platform, unlike `ctx.open_url`.
@@ -454,6 +465,7 @@ pub struct Services {
     pub automation_read: Option<AutomationReadFn>,
     pub automation_write: Option<AutomationWriteFn>,
     pub automation_open_pcraft: Option<AutomationOpenPcraftFn>,
+    pub automation_path: Option<AutomationPathFn>,
     pub automation_command: Option<AutomationCommandFn>,
     /// Same policy as [`Self::automation_command`], as a function pointer the engine calls for
     /// each step of `actions.play`. Installed on the session only while a control request or
@@ -1566,7 +1578,7 @@ impl PhotocraftApp {
         if self.background_jobs
             && let Some(save) = self.services.save_file.clone()
         {
-            return jobs_ui::start_save(self, path, settings.clone(), copy, save, false);
+            return jobs_ui::start_save(self, path, settings.clone(), copy, save, None);
         }
         let st = self.session.active().ok_or("no document")?;
         let (doc, revision) = (st.doc.id, st.revision);
@@ -1585,18 +1597,18 @@ impl PhotocraftApp {
     }
 
     /// [`Self::saved`] for automation saves: no user-configured hooks (docs/control-protocol.md).
-    pub(crate) fn saved_automation(&mut self, doc: DocId, revision: u64, path: &str, warnings: &[String], copy: bool) {
-        self.saved_inner(doc, revision, path, warnings, copy, SaveKind::Automation);
+    pub(crate) fn saved_automation(&mut self, doc: DocId, revision: u64, path: &str, identity: &str, warnings: &[String], copy: bool) {
+        self.saved_inner(doc, revision, path, warnings, copy, SaveKind::Automation(identity));
     }
 
-    fn saved_inner(&mut self, doc: DocId, revision: u64, path: &str, warnings: &[String], copy: bool, kind: SaveKind) {
+    fn saved_inner(&mut self, doc: DocId, revision: u64, path: &str, warnings: &[String], copy: bool, kind: SaveKind<'_>) {
         // Automation: only a layered save becomes the document's file; a flat one is a
         // copy, as in the headless server (#2579).
-        let (hooks, arm) = match kind {
-            SaveKind::User => (true, true),
-            SaveKind::Automation => {
+        let (hooks, arm, identity) = match kind {
+            SaveKind::User => (true, true, path),
+            SaveKind::Automation(identity) => {
                 let holds = self.session.documents().iter().find(|st| st.doc.id == doc).is_some_and(|st| photocraft_engine::file_cmds::holds_at(&st.doc, path));
-                (false, holds)
+                (false, holds, identity)
             }
         };
         self.ui.status = crate::i18n::fmt(tl!("Saved {name}"), &[("name", path)]);
@@ -1607,7 +1619,7 @@ impl PhotocraftApp {
                 if let Some(st) = app.session.active_mut()
                     && arm
                 {
-                    st.saved_to(path.to_string());
+                    st.saved_to(identity.to_string());
                     // The job locked the document, but record the revision that was written.
                     st.saved_revision = revision;
                 }
@@ -1661,6 +1673,7 @@ impl PhotocraftApp {
     /// [`Self::save_automation`] writing a Targa with `tga_bits` per pixel (`None`: 32 with an
     /// alpha channel or transparency, else 24). Automation saves never prompt.
     pub fn save_automation_with(&mut self, path: Option<String>, tga_bits: Option<photocraft_io::TgaBits>) -> Result<Value, String> {
+        let implicit = path.is_none();
         let target = {
             let state = self.session.active().ok_or("no document")?;
             // As File › Save: without `path` only a layered file is written back (#416).
@@ -1668,12 +1681,26 @@ impl PhotocraftApp {
                 "pass `path`: a save without one writes back only to the document's own PSD, PSB, .pcraft or OpenRaster file, and to OpenRaster only when it holds everything (adjustment layers, styles and masks don't fit)",
             )?
         };
+        // Keep capability-scoped I/O requests distinct from the document's desktop identity.
+        // Resolve before choosing either the worker or synchronous path.
+        let target = if implicit {
+            match &self.services.automation_path {
+                Some(resolve) => resolve(AutomationPathKind::WriteBack, &target)?,
+                None => target,
+            }
+        } else {
+            target
+        };
+        let identity = match &self.services.automation_path {
+            Some(resolve) => resolve(AutomationPathKind::Write, &target)?,
+            None => target.clone(),
+        };
         let reply = |path: &str, warnings: &[String]| json!({"path": path, "warnings": warnings});
         // #2017: the File › Save worker path, so the encode doesn't block the frame loop.
         if self.background_jobs
             && let Some(save) = self.services.automation_save.clone()
         {
-            return match jobs_ui::start_save(self, target.clone(), ExportSettings { tga_bits, ..self.save_settings() }, false, save, true)? {
+            return match jobs_ui::start_save(self, target.clone(), ExportSettings { tga_bits, ..self.save_settings() }, false, save, Some(identity))? {
                 Some((path, warnings)) => Ok(reply(&path, &warnings)),
                 None => {
                     let job = self.jobs.last_started;
@@ -1688,7 +1715,7 @@ impl PhotocraftApp {
         let (bytes, warnings) = export(&state.doc, &target, &settings)?;
         let write = self.services.automation_write.as_mut().ok_or("automation write authority is not configured")?;
         write(&target, &bytes)?;
-        self.saved_automation(doc, revision, &target, &warnings, false);
+        self.saved_automation(doc, revision, &target, &identity, &warnings, false);
         Ok(reply(&target, &warnings))
     }
 

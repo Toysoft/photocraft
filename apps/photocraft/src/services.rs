@@ -416,6 +416,17 @@ pub fn native(automation: Option<photocraft_automation::AuthorizedWorkspace>) ->
             save_through(doc, path, settings, ctl, |p, b, _| workspace.write(p, b).map_err(|e| e.to_string()))
         }) as photocraft_ui_egui::SaveFileFn
     });
+    let automation_path = automation.clone().map(|workspace| {
+        Box::new(move |kind, path: &str| {
+            use photocraft_ui_egui::AutomationPathKind;
+            match kind {
+                AutomationPathKind::Read => workspace.read_document_path(path),
+                AutomationPathKind::Write => workspace.write_document_path(path),
+                AutomationPathKind::WriteBack => workspace.document_write_request(path),
+            }
+            .map_err(|error| error.to_string())
+        }) as photocraft_ui_egui::AutomationPathFn
+    });
     let step: fn(&str, &serde_json::Value) -> photocraft_engine::Result<()> = photocraft_automation::workspace::authorize_desktop_engine_step;
     let automation_authorize = automation.is_some().then_some(step);
     let automation_command = automation.map(|_| {
@@ -440,6 +451,7 @@ pub fn native(automation: Option<photocraft_automation::AuthorizedWorkspace>) ->
         automation_write,
         automation_open_pcraft,
         automation_save,
+        automation_path,
         automation_command,
         automation_authorize,
         encode_png: Some(Box::new(|w, h, rgba| {
@@ -584,6 +596,54 @@ mod tests {
     use photocraft_format::list_recovery;
     use photocraft_ui_egui::{PhotocraftApp, prefs_ui};
     use serde_json::{Value, json};
+
+    #[test]
+    fn background_automation_save_uses_scoped_io_and_records_the_canonical_identity() {
+        let root = std::env::temp_dir().join(format!("photocraft-background-save-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        let workspace = photocraft_automation::AuthorizedWorkspace::new(Some(&root), Some(&root)).unwrap();
+        let mut services = native(Some(workspace));
+        services.load_prefs = None;
+        services.save_prefs = None;
+        services.photoshop_shortcuts = None;
+        let mut app = PhotocraftApp::new(Session::new(), services);
+        app.background_jobs = true;
+        app.run("file.new", json!({"width": 4, "height": 4})).unwrap();
+        app.run("layer.new.layer", json!({})).unwrap();
+        // Prove the production automation worker is sufficient: no ambient or sync writer.
+        app.services.write = None;
+        app.services.save_file = None;
+        app.services.automation_write = None;
+        let wait = |app: &mut PhotocraftApp| {
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+            while app.session.has_jobs() {
+                assert!(std::time::Instant::now() < deadline, "{}", app.ui.status);
+                photocraft_ui_egui::jobs_ui::tick(app, &egui::Context::default());
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }
+        };
+        let reply = app.save_automation(Some("poster.pcraft".into())).unwrap();
+        assert_eq!(reply["pending"], true);
+        assert_eq!(reply["path"], "poster.pcraft");
+        assert!(app.session.active().unwrap().path.is_none());
+        wait(&mut app);
+        let path = app.session.active().unwrap().path.as_deref().unwrap();
+        assert!(Path::new(path).is_absolute());
+        assert_eq!(std::fs::canonicalize(path).unwrap(), std::fs::canonicalize(root.join("poster.pcraft")).unwrap());
+        assert!(!app.session.active().unwrap().is_dirty());
+        app.run("edit.fill", json!({"color": "#ff0000"})).unwrap();
+        let revision = app.session.active().unwrap().revision;
+        let reply = app.save_automation(None).unwrap();
+        assert_eq!(reply["path"], "poster.pcraft", "WriteBack returns a scoped request");
+        wait(&mut app);
+        assert_eq!(app.session.active().unwrap().saved_revision, revision);
+        let saved = std::fs::read(root.join("poster.pcraft")).unwrap();
+        let opened = photocraft_io::import("poster.pcraft", &saved).unwrap();
+        assert_eq!(opened.document.layer_count(), app.session.active().unwrap().doc.layer_count());
+        assert!(app.ui.recent_files.is_empty());
+        drop(app); // Release directory handles before cleanup on Windows.
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
     #[cfg(all(unix, not(target_os = "macos")))]
     #[test]

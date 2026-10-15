@@ -141,8 +141,9 @@ pub struct SaveJob {
     pub path: String,
     /// A copy leaves the document's path and unsaved state alone.
     pub copy: bool,
-    /// An automation save records without firing user-configured hooks.
-    pub automation: bool,
+    /// Canonical desktop identity for an automation save; the worker still uses `path`
+    /// through the capability writer, and completion never fires user-configured hooks.
+    pub automation_identity: Option<String>,
     pub state: Arc<SaveState>,
     /// The job has ended (cancelled, say) but its worker may still be running: kept until it
     /// returns, so quitting and another save to the same file wait for it.
@@ -259,7 +260,7 @@ pub fn start_save(
     settings: ExportSettings,
     copy: bool,
     save: SaveFileFn,
-    automation: bool,
+    automation_identity: Option<String>,
 ) -> Result<Option<(String, Vec<String>)>, String> {
     let st = app.session.active().ok_or("no document")?;
     if let Some(j) = app.session.job_on(st.doc.id) {
@@ -268,7 +269,8 @@ pub fn start_save(
     }
     let name = crate::file_open::display_name(&path);
     // One writer per file: an older snapshot must not land after a newer one.
-    if app.jobs.saves.iter().any(|s| s.path == path) {
+    let identity = automation_identity.as_deref().unwrap_or(&path);
+    if app.jobs.saves.iter().any(|s| s.automation_identity.as_deref().unwrap_or(&s.path) == identity) {
         return Err(crate::i18n::fmt(tl!("A save to {name} is still running; try again when it finishes"), &[("name", &name)]));
     }
     let (snapshot, doc, revision) = (Arc::clone(&st.doc), st.doc.id, st.revision);
@@ -293,15 +295,15 @@ pub fn start_save(
     match started.map_err(|e| e.to_string())? {
         Started::Done(v) => {
             let warnings = warnings_of(&v);
-            if automation {
-                app.saved_automation(doc, revision, &path, &warnings, copy);
+            if let Some(identity) = &automation_identity {
+                app.saved_automation(doc, revision, &path, identity, &warnings, copy);
             } else {
                 app.saved(doc, revision, &path, &warnings, copy);
             }
             Ok(Some((path, warnings)))
         }
         Started::Job(job) => {
-            app.jobs.saves.push(SaveJob { job, doc, revision, path, copy, automation, state, ended: false });
+            app.jobs.saves.push(SaveJob { job, doc, revision, path, copy, automation_identity, state, ended: false });
             // Control and MCP requests wait on it, as for other jobs.
             app.jobs.last_started = Some(job);
             // The status bar's progress readout names the save; clear any old message.
@@ -321,8 +323,8 @@ fn warnings_of(v: &Value) -> Vec<String> {
 fn finish_save(app: &mut PhotocraftApp, ctx: &egui::Context, save: SaveJob, label: &str, outcome: JobOutcome) {
     match outcome {
         JobOutcome::Done(v) => {
-            if save.automation {
-                app.saved_automation(save.doc, save.revision, &save.path, &warnings_of(&v), save.copy);
+            if let Some(identity) = &save.automation_identity {
+                app.saved_automation(save.doc, save.revision, &save.path, identity, &warnings_of(&v), save.copy);
             } else {
                 app.saved(save.doc, save.revision, &save.path, &warnings_of(&v), save.copy);
             }
