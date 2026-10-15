@@ -909,6 +909,35 @@ impl craft_ui::docking::DockContent<String> for PanelContent<'_> {
         let resp = crate::icons::button(ui, "ellipsis", ui.available_height().min(28.0), false, tl!("Panel menu"));
         egui::Popup::menu(&resp).show(|ui| {
             ui.set_min_width(180.0);
+            if PANELS.iter().any(|&(id, _, group)| id == active && group == Group::Color) {
+                ui.separator();
+
+                let mode_id = egui::Id::new("color_wheel_mode");
+                let mode = ui
+                    .ctx()
+                    .data_mut(|d| d.get_persisted::<String>(mode_id).unwrap_or_else(|| "hue_cube".to_owned()));
+                let mut next_mode = mode.clone();
+
+                if ui
+                    .selectable_label(mode == "hue_cube", "Hue Cube")
+                    .clicked()
+                {
+                    next_mode = "hue_cube".to_owned();
+                }
+                if ui
+                    .selectable_label(mode == "color_wheel", "Color Wheel")
+                    .clicked()
+                {
+                    next_mode = "color_wheel".to_owned();
+                }
+
+                if next_mode != mode {
+                    ui.ctx()
+                        .data_mut(|d| d.insert_persisted(mode_id, next_mode));
+                }
+
+                ui.separator();
+            }
             panel_menu(self.app, ui, active);
             if ui.add_enabled(!locked, egui::Button::new(if collapsed { tl!("Expand Panel Group") } else { tl!("Collapse Panel Group") })).clicked() {
                 self.commands.push(("window.panel.group", json!({"panel":active,"operation":if collapsed {"expand"} else {"collapse"}})));

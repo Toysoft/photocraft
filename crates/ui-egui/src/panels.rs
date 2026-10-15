@@ -3610,8 +3610,29 @@ fn field_hsva(mut hsva: egui::ecolor::Hsva, remembered: (f32, f32)) -> egui::eco
 fn color_field(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     let t = Tokens::get(ui.ctx());
     let bg_active = app.ui.color_panel.background;
+    let mode = ui.ctx().data_mut(|d| {
+        d.get_persisted::<String>(egui::Id::new("color_wheel_mode"))
+            .unwrap_or_else(|| "hue_cube".to_owned())
+    });
+    if mode == "color_wheel" {
+        color_wheel(app, ui, bg_active);
+        return;
+    }
     let key = egui::Id::new(("color-field-hue", bg_active));
-    let mut hsva = srgb_hsva(if bg_active { app.session.tools.background } else { app.session.tools.foreground });
+    let mut hsva = srgb_hsva(if bg_active { 
+        app.session.tools.background 
+    } else { 
+        app.session.tools.foreground
+    });
+    // A grey or black has no hue; keep the last meaningful hue/saturation for the wheel.
+    let wheel_key = egui::Id::new(("color-wheel-hue", bg_active));
+    let remembered: (f32, f32) = ui
+        .data(|d| d.get_temp(wheel_key))
+        .unwrap_or((hsva.h, hsva.s));
+    if hsva.s < 0.001 || hsva.v < 0.001 {
+        hsva.h = remembered.0;
+        hsva.s = remembered.1;
+    }
     // What the field showed last: a grey carries no hue, black neither hue nor saturation (#3228).
     let remembered: (f32, f32) = ui.data(|d| d.get_temp(key)).unwrap_or((hsva.h, hsva.s));
     hsva = field_hsva(hsva, remembered);
@@ -3712,7 +3733,219 @@ fn color_field(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
         }
     });
 }
+/// Circular hue/saturation wheel with a brightness slider; an alternative to the SV field.
+fn color_wheel(app: &mut PhotocraftApp, ui: &mut egui::Ui, bg_active: bool) {
+    let mut hsva = srgb_hsva(if bg_active {
+        app.session.tools.background
+    } else {
+        app.session.tools.foreground
+    });
 
+    // A grey or black has no hue; keep the last meaningful hue/saturation for the wheel.
+    let wheel_key = egui::Id::new(("color-wheel-hue", bg_active));
+    let remembered: (f32, f32) = ui
+        .data(|d| d.get_temp(wheel_key))
+        .unwrap_or((hsva.h, hsva.s));
+    if hsva.s < 0.001 || hsva.v < 0.001 {
+        hsva.h = remembered.0;
+        hsva.s = remembered.1;
+    }
+
+    let mut changed = false;
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 8.0;
+        let (chips, _) = ui.allocate_exact_size(vec2(38.0, 78.0), Sense::hover());
+        field_chips(app, ui, chips);
+
+        ui.vertical(|ui| {
+            let mut hue = hsva.h * 360.0;
+            let mut saturation = hsva.s * 100.0;
+            let mut brightness = hsva.v * 100.0;
+
+            ui.horizontal(|ui| {
+                ui.label("H");
+                ui.add(
+                    egui::Slider::new(&mut hue, 0.0..=360.0)
+                        .show_value(false),
+                );
+                if widgets::value_field(ui, &mut hue, 0.0..=360.0, "", 48.0).changed() {
+                    changed = true;
+                }
+            });
+
+            ui.horizontal(|ui| {
+                ui.label("S");
+                ui.add(
+                    egui::Slider::new(&mut saturation, 0.0..=100.0)
+                        .show_value(false),
+                );
+                if widgets::value_field(ui, &mut saturation, 0.0..=100.0, "", 48.0).changed() {
+                    changed = true;
+                }
+            });
+
+            ui.horizontal(|ui| {
+                ui.label("B");
+                ui.add(
+                    egui::Slider::new(&mut brightness, 0.0..=100.0)
+                        .show_value(false),
+                );
+                if widgets::value_field(ui, &mut brightness, 0.0..=100.0, "", 48.0).changed() {
+                    changed = true;
+                }
+            });
+
+            if hue != hsva.h * 360.0
+                || saturation != hsva.s * 100.0
+                || brightness != hsva.v * 100.0
+            {
+                changed = true;
+            }
+
+            hsva.h = hue / 360.0;
+            hsva.s = saturation / 100.0;
+            hsva.v = brightness / 100.0;
+        });
+    });
+
+        if changed {
+        let color = hsva_srgb(hsva);
+        if bg_active {
+            app.session.tools.background = color;
+        } else {
+            app.session.tools.foreground = color;
+            crate::type_tool::foreground_changed(app);
+        }
+        ui.data_mut(|d| d.insert_temp(wheel_key, (hsva.h, hsva.s)));
+    }
+
+    ui.add_space(8.0);
+
+    let size = ui.available_width().min(280.0);
+    let (area, area_resp) = ui.allocate_exact_size(vec2(size, size), Sense::click_and_drag());
+    let center = area.center();
+    let outer = size / 2.0;
+    let ring_w = 18.0;
+    let inner = outer - ring_w - 2.0;
+
+    // Hue ring.
+    let segments = 96;
+    let mut ring = egui::Mesh::default();
+    for k in 0..=segments {
+        let angle = k as f32 / segments as f32 * std::f32::consts::TAU;
+        let hue = k as f32 / segments as f32;
+        let color = hsva_color32(egui::ecolor::Hsva::new(hue, 1.0, 1.0, 1.0));
+        let direction = vec2(angle.cos(), angle.sin());
+        ring.colored_vertex(center + direction * inner, color);
+        ring.colored_vertex(center + direction * outer, color);
+    }
+    for k in 0..segments {
+        let a = (k * 2) as u32;
+        let b = a + 1;
+        let c = a + 2;
+        let d = a + 3;
+        ring.add_triangle(a, c, d);
+        ring.add_triangle(a, d, b);
+    }
+    ui.painter().add(ring);
+
+    // Triangle inscribed in the inner circle:
+    // pure hue right, white upper-left, black lower-left.
+    let radius = inner * 0.98;
+    let hue_vertex = center + vec2(radius, 0.0);
+    let white_vertex = center + vec2(-radius * 0.5, -radius * 0.866);
+    let black_vertex = center + vec2(-radius * 0.5, radius * 0.866);
+
+    let hue_color = hsva_color32(egui::ecolor::Hsva::new(hsva.h, 1.0, 1.0, 1.0));
+    let mut triangle = egui::Mesh::default();
+    let hue_index = triangle.vertices.len() as u32;
+    triangle.colored_vertex(hue_vertex, hue_color);
+    let white_index = triangle.vertices.len() as u32;
+    triangle.colored_vertex(white_vertex, Color32::WHITE);
+    let black_index = triangle.vertices.len() as u32;
+    triangle.colored_vertex(black_vertex, Color32::BLACK);
+    triangle.add_triangle(hue_index, white_index, black_index);
+    ui.painter().add(triangle);
+
+    // Current saturation/brightness marker.
+    let v = hsva.v.clamp(0.0, 1.0);
+    let s = hsva.s.clamp(0.0, 1.0);
+    let hue_offset = hue_vertex - center;
+    let white_offset = white_vertex - center;
+    let black_offset = black_vertex - center;
+    let marker = center
+        + hue_offset * (s * v)
+        + white_offset * ((1.0 - s) * v)
+        + black_offset * (1.0 - v);
+    ui.painter().circle_filled(marker, 5.0, Color32::WHITE);
+    ui.painter().circle_stroke(marker, 5.0, Stroke::new(1.5, Color32::from_black_alpha(160)));
+
+    // One interaction area: ring changes hue, triangle changes saturation/brightness.
+    let active = area_resp.dragged() || area_resp.clicked();
+    if active
+        && let Some(p) = area_resp.interact_pointer_pos()
+    {
+        let offset = p - center;
+        let distance = offset.length();
+        let angle = (offset.y.atan2(offset.x) / std::f32::consts::TAU + 1.0) % 1.0;
+
+        if distance >= inner - 3.0 {
+            hsva.h = angle;
+        } else {
+            // Barycentric coordinates in the triangle.
+            let ax = hue_vertex.x;
+            let ay = hue_vertex.y;
+            let bx = white_vertex.x;
+            let by = white_vertex.y;
+            let cx = black_vertex.x;
+            let cy = black_vertex.y;
+
+            let denominator = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy);
+            if denominator.abs() > f32::EPSILON {
+                let mut weight_hue =
+                    ((by - cy) * (p.x - cx) + (cx - bx) * (p.y - cy)) / denominator;
+                let mut weight_white =
+                    ((cy - ay) * (p.x - cx) + (ax - cx) * (p.y - cy)) / denominator;
+                let mut weight_black = 1.0 - weight_hue - weight_white;
+
+                // Clamp the point into the triangle.
+                let minimum = weight_hue.min(weight_white).min(weight_black);
+                if minimum < 0.0 {
+                    weight_hue -= minimum;
+                    weight_white -= minimum;
+                    weight_black -= minimum;
+                }
+                let total = weight_hue + weight_white + weight_black;
+                weight_hue /= total;
+                weight_white /= total;
+                weight_black /= total;
+
+                hsva.v = 1.0 - weight_black;
+                hsva.s = if weight_hue + weight_white > f32::EPSILON {
+                    weight_hue / (weight_hue + weight_white)
+                } else {
+                    0.0
+                };
+            }
+        }
+
+        let color = hsva_srgb(hsva);
+        if bg_active {
+            app.session.tools.background = color;
+        } else {
+            app.session.tools.foreground = color;
+            crate::type_tool::foreground_changed(app);
+        }
+    ui.data_mut(|d| d.insert_temp(wheel_key, (hsva.h, hsva.s)));
+    }
+
+    // Hue marker, drawn last.
+    let hue_angle = hsva.h * std::f32::consts::TAU;
+    let direction = vec2(hue_angle.cos(), hue_angle.sin());
+    let hue_marker = center + direction * (inner + ring_w / 2.0);
+    ui.painter().circle_filled(hue_marker, 6.0, Color32::WHITE);
+    ui.painter().circle_stroke(hue_marker, 6.0, Stroke::new(1.5, Color32::from_black_alpha(160)));
+}
 /// Tool colours are sRGB-encoded floats; egui's Hsva works on sRGB bytes via these helpers
 /// (its `from_rgba_unmultiplied` expects *linear* RGB, which gave wrong readouts).
 fn srgb_bytes(c: [f32; 4]) -> [u8; 3] {
