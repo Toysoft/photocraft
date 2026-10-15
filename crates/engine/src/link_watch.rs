@@ -12,8 +12,9 @@
 //! `layer.smartObjects.updateChanged` takes them on the spot (CLI, agents).
 //!
 //! Stamps are kept per document: one in the background is looked at when it comes to the front.
-//! A file seen for the first time is only remembered (one changed while its document was closed
-//! keeps waiting for Update Modified Content, as in Photoshop); one that can't be read (another app
+//! A file seen for the first time is compared with the source stamp preserved in an external
+//! PSD record, if available, so changes made while its parent was closed also refresh. Otherwise
+//! the first stamp is only remembered. A file that can't be read (another app
 //! is still writing it) is tried again once it changes again, not on every look. Only smart objects
 //! of the document itself follow their files, not ones nested in another smart object's contents.
 
@@ -115,6 +116,21 @@ impl Session {
             }
         });
         let mut changed = Vec::new();
+        // PSD caches remember the source stamp. A file modified while this parent was
+        // closed must refresh on its first scan, rather than accepting a stale preview.
+        let cached: HashMap<String, (u64, f64)> = self
+            .active()
+            .map(|st| {
+                st.doc
+                    .metadata
+                    .psd_global_blocks
+                    .iter()
+                    .filter(|(_, key, _)| matches!(key, b"lnkE" | b"lnk2" | b"lnk3" | b"lnkD"))
+                    .flat_map(|(_, _, data)| photocraft_io::linked::parse_external_files(data))
+                    .map(|f| (f.path, (f.file_size, f.modified)))
+                    .collect()
+            })
+            .unwrap_or_default();
         for (path, ids, stamp) in now {
             match (before.get(&path), stamp) {
                 // Not there right now (an app saving by delete and rename): keep the last stamp.
@@ -122,7 +138,11 @@ impl Session {
                     self.link_stamps.insert((doc, path), *old);
                 }
                 (old, Some(new)) => {
-                    if old.is_some_and(|o| *o != new) {
+                    let stale = old.is_none()
+                        && cached.get(&path).is_some_and(|(size, time)| {
+                            (*size != 0 && *size != new.0) || (*time > 0.0 && (*time - new.1 as f64 / 1_000_000_000.0).abs() > 0.000005)
+                        });
+                    if old.is_some_and(|o| *o != new) || stale {
                         changed.push((path.clone(), ids));
                     }
                     self.link_stamps.insert((doc, path), new);

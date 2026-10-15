@@ -115,6 +115,7 @@ const MAX_NESTING: u32 = 8;
 #[derive(Clone, Debug)]
 struct Source {
     uuid: String,
+    external: bool,
     /// Pixel size of the source document.
     size: (f64, f64),
     dpi: f64,
@@ -142,6 +143,8 @@ struct SmartOut {
     prune_ok: bool,
     /// Files to embed.
     add: Vec<crate::linked::LinkedFile>,
+    /// Real external file references, emitted in lnkE rather than embedded in lnk2.
+    external_add: Vec<crate::linked::ExternalFile>,
     /// Sources converted so far, by contents identity and bytes (`Err` = can't be embedded).
     converted: std::collections::HashMap<(SmartContentsId, [u8; 32]), Result<Source, String>>,
     /// Each placed layer has its own id, even when it duplicates an imported layer.
@@ -223,7 +226,7 @@ impl SmartOut {
     /// filter caches kept or regenerated per smart object. Unchanged blocks stay byte-identical.
     fn finish(&self, blocks: Vec<photocraft_doc::PsdGlobalBlock>) -> Vec<photocraft_doc::PsdGlobalBlock> {
         use std::sync::Arc;
-        let keep = |u: &str| !self.prune_ok || self.used.contains(u);
+        let keep = |u: &str| (!self.prune_ok || self.used.contains(u)) && !self.external_add.iter().any(|f| f.uuid == u);
         let mut out = Vec::with_capacity(blocks.len() + 2);
         let mut added = false;
         let mut fx_placed = false;
@@ -260,6 +263,14 @@ impl SmartOut {
         if !added && !self.add.is_empty() {
             let data: Vec<u8> = self.add.iter().flat_map(crate::linked::encode_linked_file).collect();
             out.push((*b"8BIM", *b"lnk2", Arc::new(data)));
+        }
+        if !self.external_add.is_empty() {
+            let data: Vec<u8> = self.external_add.iter().flat_map(crate::linked::encode_external_file).collect();
+            if let Some((_, _, block)) = out.iter_mut().find(|(_, k, _)| k == b"lnkE") {
+                Arc::make_mut(block).extend(data);
+            } else {
+                out.push((*b"8BIM", *b"lnkE", Arc::new(data)));
+            }
         }
         for (sig, key, data) in self.linked_copies.values() {
             if let Some((_, _, block)) = out.iter_mut().find(|(s, k, _)| s == sig && k == key) {
@@ -761,6 +772,14 @@ impl Ex {
             && t.placed == placed
             && unchanged
         {
+            if src.external {
+                raw.retain(|(k, _)| !matches!(k, b"SoLd" | b"SoLE" | b"PlLd"));
+                raw.push((*b"SoLE", data.to_vec()));
+                if !stack.filters.is_empty() {
+                    self.smart.keep_fx.insert(t.placed.clone());
+                }
+                return;
+            }
             let keys: &[&[u8; 4]] = if raw.iter().any(|(k, _)| k == b"SoLd") { &[b"SoLd"] } else { &[b"SoLE", b"SoLd"] };
             match keys.iter().find_map(|k| raw.iter().position(|(rk, _)| rk == *k)) {
                 Some(i) => raw[i].1 = data.to_vec(),
@@ -794,9 +813,13 @@ impl Ex {
         let sold = sold_bytes(same_source.map(|t| &t.descriptor), &spec, &mut warnings);
         let plld = plld_bytes(&spec, &mut warnings);
         warnings.dedup();
-        let key = if same_source.is_some() && raw.iter().any(|(k, _)| k == b"SoLE") && !raw.iter().any(|(k, _)| k == b"SoLd") { *b"SoLE" } else { *b"SoLd" };
+        let key = if src.external { *b"SoLE" } else { *b"SoLd" };
         raw.retain(|(k, _)| k == &key || !matches!(k, b"SoLd" | b"SoLE"));
-        upsert(raw, b"PlLd", plld, Some(&key));
+        if src.external {
+            raw.retain(|(k, _)| k != b"PlLd");
+        } else {
+            upsert(raw, b"PlLd", plld, Some(&key));
+        }
         upsert(raw, &key, sold, None);
         if !stack.filters.is_empty() {
             let bounds = sm.cache.as_ref().map_or(self.canvas, |c| c.content_bounds().union(&self.canvas));
@@ -884,9 +907,8 @@ impl Ex {
         }
     }
 
-    /// The `lnk2` file a smart object's source is written as: a preserved embedded file, or a new
-    /// one (a `.pcraft` source becomes a PSB of the nested document; image files are embedded as
-    /// they are; a linked file is read and embedded).
+    /// Resolve an embedded source or an external `lnkE` record. External sources retain
+    /// their file path; their cached geometry lets a missing file remain editable.
     fn smart_source(&mut self, sm: &photocraft_doc::SmartObject, template: Option<&crate::smart_map::Placed>) -> Result<Source, String> {
         use photocraft_doc::SmartSource;
         match &sm.source {
@@ -924,18 +946,52 @@ impl Ex {
                     }
                     uuid
                 };
-                Ok(Source { uuid, size, dpi })
+                Ok(Source { uuid, size, dpi, external: false })
             }
             SmartSource::Linked { path } => {
+                let meta = photocraft_doc::Metadata { psd_global_blocks: self.smart.globals.clone(), ..Default::default() };
+                let preserved = template.and_then(|t| crate::linked::find_external_file(&meta, &t.idnt)).filter(|f| f.path == *path);
+                let uuid = preserved.as_ref().map_or_else(|| contents_uuid(sm.contents_id, path.as_bytes()), |f| f.uuid.clone());
+                let name = path.rsplit(['/', '\\']).next().unwrap_or(path).to_string();
+                let geometry = template.and_then(|t| crate::smart_map::stored_size(&t.descriptor)).map(|s| (s, f64::from(self.dpi)));
+                let file_size = preserved.as_ref().map_or(0, |f| f.file_size);
+                let modified = preserved.as_ref().map_or(0.0, |f| f.modified);
                 #[cfg(not(target_arch = "wasm32"))]
-                {
-                    let bytes = std::fs::read(path).map_err(|e| format!("the linked file {path} can't be read: {e}"))?;
-                    let name = path.rsplit(['/', '\\']).next().unwrap_or(path).to_string();
-                    self.warnings.push(format!("the linked smart object {name} was embedded (PSD export keeps no external links)"));
-                    self.embed(sm.contents_id, &name, &bytes)
+                let (geometry, file_size, modified) = {
+                    let (mut geometry, mut file_size, mut modified) = (geometry, file_size, modified);
+                    if preserved.is_none()
+                        && let Ok(stat) = std::fs::metadata(path)
+                    {
+                        file_size = stat.len();
+                        modified = stat.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map_or(0.0, |t| t.as_secs_f64());
+                    }
+                    if geometry.is_none() {
+                        geometry = photocraft_format::read_file(std::path::Path::new(path)).ok().and_then(|b| source_geometry(&name, &b).ok());
+                    }
+                    (geometry, file_size, modified)
+                };
+                let (size, dpi) = geometry.unwrap_or((size_from_layer(sm), f64::from(self.dpi)));
+                // Keep an imported liFE item verbatim, including descriptors we do not
+                // understand. A refresh updates only its cached stamp in the metadata.
+                if preserved.is_none() && !self.smart.external_add.iter().any(|f| f.uuid == uuid) {
+                    let file_type = match name.rsplit('.').next().unwrap_or("").to_ascii_lowercase().as_str() {
+                        "png" => *b"PNGf",
+                        "psb" => *b"8BPB",
+                        "jpg" | "jpeg" => *b"JPEG",
+                        "tif" | "tiff" => *b"TIFF",
+                        _ => *b"8BPS",
+                    };
+                    self.smart.external_add.push(crate::linked::ExternalFile {
+                        uuid: uuid.clone(),
+                        file_name: name,
+                        path: path.clone(),
+                        relative_path: None,
+                        file_type,
+                        file_size,
+                        modified,
+                    });
                 }
-                #[cfg(target_arch = "wasm32")]
-                Err(format!("the linked file {path} can't be read here"))
+                Ok(Source { uuid, size, dpi, external: true })
             }
             SmartSource::Embedded { file_name, bytes } => self.embed(sm.contents_id, file_name, bytes),
         }
@@ -957,7 +1013,15 @@ impl Ex {
                     };
                     crate::linked::find_linked_file(&meta, uuid)
                 });
-                file.and_then(|f| crate::import(&f.file_name, &f.bytes).ok()).map(|r| r.document)
+                let embedded = file.and_then(|f| crate::import(&f.file_name, &f.bytes).ok()).map(|r| r.document);
+                #[cfg(not(target_arch = "wasm32"))]
+                let embedded = embedded.or_else(|| {
+                    let preserved = self.smart.globals.iter().flat_map(|(_, _, data)| crate::linked::parse_external_files(data)).find(|f| f.uuid == uuid);
+                    let f = self.smart.external_add.iter().find(|f| f.uuid == uuid).or(preserved.as_ref())?;
+                    let bytes = photocraft_format::read_file(std::path::Path::new(&f.path)).ok()?;
+                    crate::import(&f.file_name, &bytes).ok().map(|r| r.document)
+                });
+                embedded
             }
         };
         let c = doc.map(|d| {
@@ -1018,7 +1082,7 @@ impl Ex {
         if !self.smart.known.contains(&uuid) && !self.smart.add.iter().any(|f| f.uuid == uuid) {
             self.smart.add.push(crate::linked::LinkedFile { uuid: uuid.clone(), file_name: name, bytes: data });
         }
-        Ok(Source { uuid, size, dpi })
+        Ok(Source { uuid, size, dpi, external: false })
     }
 
     /// Pixels for a fill layer: Photoshop's cached rendering while valid,

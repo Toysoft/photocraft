@@ -467,9 +467,28 @@ fn refresh_in(doc: &mut Document, id: LayerId, ctx: &JobCtx) -> Result<bool> {
     if !matches!(l.content, LayerContent::Smart(_)) {
         return Err(other("the layer is not a smart object"));
     }
+    #[cfg(not(target_arch = "wasm32"))]
+    let linked = match &l.content {
+        LayerContent::Smart(sm) => match &sm.source {
+            SmartSource::Linked { path } if photocraft_io::linked::find_linked_file(&doc.metadata, path).is_none() => std::fs::metadata(path)
+                .ok()
+                .and_then(|m| m.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|t| (path.clone(), m.len(), t))),
+            _ => None,
+        },
+        _ => None,
+    };
     let ok = refresh_layer_in(doc, &mut l, ctx)?;
     if ok && let Some(dst) = doc.layer_mut(id) {
         dst.content = l.content;
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    if ok
+        && let Some((path, len, time)) = linked
+        && let Ok(m) = std::fs::metadata(&path)
+        && m.len() == len
+        && m.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()) == Some(time)
+    {
+        photocraft_io::linked::update_external_stamp(&mut doc.metadata, &path, len, time.as_secs_f64());
     }
     Ok(ok)
 }
@@ -889,7 +908,23 @@ pub fn commit_child(s: &mut Session, index: usize) -> Result<bool> {
     let child = st.doc.clone();
     let Some(link) = s.smart_links.iter().find(|l| l.child == child.id).copied() else { return Ok(false) };
     let parent = s.docs.iter().position(|d| d.doc.id == link.parent).ok_or_else(|| other("the smart object's document was closed"))?;
-    let bytes = Arc::new(encode_source(&child)?);
+    let parent_doc = &s.docs.get(parent).ok_or(EngineError::NoDocument)?.doc;
+    let source = smart(parent_doc, link.layer)?.source.clone();
+    let linked_path = match &source {
+        SmartSource::Linked { path } if embedded_source_bytes(&parent_doc.metadata, &source).is_none() => Some(path.clone()),
+        _ => None,
+    };
+    let bytes = if let Some(path) = &linked_path {
+        // The path comes from the document, so automation must reauthorize the write.
+        if let Some(gate) = s.authorize {
+            gate("file.save", &json!({"path":path}))?;
+        }
+        let out = photocraft_io::export(&child, path, &Default::default()).map_err(|e| other(format!("can't save linked contents: {e}")))?;
+        crate::file_cmds::write_file(path, &out.bytes)?;
+        Arc::new(out.bytes)
+    } else {
+        Arc::new(encode_source(&child)?)
+    };
     let prev = s.active;
     s.active = Some(parent);
     let r = s.edit("Edit Contents", |doc, _| {
@@ -903,9 +938,13 @@ pub fn commit_child(s: &mut Session, index: usize) -> Result<bool> {
                 SmartSource::Embedded { file_name, .. } => file_name.as_str(),
                 SmartSource::Linked { .. } => child.name.as_str(),
             };
-            let stem = name.rsplit_once('.').map_or(name, |(stem, _)| stem);
-            sm.source = SmartSource::Embedded { file_name: format!("{stem}.pcraft"), bytes: bytes.clone() };
-            detach_psd(doc.layer_mut(id).ok_or(EngineError::NoLayer(id))?);
+            if let Some(path) = &linked_path {
+                sm.source = SmartSource::Linked { path: path.clone() };
+            } else {
+                let stem = name.rsplit_once('.').map_or(name, |(stem, _)| stem);
+                sm.source = SmartSource::Embedded { file_name: format!("{stem}.pcraft"), bytes: bytes.clone() };
+                detach_psd(doc.layer_mut(id).ok_or(EngineError::NoLayer(id))?);
+            }
             refresh_or_fail(doc, id)?;
         }
         Ok(())

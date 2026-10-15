@@ -962,6 +962,9 @@ pub mod transcode {
                     if t.u8()? != 0 {
                         t.versioned_descriptor()?;
                     }
+                    if &kind == b"liFE" {
+                        t.versioned_descriptor()?;
+                    }
                     if &kind == b"liFE" && version > 3 {
                         t.i32()?;
                         for _ in 0..4 {
@@ -977,6 +980,9 @@ pub mod transcode {
                     }
                     let data_len = usize::try_from(data_len).map_err(|_| PsdError::LimitExceeded("linked file length"))?;
                     if &kind == b"liFD" {
+                        t.raw(data_len)?;
+                    }
+                    if &kind == b"liFE" && version > 2 {
                         t.raw(data_len)?;
                     }
                     if version >= 5 {

@@ -938,8 +938,8 @@ fn automation_smart_contents_refuses_disk_sources_before_changes() {
         assert!(Arc::ptr_eq(&before, &s.active().unwrap().doc));
         assert_eq!((s.documents().len(), s.active().unwrap().revision, s.active().unwrap().history.entries().len()), (1, revision, history));
 
-        // Human commands retain their linked-file behavior. Returning to an already-open child
-        // reads no source, and saving it updates only its parent layer, never a linked sibling.
+        // Returning to an already-open child reads no source. Saving now writes the external
+        // file, so the resolved path must be authorized again before changing either document.
         s.authorize = None;
         let r = s.execute(cmd, json!({"layer": id})).unwrap();
         if cmd.ends_with("editContents") {
@@ -950,17 +950,24 @@ fn automation_smart_contents_refuses_disk_sources_before_changes() {
             assert_eq!(again["document"], r["document"]);
             assert_eq!(s.documents().len(), 2);
             s.execute("image.adjustments.invert", json!({})).unwrap();
+            assert!(s.execute("layer.smartObjects.saveContents", json!({})).is_err());
+            assert!(s.active().unwrap().is_dirty());
+            assert_eq!(std::fs::read(&path).unwrap(), source_bytes);
+            s.authorize = None;
             s.execute("layer.smartObjects.saveContents", json!({})).unwrap();
             assert!(!s.active().unwrap().is_dirty());
             let parent = &s.documents()[0].doc;
-            assert!(matches!(smart(parent, LayerId(id)).unwrap().source, SmartSource::Embedded { .. }));
+            assert!(matches!(smart(parent, LayerId(id)).unwrap().source, SmartSource::Linked { .. }));
             assert_eq!(smart(parent, sibling).unwrap().cache.as_ref().unwrap().rgba(1, 1), [0.0, 0.0, 1.0, 1.0]);
+            assert_ne!(std::fs::read(&path).unwrap(), source_bytes, "an authorized Save Contents writes its real source");
             s.close(child).unwrap();
+            // Restore this shared fixture before testing Convert to Layers below.
+            std::fs::write(&path, &source_bytes).unwrap();
         } else {
             assert_eq!(s.active().unwrap().doc.layer(LayerId(r["layer"].as_u64().unwrap())).unwrap().surface().unwrap().rgba(-5, 6), [1.0, 0.0, 0.0, 1.0]);
         }
     }
-    assert_eq!(std::fs::read(&path).unwrap(), source_bytes, "committing contents does not overwrite the linked file");
+    assert_eq!(std::fs::read(&path).unwrap(), source_bytes, "fixture restored after authorized linked save");
     std::fs::remove_file(path).unwrap();
 }
 

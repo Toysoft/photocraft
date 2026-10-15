@@ -3,6 +3,7 @@
 //! PSD import keeps a placed layer's source as `SmartSource::Linked { path: <Idnt uuid> }` and the
 //! file bytes stay inside the preserved global block (so PSD export stays byte-stable). This module
 //! finds the bytes for a uuid when the engine needs to re-render the smart object from its source.
+//! External `liFE` records use the real local file path instead; parsing never opens that file.
 //!
 //! Layout (Adobe PSD spec, "Linked Layer"): a sequence of items, each `u64 length` + item data,
 //! padded to 4 bytes. Item: type (`liFD` data / `liFE` external / `liFA` alias), version (1–7),
@@ -11,6 +12,10 @@
 
 use photocraft_doc::Metadata;
 use photocraft_psd::descriptor::VersionedDescriptor;
+
+#[path = "external_linked.rs"]
+mod external;
+pub use external::{ExternalFile, encode_external_file, find_external_file, parse_external_files, update_external_stamp};
 
 /// An embedded file found in a linked-layer block.
 #[derive(Clone, Debug, PartialEq, Eq)]

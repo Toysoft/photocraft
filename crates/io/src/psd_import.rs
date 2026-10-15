@@ -61,6 +61,8 @@ pub(crate) struct Ctx<'a> {
     pub smart_contents: std::collections::HashMap<String, SmartContentsId>,
     /// Source sizes of `PlLd`-only placed layers, by source id (read once per embedded file).
     pub plld_sizes: std::collections::HashMap<String, Option<(f64, f64)>>,
+    /// Parsed once per file; placed layers must not repeatedly decode all external records.
+    pub external_sources: std::collections::HashMap<String, String>,
     /// Cancellation and progress for background opens (checked per layer record).
     pub ctl: photocraft_raster::Interrupt<'a>,
     /// Layer records decoded so far, out of `total` (progress).
@@ -419,7 +421,7 @@ impl Ctx<'_> {
             };
             LayerContent::Smart(SmartObject {
                 contents_id,
-                source: SmartSource::Linked { path: id },
+                source: SmartSource::Linked { path: self.external_sources.get(&id).cloned().unwrap_or(id) },
                 transform,
                 smart_filters: stack.filters,
                 cache: Some(cache),
@@ -866,6 +868,13 @@ pub(crate) fn psd_to_document_decoded(
         filter_effects: Vec::new(),
         smart_contents: Default::default(),
         plld_sizes: Default::default(),
+        external_sources: file
+            .global_blocks
+            .iter()
+            .filter(|b| matches!(&b.key, b"lnkE" | b"lnk2" | b"lnk3" | b"lnkD"))
+            .flat_map(|b| crate::linked::parse_external_files(&b.data))
+            .map(|f| (f.uuid, f.path))
+            .collect(),
         ctl: *ctl,
         done: 0,
         total: file.layers().len(),
