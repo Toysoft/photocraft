@@ -2166,6 +2166,27 @@ mod open_recent_tests {
         assert_eq!(app.session.documents().len(), 2);
         let _ = std::fs::remove_file(&path);
     }
+
+    /// #6016: a file written by File › Save As (and Save) is as recent as one just opened: it
+    /// leads Open Recent and is stored with the preferences.
+    #[test]
+    fn saving_a_file_records_it_as_recent() {
+        let services = crate::Services {
+            export: Some(Box::new(|_d: &photocraft_doc::Document, _p: &str, _s: &crate::ExportSettings| Ok((b"out".to_vec(), Vec::new())))),
+            write: Some(Box::new(|_p: &str, _b: &[u8]| Ok(()))),
+            ..Default::default()
+        };
+        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), services);
+        app.run("file.new", json!({"width": 8, "height": 8})).unwrap();
+        assert!(app.ui.recent_files.is_empty());
+        let p = "/tmp/photocraft_saved_as_test.psd".to_string();
+        app.save_as(Some(p.clone())).unwrap();
+        assert_eq!(app.ui.recent_files, vec![p.clone()]);
+        assert_eq!(app.session.prefs().file_handling.recent_files, vec![p.clone()], "stored with the preferences");
+        // Saving again under the same name keeps one entry.
+        app.save_as(Some(p.clone())).unwrap();
+        assert_eq!(app.ui.recent_files, vec![p]);
+    }
 }
 
 #[cfg(test)]
