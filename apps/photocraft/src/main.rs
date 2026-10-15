@@ -2,7 +2,11 @@
 //!
 //! Usage: `photocraft [--control <port>] [--control-token <64-hex> |
 //! --control-token-file <path>] [--automation-read-root <dir>]
-//! [--automation-write-root <dir>] [--safe-gpu] [--in-window-menus] [files…]`
+//! [--automation-write-root <dir>] [--safe-gpu] [--in-window-menus] [--new-instance] [files…]`
+//!
+//! On Windows and Linux a launch hands its files to the PhotoCraft that is already running (new
+//! tabs in its window) and exits; `--new-instance` starts a separate copy instead, as does any
+//! `--control` launch (see `single_instance`).
 //!
 //! `--safe-gpu` starts with the CPU renderer (no GPU canvas; a software adapter for the window
 //! where the platform has one) for this launch, e.g. after a graphics driver crash. A start that
@@ -46,6 +50,9 @@ mod monitor_profile;
 mod photoshop_settings;
 mod screen_color;
 mod services;
+// macOS gets one instance from LaunchServices (open-documents Apple events).
+#[cfg(any(not(target_os = "macos"), test))]
+mod single_instance;
 // Windows gets pen pressure from winit (WM_POINTER); the web runner has its own listener.
 #[cfg(any(target_os = "macos", target_os = "linux", test))]
 mod tablet;
@@ -191,6 +198,7 @@ fn main() -> eframe::Result {
     // reported in a notice once the app is up; a control token is a usage error like a bad port.
     let mut unreadable_paths: Vec<String> = Vec::new();
     let mut safe_gpu = false;
+    let mut new_instance = false;
     let mut in_window_menus = std::env::var_os("PHOTOCRAFT_IN_WINDOW_MENUS").is_some_and(|v| !v.is_empty() && v != "0");
     let mut args = std::env::args_os().skip(1);
     while let Some(a) = args.next() {
@@ -212,6 +220,7 @@ fn main() -> eframe::Result {
             Some("--automation-write-root") => automation_write_root = args.next().map(std::path::PathBuf::from),
             Some("--safe-gpu") => safe_gpu = true,
             Some("--in-window-menus") => in_window_menus = true,
+            Some("--new-instance") => new_instance = true,
             Some("--version") => {
                 println!("photocraft {}", photocraft_engine::build_info::long_version());
                 return Ok(());
@@ -242,6 +251,33 @@ fn main() -> eframe::Result {
             Err(e) => log::warn!("no log file: {e}"),
         }
     }
+
+    // One PhotoCraft per user (#3708): files opened from Explorer or a file manager while it runs
+    // become tabs in its window. Automation launches (`--control`) keep their own process, and so
+    // do paths that aren't valid Unicode (this launch reports them).
+    #[cfg(not(target_os = "macos"))]
+    let single_instance = match services::config_dir() {
+        Some(dir) if !new_instance && control_port.is_none() && unreadable_paths.is_empty() => {
+            let paths: Vec<String> = files.iter().map(|f| single_instance::absolute(f)).collect();
+            match single_instance::claim(&dir, &paths) {
+                single_instance::Launch::Forwarded => {
+                    log::info!("handed {} file(s) to the running PhotoCraft", paths.len());
+                    return Ok(());
+                }
+                single_instance::Launch::Primary(primary) => Some(primary),
+                single_instance::Launch::Standalone(reason) => {
+                    log::warn!("starting a separate PhotoCraft: {reason}");
+                    None
+                }
+            }
+        }
+        _ => None,
+    };
+    // Lives until the event loop returns: dropping it lets the next launch become the primary.
+    #[cfg(not(target_os = "macos"))]
+    let single_instance = &single_instance;
+    #[cfg(target_os = "macos")]
+    let _ = new_instance;
 
     // The display server to open the window on: Xwayland for a pen on Wayland, which gives this
     // app no pen input (#639).
@@ -485,6 +521,11 @@ fn main() -> eframe::Result {
             }
             #[cfg(not(target_os = "macos"))]
             let _ = in_window_menus;
+            // Files from later launches (Explorer, file managers) open here as new tabs.
+            #[cfg(not(target_os = "macos"))]
+            if let Some(primary) = single_instance {
+                app.services.os_events = Some(primary.connect(&cc.egui_ctx));
+            }
             // Where file drags and drops are (winit 0.30 doesn't say).
             app.services.cursor_pos = cursor::service(cc);
             // The custom title bar's undecorated window must stay borderless, or its caption and
