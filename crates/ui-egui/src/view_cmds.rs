@@ -1469,6 +1469,7 @@ pub(crate) fn write_copy(
     app.ui.status_error = false;
     let what = crate::i18n::fmt(tl!(template), &[("path", &crate::file_open::display_name(path))]);
     crate::notices::io_warnings(app, &what, &warnings);
+    crate::telegram::after_written(app, path, crate::telegram::WriteKind::SaveCopy);
     Ok(json!({"path": path, "warnings": warnings}))
 }
 

@@ -133,6 +133,12 @@ Then append a terse entry to `log/devlog.md` (what landed, numbers, what's still
 - `plan/` (local, gitignored): research, parity plan, execution plan, estimates.
 - `log/` (local, gitignored): the dev log.
 
+## Pull requests
+
+Open or reopen a pull request only when the user explicitly says it can go out. Implementing the change, or pushing a branch, is not that.
+
+Write the description the way ArtCraft's merged requests do: what changed and why, in prose. A **Testing** section names the commands and the checks that were actually run, as sentences. Do not add a GitHub checkbox list of steps that were not done. A UI change attaches a screenshot (`docs/contributing.md`).
+
 ## 8. Keeping the native format complete
 
 `photocraft-format` deliberately fails to compile when a `photocraft-doc` struct gains a field, so

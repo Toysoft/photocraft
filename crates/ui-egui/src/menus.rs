@@ -38,6 +38,7 @@ pub const UI_COMMANDS: &[(&str, &str, &[&str], Option<&str>)] = &[
     ("file.exit", "Exit", &["File"], Some("Cmd+Q")),
     ("edit.freeTransform", "Free Transform", &["Edit"], Some("Cmd+T")),
     ("file.export.exportAs", "Export As…", &["File", "Export"], Some("Cmd+Alt+Shift+W")),
+    ("file.sendTelegram", "Send to Telegram…", &["File"], None),
     ("file.export.quickExportAsPng", "Quick Export as PNG", &["File", "Export"], None),
     ("edit.transform.scale", "Scale", &["Edit", "Transform"], None),
     ("edit.transform.rotate", "Rotate", &["Edit", "Transform"], None),
@@ -363,6 +364,7 @@ pub(crate) fn invoke_unguarded(app: &mut PhotocraftApp, ctx: &egui::Context, id:
             let tga_bits = crate::targa_options_ui::bits_param(&params, id)?;
             app.save_as_with(params.get("path").and_then(Value::as_str).map(str::to_string), tga_bits)
         }
+        "file.sendTelegram" => crate::telegram::command(app),
         "view.zoomIn" | "view.zoomOut" | "view.fitOnScreen" | "view.actualPixels" => app.run(id, params),
         "window.newWindowForDocument" => {
             let doc = app.session.active_index().ok_or("no document")?;
@@ -768,7 +770,7 @@ pub fn is_enabled(app: &PhotocraftApp, id: &str) -> bool {
     match id {
         "window.panel.activate" | "window.panel.layout" => true,
         "window.panel.group" | "window.panel.move" | "window.panel.float" | "window.panel.dock" | "window.panel.close" => !app.session.prefs().workspace_locked,
-        "file.open" | "file.exit" | "file.clearRecent" | "file.removeRecent" | "help.about" | "help.systemInfo" | "edit.search" => true,
+        "file.open" | "file.exit" | "file.clearRecent" | "file.removeRecent" | "help.about" | "help.systemInfo" | "edit.search" | "file.sendTelegram" => true,
         i if i.starts_with("file.openRecent.") => true,
         i if i.starts_with(DOCUMENT_ITEM) => true,
         i if crate::links::url_for(i).is_some() => true,
@@ -977,6 +979,7 @@ pub fn is_live(id: &str) -> bool {
 /// catalogue spells it differently (Filter › "Other…").
 const PLACE_AFTER: &[(&str, &str)] = &[
     ("file.newFromClipboard", "file.new"),
+    ("file.sendTelegram", "file.saveACopy"),
     ("filter.render.relight", "filter.render.lightingEffects"),
     ("view.resetView", "view.flipHorizontal"),
     ("filter.other.colorToAlpha", "filter.other.offset"),

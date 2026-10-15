@@ -147,6 +147,8 @@ pub struct SaveJob {
     /// The job has ended (cancelled, say) but its worker may still be running: kept until it
     /// returns, so quitting and another save to the same file wait for it.
     pub ended: bool,
+    /// Send this file to Telegram once the write has finished. None for saves the user did not arm.
+    pub notify_telegram: Option<crate::telegram::WriteKind>,
 }
 
 /// The shell's job bookkeeping.
@@ -301,7 +303,7 @@ pub fn start_save(
             Ok(Some((path, warnings)))
         }
         Started::Job(job) => {
-            app.jobs.saves.push(SaveJob { job, doc, revision, path, copy, automation, state, ended: false });
+            app.jobs.saves.push(SaveJob { job, doc, revision, path, copy, automation, state, ended: false, notify_telegram: None });
             // Control and MCP requests wait on it, as for other jobs.
             app.jobs.last_started = Some(job);
             // The status bar's progress readout names the save; clear any old message.
@@ -328,6 +330,9 @@ fn finish_save(app: &mut PhotocraftApp, ctx: &egui::Context, save: SaveJob, labe
             }
             if !save.copy {
                 crate::discard_ui::saved_document(app, ctx, save.doc);
+            }
+            if let Some(kind) = save.notify_telegram {
+                crate::telegram::after_written(app, &save.path, kind);
             }
         }
         JobOutcome::Failed(err) => {

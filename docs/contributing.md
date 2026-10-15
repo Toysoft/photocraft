@@ -10,6 +10,7 @@
 - **Style:** `cargo fmt`, and `cargo clippy -- -D warnings`. Match surrounding code. Comments explain *why*.
 - **UI:** use `theme::Tokens` and `widgets::*`. Verify visually (offscreen `snapshot` example or the control channel) before submitting, and attach before/after screenshots to PRs.
 - **Commits:** small, focused, with a clear subject line.
+- **Pull requests:** open one only when the author asks for it. The description says what changed and why, in prose. A Testing section lists the commands and checks that were actually run. Do not add a checkbox list of unrun steps. UI changes attach a screenshot.
 
 ## Adding a command
 
