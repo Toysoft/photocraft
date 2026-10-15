@@ -9,7 +9,7 @@ order = 7
 id = "REL-1"
 target = "panic_hunt fuzzes every command with adversarial params"
 status = "done"
-note = "engine/tests/panic_hunt.rs: every command, own thread, 4 s timeout; #[ignore], run in the gate"
+note = "engine/tests/it/panic_hunt.rs: every command, own thread, 4 s timeout; #[ignore], run in the gate"
 
 [[item]]
 id = "REL-2"

@@ -1,5 +1,8 @@
 //! One integration-test process keeps the global smart filter stage cache isolated from parallel
 //! unit tests, so these tests can tell a cached stage from a re-render.
+//! It stays out of the shared `tests/it` binary on purpose: other integration tests render smart
+//! objects concurrently (and `panic_hunt` runs every command, Purge included), which would refill or
+//! empty the process-wide stage cache this test inspects.
 use std::sync::Arc;
 
 use photocraft_doc::LayerContent;
