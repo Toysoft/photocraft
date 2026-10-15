@@ -59,6 +59,8 @@ struct Preview {
     across: bool,
     /// Wrap the text to the preview's width (the pangram).
     wrap: bool,
+    /// The text is only a sample of characters: keep fewer of them rather than draw them tiny.
+    trim: bool,
 }
 
 fn hover_id() -> egui::Id {
@@ -123,9 +125,9 @@ fn body(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     let hovered: Option<Preview> = ui.ctx().data(|d| d.get_temp::<Preview>(hover_id()));
     let shown = hovered.unwrap_or_else(|| {
         if variable {
-            Preview { text: AXIS_SAMPLE.into(), samples: vec![(String::new(), c.clone())], across: true, wrap: false }
+            Preview { text: AXIS_SAMPLE.into(), samples: vec![(String::new(), c.clone())], across: true, wrap: false, trim: false }
         } else {
-            Preview { text: PANGRAM.into(), samples: vec![(String::new(), c.clone())], across: false, wrap: true }
+            Preview { text: PANGRAM.into(), samples: vec![(String::new(), c.clone())], across: false, wrap: true, trim: false }
         }
     });
     preview(ui, &shown, &details, c.size_pt);
@@ -235,6 +237,7 @@ fn feature_preview(c: &CharStyle, tag: &str, d: &FaceDetails) -> Preview {
         samples: vec![(tl!("Off").to_string(), with_feature(c, tag, false)), (tl!("On").to_string(), with_feature(c, tag, true))],
         across: false,
         wrap: false,
+        trim: true,
     }
 }
 
@@ -293,7 +296,10 @@ fn row_rects(ui: &mut egui::Ui, label: &str, control_w: f32, enabled: bool) -> (
 }
 
 /// A segmented control in `rect`: one segment per label (a "✓" label draws a check mark),
-/// `selected` raised. Returns (clicked segment, hovered segment).
+/// `selected` raised. `tips` name each segment for accessibility; one is also shown on hover when
+/// `tooltips` and the segment's caption doesn't already say it ("Lining" for "Lining figures"),
+/// so only symbols ("A₂", "—") explain themselves. Returns (clicked segment, hovered segment).
+#[allow(clippy::too_many_arguments)]
 fn segments(
     ui: &mut egui::Ui,
     id: egui::Id,
@@ -302,6 +308,7 @@ fn segments(
     tips: &[String],
     selected: Option<usize>,
     enabled: &[bool],
+    tooltips: bool,
 ) -> (Option<usize>, Option<usize>) {
     let t = Tokens::get(ui.ctx());
     let n = labels.len().max(1);
@@ -341,7 +348,7 @@ fn segments(
         }
         let tip = tips.get(i).cloned().unwrap_or_else(|| label.clone());
         resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, on, is_sel, &tip));
-        let resp = if tip.is_empty() { resp } else { resp.on_hover_text(tip) };
+        let resp = if tooltips && tip_adds(label, &tip) { resp.on_hover_text(tip) } else { resp };
         if resp.contains_pointer() {
             hovered = Some(i);
         }
@@ -352,6 +359,12 @@ fn segments(
     (clicked, hovered)
 }
 
+/// Whether a segment's tooltip says more than its caption: "Superscript" for "A²" does, "Lining
+/// figures" for "Lining" doesn't.
+fn tip_adds(caption: &str, tip: &str) -> bool {
+    !tip.is_empty() && !tip.to_lowercase().contains(&caption.to_lowercase())
+}
+
 /// A feature row with Figma's [— | ✓] switch; disabled (greyed) when the face lacks it.
 fn feature_row(ui: &mut egui::Ui, c: &CharStyle, d: &FaceDetails, tag: &str, label: &str, hover: &mut Option<Preview>, change: &mut Option<Value>) {
     let enabled = d.has_feature(tag);
@@ -359,11 +372,14 @@ fn feature_row(ui: &mut egui::Ui, c: &CharStyle, d: &FaceDetails, tag: &str, lab
     let on = feature_shown_on(c, tag);
     let tips = [format!("{label}: {}", tl!("Off")), format!("{label}: {}", tl!("On"))];
     let (clicked, _) =
-        segments(ui, egui::Id::new(("type-details-feature", tag)), control, &["—".into(), "✓".into()], &tips, Some(usize::from(on)), &[enabled, enabled]);
+        segments(ui, egui::Id::new(("type-details-feature", tag)), control, &["—".into(), "✓".into()], &tips, Some(usize::from(on)), &[enabled, enabled], false);
     if let Some(i) = clicked {
         *change = Some(feature_props(tag, i == 1));
     }
-    if enabled && ui.rect_contains_pointer(row) {
+    // The gap between rows belongs half to each neighbour, as clicks there reach the closest
+    // switch: moving down the list previews one feature after the next, never the pangram between.
+    let gap = ui.spacing().item_spacing.y / 2.0;
+    if enabled && ui.rect_contains_pointer(row.expand2(vec2(0.0, gap))) {
         *hover = Some(feature_preview(c, tag, d));
     }
 }
@@ -390,13 +406,13 @@ fn choice_row(ui: &mut egui::Ui, id: &str, label: &str, text: &str, choices: Vec
     let tips: Vec<String> = choices.iter().map(|c| c.tip.clone()).collect();
     let enabled: Vec<bool> = choices.iter().map(|c| c.available).collect();
     let selected = choices.iter().position(|c| c.selected);
-    let (clicked, hovered) = segments(ui, egui::Id::new(("type-details-choice", id)), seg, &labels, &tips, selected, &enabled);
+    let (clicked, hovered) = segments(ui, egui::Id::new(("type-details-choice", id)), seg, &labels, &tips, selected, &enabled, true);
     ui.add_space(6.0);
     if let Some(ch) = clicked.and_then(|i| choices.get(i)) {
         *change = Some(ch.props.clone());
     }
     if let Some(ch) = hovered.and_then(|i| choices.get(i)) {
-        *hover = Some(Preview { text: text.into(), samples: vec![(ch.tip.clone(), ch.style.clone())], across: true, wrap: false });
+        *hover = Some(Preview { text: text.into(), samples: vec![(ch.tip.clone(), ch.style.clone())], across: true, wrap: false, trim: false });
     }
 }
 
@@ -684,7 +700,7 @@ fn instance_row(ui: &mut egui::Ui, c: &CharStyle, d: &FaceDetails, hover: &mut O
                     s = with_axis(&s, tag, *v);
                 }
                 *hover =
-                    Some(Preview { text: AXIS_SAMPLE.into(), samples: vec![(String::new(), c.clone()), (inst.name.clone(), s)], across: true, wrap: false });
+                    Some(Preview { text: AXIS_SAMPLE.into(), samples: vec![(String::new(), c.clone()), (inst.name.clone(), s)], across: true, wrap: false, trim: false });
             }
         });
     });
@@ -741,6 +757,7 @@ fn axis_row(ui: &mut egui::Ui, c: &CharStyle, a: &photocraft_text::AxisDetail, h
             samples: vec![(crate::widgets::fmt_num(a.min.into()), lo), (crate::widgets::fmt_num(a.max.into()), hi)],
             across: true,
             wrap: false,
+            trim: false,
         });
     }
     if let Some(value) = set {
@@ -771,7 +788,10 @@ fn preview(ui: &mut egui::Ui, p: &Preview, d: &FaceDetails, doc_size: f32) {
     let n = p.samples.len().max(1) as f32;
     let inner = rect.shrink2(vec2(14.0, 10.0));
     let captions = p.samples.iter().any(|(c, _)| !c.is_empty());
-    for (i, (caption, style)) in p.samples.iter().enumerate() {
+    let styles: Vec<CharStyle> = p.samples.iter().map(|(_, s)| preview_style(s, d, doc_size)).collect();
+    // Trimmed once for every sample, so off and on show the same characters.
+    let mut text: Option<String> = None;
+    for (i, ((caption, _), style)) in p.samples.iter().zip(&styles).enumerate() {
         let slot = if p.across {
             Rect::from_min_size(pos2(inner.left() + inner.width() / n * i as f32, inner.top()), vec2(inner.width() / n, inner.height()))
         } else {
@@ -788,8 +808,8 @@ fn preview(ui: &mut egui::Ui, p: &Preview, d: &FaceDetails, doc_size: f32) {
             let align = if p.across { egui::Align2::CENTER_CENTER } else { egui::Align2::LEFT_CENTER };
             ui.painter().text(at, align, caption, egui::FontId::proportional(10.5), t.text_faint);
         }
-        let style = preview_style(style, d, doc_size);
-        if let Some(tex) = sample_texture(ui.ctx(), &p.text, &style, ink.size(), p.wrap) {
+        let text = text.get_or_insert_with(|| if p.trim && !p.wrap { trimmed_text(ui.ctx(), &p.text, &styles, ink.size()) } else { p.text.clone() });
+        if let Some(tex) = sample_texture(ui.ctx(), text, style, ink.size(), p.wrap) {
             let size = tex.size_vec2() / ui.ctx().pixels_per_point().ceil().max(1.0);
             let at = if p.wrap || !p.across && captions { pos2(ink.left(), ink.center().y - size.y / 2.0) } else { ink.center() - size / 2.0 };
             ui.painter().image(tex.id(), Rect::from_min_size(at, size), Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), t.text);
@@ -839,9 +859,59 @@ fn sample_texture(ctx: &egui::Context, text: &str, style: &CharStyle, slot: egui
     tex
 }
 
-/// Renders `text` in `style` to fit a `slot` (pixels): as large as fits, up to a size that fills
-/// the slot's height, wrapped to its width when `wrap`. White ink with coverage as alpha.
-pub(crate) fn render(engine: &mut photocraft_text::TextEngine, text: &str, style: &CharStyle, slot: [u32; 2], wrap: bool) -> Option<ColorImage> {
+/// A sample drawn smaller than this share of the size that fills its slot's height reads as a
+/// row of specks (24 boxed characters on one line): it keeps fewer characters instead.
+const MIN_FILL: f32 = 0.6;
+/// Fewest characters a trimmed sample keeps.
+const MIN_CHARS: usize = 6;
+
+/// `text`, cut short when drawing all of it in the widest of `styles` would shrink it below
+/// [`MIN_FILL`] of the slot's height (cached: it lays the text out).
+fn trimmed_text(ctx: &egui::Context, text: &str, styles: &[CharStyle], slot: egui::Vec2) -> String {
+    let scale = ctx.pixels_per_point().ceil().clamp(1.0, 4.0);
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    (text, format!("{styles:?}"), slot.x.to_bits(), slot.y.to_bits(), scale.to_bits(), photocraft_text::fonts::shared_generation()).hash(&mut h);
+    let key = h.finish();
+    let id = egui::Id::new("type-details-trimmed");
+    if let Some(t) = ctx.data_mut(|d| d.get_temp_mut_or_default::<TrimCache>(id).0.iter().find(|(k, _)| *k == key).map(|(_, t)| t.clone())) {
+        return t;
+    }
+    let out = {
+        let mut engine = photocraft_text::shared().lock().unwrap_or_else(PoisonError::into_inner);
+        trim(&mut engine, text, styles, [(slot.x * scale) as u32, (slot.y * scale) as u32])
+    };
+    ctx.data_mut(|d| {
+        let cache = d.get_temp_mut_or_default::<TrimCache>(id);
+        if cache.0.len() >= CACHE_LIMIT {
+            cache.0.pop_front();
+        }
+        cache.0.push_back((key, out.clone()));
+    });
+    out
+}
+
+#[derive(Clone, Default)]
+struct TrimCache(VecDeque<(u64, String)>);
+
+/// [`trimmed_text`] uncached. A line too wide for its slot shrinks with its length, so keeping a
+/// share of the characters grows the drawing by about the inverse share.
+pub(crate) fn trim(engine: &mut photocraft_text::TextEngine, text: &str, styles: &[CharStyle], slot: [u32; 2]) -> String {
+    let n = text.chars().count();
+    let full = slot[1] as f32 * FILL;
+    let fill = styles.iter().filter_map(|s| fit(engine, text, s, slot, false).map(|f| f.2 / full)).fold(f32::INFINITY, f32::min);
+    if !fill.is_finite() || fill >= MIN_FILL || n <= MIN_CHARS {
+        return text.to_string();
+    }
+    let keep = ((n as f32 * fill / MIN_FILL).floor() as usize).clamp(MIN_CHARS, n);
+    text.trim().chars().take(keep).collect::<String>().trim_end().to_string()
+}
+
+/// Share of a single-line slot's height a sample's size starts at (before shrinking to fit).
+const FILL: f32 = 0.62;
+
+/// Lays `text` out in `style` as large as fits a `slot` (pixels), up to a size that fills the
+/// slot's height, wrapped to its width when `wrap`: (layout, drawn bounds, size).
+fn fit(engine: &mut photocraft_text::TextEngine, text: &str, style: &CharStyle, slot: [u32; 2], wrap: bool) -> Option<(photocraft_text::TextLayout, [f32; 4], f32)> {
     let [w, h] = slot;
     if text.is_empty() || w < 4 || h < 4 || w > 4096 || h > 4096 {
         return None;
@@ -858,11 +928,11 @@ pub(crate) fn render(engine: &mut photocraft_text::TextEngine, text: &str, style
             ..Default::default()
         };
         let layout = engine.layout(&layer, 72.0);
-        let b = layout.bounds();
+        let b = drawn_bounds(&layout);
         (layout, b)
     };
     // Wrapped text keeps a reading size; a single line fills the height.
-    let mut size = if wrap { h as f32 / 3.6 } else { h as f32 * 0.62 };
+    let mut size = if wrap { h as f32 / 3.6 } else { h as f32 * FILL };
     let (mut layout, mut bounds) = layout_at(engine, size);
     for _ in 0..3 {
         let [x0, y0, x1, y1] = bounds?;
@@ -874,7 +944,14 @@ pub(crate) fn render(engine: &mut photocraft_text::TextEngine, text: &str, style
         size = (size * fit * 0.98).max(1.0);
         (layout, bounds) = layout_at(engine, size);
     }
-    let [x0, y0, x1, y1] = bounds?;
+    Some((layout, bounds?, size))
+}
+
+/// Renders `text` in `style` to fit a `slot` (pixels): as large as fits, up to a size that fills
+/// the slot's height, wrapped to its width when `wrap`. White ink with coverage as alpha.
+pub(crate) fn render(engine: &mut photocraft_text::TextEngine, text: &str, style: &CharStyle, slot: [u32; 2], wrap: bool) -> Option<ColorImage> {
+    let [w, h] = slot;
+    let (layout, [x0, y0, x1, y1], _) = fit(engine, text, style, slot, wrap)?;
     let (bw, bh) = (x1 - x0, y1 - y0);
     if !(bw.is_finite() && bh.is_finite()) || bw <= 0.0 || bh <= 0.0 {
         return None;
@@ -891,6 +968,21 @@ pub(crate) fn render(engine: &mut photocraft_text::TextEngine, text: &str, style
     let mut rgba = vec![[0u8; 4]; ow * oh];
     rendered.surface.read_rgba8_into(photocraft_geom::Rect::new(0, 0, out_w as i32, out_h as i32), &mut rgba);
     Some(ColorImage::from_rgba_unmultiplied([ow, oh], &rgba.into_iter().flat_map(|p| [255, 255, 255, p[3]]).collect::<Vec<_>>()))
+}
+
+/// What a sample must show: the lines' logical box plus any ink the glyphs draw outside it (a
+/// circled figure taller than the ascent, a deep swash), so nothing a sane font draws is cropped.
+/// Ink is counted up to one line height beyond the box on each side; a font that draws further out
+/// than that is malformed and only loses the excess, rather than shrinking every sample to a dot.
+fn drawn_bounds(layout: &photocraft_text::TextLayout) -> Option<[f32; 4]> {
+    let [x0, y0, x1, y1] = layout.bounds()?;
+    let ink = photocraft_text::render::ink_rect(layout, &Affine::IDENTITY);
+    if ink.is_empty() {
+        return Some([x0, y0, x1, y1]);
+    }
+    let reach = (y1 - y0).max(0.0);
+    let grow = |v: i32, lo: f32, hi: f32| (v as f32).clamp(lo - reach, hi + reach);
+    Some([x0.min(grow(ink.x0, x0, x1)), y0.min(grow(ink.y0, y0, y1)), x1.max(grow(ink.x1, x0, x1)), y1.max(grow(ink.y1, y0, y1))])
 }
 
 fn style_antialias() -> photocraft_doc::text::AntiAlias {
@@ -992,6 +1084,29 @@ mod tests {
         assert!(!feature_shown_on(&p.samples[0].1, "cv11") && feature_shown_on(&p.samples[1].1, "cv11"));
     }
 
+    /// The gap between two feature rows previews one of them, as a click there toggles the closest
+    /// switch: moving down the list never flashes back to the pangram between features.
+    #[test]
+    fn the_gap_between_feature_rows_previews_a_neighbour() {
+        let (app, _) = app_with_type();
+        let mut h = harness(app, 0);
+        h.get_by_label("Contextual Alternates: On").scroll_to_me();
+        h.run_steps(3);
+        let (a, b) = (h.get_by_label("Discretionary Ligatures: On").rect(), h.get_by_label("Contextual Alternates: On").rect());
+        assert!(b.top() > a.bottom(), "rows are stacked");
+        // Every point from one switch down to the next, the gaps included.
+        let mut bad = Vec::new();
+        for y in a.center().y as i32..=b.center().y as i32 {
+            h.event(egui::Event::PointerMoved(pos2(a.center().x, y as f32 + 0.5)));
+            h.run_steps(2);
+            let p: Option<Preview> = h.ctx.data(|d| d.get_temp(hover_id()));
+            if p.is_none_or(|p| p.samples.len() != 2) {
+                bad.push(y);
+            }
+        }
+        assert!(bad.is_empty(), "no feature previewed at y = {bad:?} between {a:?} and {b:?}");
+    }
+
     /// Moving across a segmented control always hovers one of its segments, enabled or not: the
     /// boundary between two has no dead gap.
     #[test]
@@ -1002,7 +1117,7 @@ mod tests {
             move |ui, hovered: &mut Option<usize>| {
                 // Lining and Oldstyle disabled, as for a face without them (Inter): hover-only
                 // widgets get no interaction-radius slack, so any gap between them showed.
-                *hovered = segments(ui, egui::Id::new("seg-test"), rect, &labels, &labels, Some(0), &[true, false, false]).1;
+                *hovered = segments(ui, egui::Id::new("seg-test"), rect, &labels, &labels, Some(0), &[true, false, false], true).1;
             },
             None,
         );
@@ -1052,6 +1167,29 @@ mod tests {
         assert!(feature_shown_on(&c, "calt") && !feature_shown_on(&c, "ss01") && feature_shown_on(&c, "liga"));
     }
 
+    /// Tooltips only where the caption is a symbol, not the tooltip's own words.
+    #[test]
+    fn tooltips_only_explain_symbols() {
+        assert!(tip_adds("A²", "Superscript") && tip_adds("—", "Default") && tip_adds("AG", "All Caps"));
+        assert!(!tip_adds("Lining", "Lining figures") && !tip_adds("Tabular", "Tabular figures") && !tip_adds("Lining", ""));
+    }
+
+    /// A sample too long to read on one line keeps fewer characters; a short one is untouched.
+    #[test]
+    fn long_samples_are_trimmed_not_shrunk() {
+        let mut e = photocraft_text::TextEngine::new();
+        let c = CharStyle { font_family: "Inter".into(), ..Default::default() };
+        let long = "0123456789ABCDEFGHIJKLMN";
+        let t = trim(&mut e, long, std::slice::from_ref(&c), [200, 40]);
+        assert!(t.len() < long.len() && t.chars().count() >= MIN_CHARS && long.starts_with(&t), "{t:?}");
+        let fill = |text: &str, e: &mut photocraft_text::TextEngine| fit(e, text, &c, [200, 40], false).unwrap().2 / (40.0 * FILL);
+        let (before, after) = (fill(long, &mut e), fill(&t, &mut e));
+        assert!(before < MIN_FILL && after >= MIN_FILL * 0.9, "trimming grows the drawing to a readable size: {before} -> {after}");
+        assert_eq!(trim(&mut e, "Ra", std::slice::from_ref(&c), [200, 40]), "Ra");
+        assert_eq!(trim(&mut e, long, std::slice::from_ref(&c), [4000, 40]), long, "fits wide slots whole");
+        assert_eq!(trim(&mut e, "", &[c], [200, 40]), "");
+    }
+
     /// The preview is real text from the text engine, sized to its slot; nothing to draw is no
     /// image, never a panic.
     #[test]
@@ -1072,6 +1210,12 @@ mod tests {
         assert!(render(&mut e, "", &c, [200, 80], false).is_none());
         assert!(render(&mut e, "Ra", &c, [0, 0], false).is_none());
         assert!(render(&mut e, "Ra", &c, [100_000, 80], false).is_none());
+        // Glyphs drawn beyond the ascent (stacked marks here; circled figures in some faces) are
+        // fitted whole, not cropped at the line box: the ink clears the image's edges.
+        let tall = "A\u{30A}\u{302}\u{302}\u{302}";
+        let img = render(&mut e, tall, &c, [200, 80], false).expect("tall");
+        let edge = |row: usize| (0..img.size[0]).any(|x| img.pixels[row * img.size[0] + x].a() > 0);
+        assert!(!edge(0) && !edge(img.size[1] - 1), "cropped: {:?}", img.size);
         let huge = CharStyle { size_pt: f32::NAN, variations: vec![FontVariation { axis: "wght".into(), value: f32::INFINITY }], ..c };
         let _ = render(&mut e, "Ra", &huge, [200, 80], false);
     }
