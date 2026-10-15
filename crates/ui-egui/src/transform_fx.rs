@@ -16,8 +16,12 @@
 //! rate, and comes back when the pointer is released. It is rebuilt only when the box, the zoom
 //! or the layer changes.
 //!
-//! The composite is drawn over transparency with Normal blending, like the mesh it replaces: a
-//! layer's or an effect's blend mode shows against the layers under it only after the commit.
+//! A layer with a blend mode other than Normal is composited the same way, onto the layers under
+//! it rather than onto transparency (#5513): the document under the box is rendered at the same
+//! scale ([`backdrop`]), the layer blends onto it as the compositor blends it, and only the pixels
+//! the layer changed are drawn. Without a blend mode (or where the layers under it aren't all the
+//! layer blends with, see `transform_tool::blends_with_canvas`) the composite is drawn over
+//! transparency with Normal blending, like the mesh it replaces.
 
 use std::sync::{Arc, Mutex, PoisonError};
 
@@ -26,6 +30,7 @@ use photocraft_algo::transform::Homography;
 use photocraft_color::{BlendMode, PixelFormat};
 use photocraft_compose::Buffer;
 use photocraft_compose::effects::{self, TextureCtx};
+use photocraft_compose::psblend;
 use photocraft_doc::{Document, Effect, Layer, LayerContent};
 use photocraft_geom::Rect;
 use photocraft_raster::Surface;
@@ -235,9 +240,11 @@ pub struct Source<'a> {
     pub nearest: bool,
 }
 
-/// Composite the moving texels with `work`'s style over `plan.shown`, on transparency. `work`
-/// and `plan` come from [`plan`]; `doc` gives the global light and the patterns.
-pub fn compose(doc: &Document, work: &Layer, plan: &Plan, source: &Source) -> Option<Buffer> {
+/// Composite the moving texels with `work`'s style over `plan.shown`, on transparency, or with
+/// `backdrop` onto it in `work`'s blend mode: then the pixels the layer leaves as they were are
+/// transparent, as the canvas shows them already. `work` and `plan` come from [`plan`]; `doc`
+/// gives the global light and the patterns.
+pub fn compose(doc: &Document, work: &Layer, plan: &Plan, source: &Source, backdrop: Option<&Buffer>) -> Option<Buffer> {
     let s = plan.scale;
     let to_quad = Homography::rect_to_quad([0.0, 0.0, 1.0, 1.0], source.quad.map(|q| [q[0] * s, q[1] * s]))?;
     let to_unit = to_quad.inverse()?;
@@ -254,13 +261,68 @@ pub fn compose(doc: &Document, work: &Layer, plan: &Plan, source: &Source) -> Op
     bands(&mut out.px, width * BAND_ROWS, |i, px| {
         let y0 = shown.y0.saturating_add((i * BAND_ROWS) as i32);
         let band = Rect::new(shown.x0, y0, shown.x1, y0.saturating_add((px.len() / width.max(1)) as i32));
-        let mut over = Buffer::transparent(band);
-        effects::composite_with_effects(work, &crop(&content, band), &mut over, &maps, plan.bounds, &doc.patterns);
-        for (o, p) in px.iter_mut().zip(over.px) {
-            *o = p;
+        let under = backdrop.map(|b| crop(b, band));
+        let mut over = under.clone().unwrap_or_else(|| Buffer::transparent(band));
+        // In the document's blend space, as the compositor blends it: Lab mixes in CIELAB, and
+        // 32-bit doesn't clip at 1. The flags are per thread, so each band sets them.
+        let (lab, hdr) = (doc.mode == photocraft_color::ColorMode::Lab, doc.depth == photocraft_color::SampleType::F32);
+        psblend::with_lab_mix(lab, || {
+            psblend::with_hdr(hdr, || effects::composite_with_effects(work, &crop(&content, band), &mut over, &maps, plan.bounds, &doc.patterns))
+        });
+        for (i, (o, p)) in px.iter_mut().zip(over.px).enumerate() {
+            let was = under.as_ref().and_then(|u| u.px.get(i));
+            *o = if was.is_some_and(|w| same(*w, p)) { [0.0; 4] } else { p };
         }
     });
     Some(out)
+}
+
+/// Two composite pixels that look the same at 8 bits.
+fn same(a: [f32; 4], b: [f32; 4]) -> bool {
+    let premultiplied = |p: [f32; 4]| [p[0] * p[3], p[1] * p[3], p[2] * p[3], p[3]];
+    premultiplied(a).iter().zip(premultiplied(b)).all(|(x, y)| (x - y).abs() < 0.5 / 255.0)
+}
+
+/// The factor of the proxy document (`photocraft_compose::proxy`) a backdrop of `doc` at `scale`
+/// is rendered from: 1 (the document itself) unless it is at most half size and a proxy
+/// composite of `doc` is faithful. A proxy costs about 1/k² of the document to render.
+pub fn proxy_factor(doc: &Document, scale: f64) -> u32 {
+    let k = if scale > 0.0 { (1.0 / scale).floor().min(64.0) as u32 } else { 1 };
+    if k >= 2 && photocraft_compose::proxy::proxy_faithful(doc) { k } else { 1 }
+}
+
+/// The document under the box (the moving layer and what covers it left out) at the plan's
+/// scale, over `plan.shown` and some way around it, so a box dragged a little reuses it. `doc`
+/// is that document, or its proxy at factor `k` ([`proxy_factor`]). The buffer is in work
+/// pixels. `None` when it can't be rendered.
+pub fn backdrop(doc: &Document, k: u32, plan: &Plan) -> Option<Buffer> {
+    let k = f64::from(k.max(1));
+    let s = plan.scale;
+    if !(s.is_finite() && s > 0.0 && s * k <= 1.0) {
+        return None;
+    }
+    let up = |v: u32| (f64::from(v) * k * s).ceil().min(COORD_LIMIT) as i32;
+    let canvas = Rect::new(0, 0, up(doc.size.width), up(doc.size.height));
+    let want = plan.shown.intersect(&canvas);
+    if want.is_empty() {
+        return None;
+    }
+    let area = |r: Rect| f64::from(r.width()) * f64::from(r.height());
+    let grown = want.inflate((want.width().max(want.height()) / 2) as i32).intersect(&canvas);
+    let rect = if area(grown) <= MAX_PIXELS { grown } else { want };
+    // The source pixels each work pixel covers (at scale 1, the same rectangle).
+    let per = 1.0 / (s * k);
+    let edge = |v: i32, up: bool| {
+        let v = (f64::from(v) * per).clamp(-COORD_LIMIT, COORD_LIMIT);
+        (if up { v.ceil() } else { v.floor() }) as i32
+    };
+    let source = Rect::new(edge(rect.x0, false), edge(rect.y0, false), edge(rect.x1, true), edge(rect.y1, true));
+    let mut buf = photocraft_compose::render_reduced_rect(doc, source, rect.width(), rect.height());
+    if buf.rect.width() != rect.width() || buf.rect.height() != rect.height() {
+        return None;
+    }
+    buf.rect = rect;
+    Some(buf)
 }
 
 /// Rows composited per parallel band.
@@ -328,21 +390,34 @@ pub struct Frame<'a> {
     pub zoom: f32,
     /// The pointer is down: composite within the smaller [`budget`].
     pub dragging: bool,
+    /// The document under the box, when the layer blends with it in its own mode.
+    pub under: Option<&'a Document>,
 }
 
 impl Frame<'_> {
     /// The plan for this frame, the layer it composites and the texel level it reads.
     pub fn plan(&self) -> Option<(Plan, Layer, u32)> {
-        let (plan, work) = plan(self.layer, [self.doc.size.width, self.doc.size.height], self.quad, self.zoom, budget(self.layer, self.dragging))?;
+        let (plan, mut work) = plan(self.layer, [self.doc.size.width, self.doc.size.height], self.quad, self.zoom, budget(self.layer, self.dragging))?;
+        if self.under.is_some() {
+            work.blend = self.layer.blend;
+        }
         let level = PreviewTextures::choose(plan.scale as f32, self.quad_scale, self.nearest).0;
         Some((plan, work, level))
     }
 
-    /// The composite a [`Frame::plan`] describes.
-    pub fn compose(&self, plan: &Plan, work: &Layer, level: u32) -> Option<Buffer> {
+    /// The composite a [`Frame::plan`] describes, onto `backdrop` (from [`backdrop`] of
+    /// `under`) when the layer blends with what is under it.
+    pub fn compose(&self, plan: &Plan, work: &Layer, level: u32, backdrop: Option<&Buffer>) -> Option<Buffer> {
         let (texels, uv): (Arc<ColorImage>, [f32; 2]) = self.texels.level_image(level)?;
-        compose(self.doc, work, plan, &Source { image: &texels, uv, quad: self.quad, nearest: self.nearest })
+        compose(self.doc, work, plan, &Source { image: &texels, uv, quad: self.quad, nearest: self.nearest }, backdrop)
     }
+}
+
+/// A [`backdrop`] and what it was rendered for.
+struct Under {
+    revision: u64,
+    scale: u64,
+    buf: Buffer,
 }
 
 #[derive(Clone, PartialEq)]
@@ -353,6 +428,7 @@ struct Key {
     level: u32,
     nearest: bool,
     crisp: bool,
+    blends: bool,
 }
 
 struct Shown {
@@ -364,8 +440,14 @@ struct Shown {
 #[derive(Default)]
 struct State {
     shown: Option<Shown>,
+    /// The document under the box, for a layer that blends with it.
+    under: Option<Under>,
+    /// The proxy of that document it was last rendered from: revision, factor, proxy.
+    proxy: Option<(u64, u32, Arc<Document>)>,
     /// Composites made so far.
     builds: u64,
+    /// Backdrops rendered so far.
+    backdrops: u64,
 }
 
 /// The styled composite of a Free Transform session's moving layer, kept until the box, the
@@ -386,6 +468,11 @@ impl StyledPreview {
         self.state.lock().unwrap_or_else(PoisonError::into_inner).builds
     }
 
+    /// How many times the document under the box was rendered for a blending layer.
+    pub fn backdrops(&self) -> u64 {
+        self.state.lock().unwrap_or_else(PoisonError::into_inner).backdrops
+    }
+
     /// The composite for `frame` and the document rectangle it covers (x0, y0, x1, y1),
     /// compositing it again if anything it depends on changed. `None` when there is nothing to
     /// draw this way: the caller falls back to the plain texels.
@@ -400,12 +487,31 @@ impl StyledPreview {
             level,
             nearest: frame.nearest,
             crisp,
+            blends: frame.under.is_some(),
         };
         let mut state = self.state.lock().unwrap_or_else(PoisonError::into_inner);
         if let Some(s) = state.shown.as_ref().filter(|s| s.key == key) {
             return Some((s.tex.id(), s.rect));
         }
-        let out = frame.compose(&plan, &work, level)?;
+        if let Some(under) = frame.under {
+            let scale = plan.scale.to_bits();
+            let fits = |u: &Under| u.revision == frame.revision && u.scale == scale && u.buf.rect.intersect(&plan.shown) == plan.shown;
+            if !state.under.as_ref().is_some_and(fits) {
+                let k = proxy_factor(under, plan.scale);
+                let proxy = (k > 1).then(|| match state.proxy.as_ref().filter(|p| p.0 == frame.revision && p.1 == k) {
+                    Some(p) => p.2.clone(),
+                    None => Arc::new(photocraft_compose::proxy::proxy_document(under, k)),
+                });
+                state.proxy = proxy.clone().map(|p| (frame.revision, k, p));
+                state.under = backdrop(proxy.as_deref().unwrap_or(under), k, &plan).map(|buf| Under { revision: frame.revision, scale, buf });
+                state.backdrops += 1;
+            }
+        }
+        let backdrop = frame.under.and(state.under.as_ref()).map(|u| &u.buf);
+        if frame.under.is_some() && backdrop.is_none() {
+            return None;
+        }
+        let out = frame.compose(&plan, &work, level, backdrop)?;
         let options = if crisp { TextureOptions::NEAREST } else { TextureOptions::LINEAR };
         let tex = ctx.load_texture(self.name.clone(), image(&out), options);
         let (id, rect) = (tex.id(), plan.doc_rect());
@@ -467,7 +573,7 @@ mod tests {
     fn composite(layer: &Layer, w: usize, h: usize, quad: [[f64; 2]; 4], zoom: f32) -> (Buffer, Plan) {
         let texels = ColorImage::new([w, h], vec![BLUE; w * h]);
         let (plan, work) = plan(layer, [200, 200], quad, zoom, budget(layer, false)).expect("on the canvas");
-        let out = compose(&doc(), &work, &plan, &Source { image: &texels, uv: [1.0, 1.0], quad, nearest: false }).expect("composited");
+        let out = compose(&doc(), &work, &plan, &Source { image: &texels, uv: [1.0, 1.0], quad, nearest: false }, None).expect("composited");
         (out, plan)
     }
 
@@ -623,7 +729,7 @@ mod tests {
         let line = [[60.0, 60.0], [100.0, 100.0], [60.0, 60.0], [100.0, 100.0]];
         if let Some((p, work)) = plan(&l, [200, 200], line, 1.0, budget(&l, false)) {
             let texels = ColorImage::new([4, 4], vec![BLUE; 16]);
-            assert!(compose(&doc(), &work, &p, &Source { image: &texels, uv: [1.0, 1.0], quad: line, nearest: false }).is_none());
+            assert!(compose(&doc(), &work, &p, &Source { image: &texels, uv: [1.0, 1.0], quad: line, nearest: false }, None).is_none());
         }
     }
 
@@ -636,7 +742,7 @@ mod tests {
         let (plan, work) = plan(&l, [200, 200], quad, 1.0, budget(&l, false)).expect("planned");
         assert!(plan.shown.height() as usize > 2 * BAND_ROWS, "{:?}", plan.shown);
         let source = Source { image: &texels, uv: [1.0, 1.0], quad, nearest: false };
-        let banded = compose(&doc(), &work, &plan, &source).expect("composited");
+        let banded = compose(&doc(), &work, &plan, &source, None).expect("composited");
         // The same in one pass.
         let to_unit = Homography::rect_to_quad([0.0, 0.0, 1.0, 1.0], quad).and_then(|h| h.inverse()).expect("invertible");
         let content = resample(&texels, [1.0, 1.0], &to_unit, [85.0, 97.5], plan.content, false);
