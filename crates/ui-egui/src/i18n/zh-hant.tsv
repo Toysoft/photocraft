@@ -2790,3 +2790,5 @@ curves	Smooth	平滑
 	set name	組合名稱
 	{set} (modified)	{set}（已修改）
 	Random	隨機
+	Rotate View Left	向左旋轉檢視
+	Rotate View Right	向右旋轉檢視

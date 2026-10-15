@@ -3159,3 +3159,5 @@ curves	Smooth	Сгладить
 	set name	имя набора
 	{set} (modified)	{set} (изменён)
 	Random	Случайно
+	Rotate View Left	Повернуть вид влево
+	Rotate View Right	Повернуть вид вправо

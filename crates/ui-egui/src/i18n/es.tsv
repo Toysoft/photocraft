@@ -4151,3 +4151,5 @@ navigator	Zoom	Zoom
 	There are too many sets: delete one first.	Hay demasiados conjuntos: elimine uno primero.
 	set name	nombre del conjunto
 	{set} (modified)	{set} (modificado)
+	Rotate View Left	Girar vista a la izquierda
+	Rotate View Right	Girar vista a la derecha
