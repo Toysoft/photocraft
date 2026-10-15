@@ -525,8 +525,8 @@ pub struct Services {
 }
 
 /// A document histogram being computed off the UI thread: (document, revision, receiver of
-/// (document, compute ms, histograms)).
-pub(crate) type HistJob = (DocId, u64, std::sync::mpsc::Receiver<(DocId, f64, std::sync::Arc<tone::Histograms>)>);
+/// (document, compute ms, histograms, counted pixels)).
+pub(crate) type HistJob = (DocId, u64, std::sync::mpsc::Receiver<(DocId, f64, std::sync::Arc<tone::Histograms>, u64)>);
 
 /// The Info panel's cached sample: pixel x, y, document revision and Eyedropper Sample Size.
 type InfoSampleKey = (i32, i32, u64, u32);
@@ -692,8 +692,8 @@ pub struct PhotocraftApp {
     pub(crate) automation_input: bool,
     /// Levels/Curves histogram cache: (document, adjustment layer, revision it is valid for).
     pub(crate) tone_hist: Option<(DocId, photocraft_doc::LayerId, u64, std::sync::Arc<tone::Histograms>)>,
-    /// Histogram panel cache: (document, revision, computed at ms, histograms).
-    pub(crate) doc_hist: Option<(DocId, u64, f64, std::sync::Arc<tone::Histograms>)>,
+    /// Histogram panel cache: (document, revision, computed at ms, counted pixels, histograms).
+    pub(crate) doc_hist: Option<(DocId, u64, f64, u64, std::sync::Arc<tone::Histograms>)>,
     /// The document histogram being computed on a worker thread: (document, revision, receiver).
     pub(crate) hist_job: Option<HistJob>,
     /// Free Transform preview (document without the moving pixels + their texture).
