@@ -2008,3 +2008,50 @@ fn hyphenless_postscript_names_split_trailing_styles() {
         assert_eq!((r.family.as_str(), r.weight, r.italic), (family, weight, italic), "{ps}");
     }
 }
+
+// ---------------------------------------------------------------- face details (craft-font-info)
+
+fn family_style(family: &str) -> photocraft_doc::text::CharStyle {
+    photocraft_doc::text::CharStyle { font_family: family.into(), ..Default::default() }
+}
+
+#[test]
+fn face_details_of_bundled_inter_lists_its_features_with_names_and_samples() {
+    let mut e = crate::TextEngine::new();
+    let d = e.fonts.face_details(&family_style("Inter"));
+    for tag in ["kern", "dlig", "calt", "tnum", "frac", "cv11"] {
+        assert!(d.has_feature(tag), "{tag} in {:?}", d.features.iter().map(|f| &f.tag).collect::<Vec<_>>());
+    }
+    assert!(d.features.windows(2).all(|w| w[0].tag < w[1].tag), "sorted, each tag once");
+    let tnum = d.feature("tnum").unwrap();
+    assert!(tnum.sample.contains('1'), "tabular figures change the figures: {:?}", tnum.sample);
+    assert!(d.feature("kern").unwrap().sample.is_empty(), "positioning has no substitution sample");
+    assert!(!d.has_feature("zzzz"));
+    // The font's own names for stylistic sets and character variants.
+    assert_eq!(d.feature("cv11").and_then(|f| f.name.as_deref()), Some("Single-story a"));
+    assert_eq!(d.feature("ss01").and_then(|f| f.name.as_deref()), Some("Open digits"));
+    assert!(d.feature("cv11").unwrap().sample.contains('a'));
+    // An unknown family reads the default family; the result is cached and shared.
+    let a = e.fonts.face_details(&family_style("No Such Family"));
+    assert!(a.has_feature("kern"));
+    assert!(std::sync::Arc::ptr_eq(&a, &e.fonts.face_details(&family_style("No Such Family"))));
+}
+
+/// Opt-in check against real variable fonts, which aren't in the repository: point
+/// `PHOTOCRAFT_TEST_ROBOTO_FLEX` at a Roboto Flex variable TTF (Google Fonts, OFL) and run
+/// with `--ignored`. The bundled-Inter test above covers the same code on every machine.
+#[test]
+#[ignore = "needs PHOTOCRAFT_TEST_ROBOTO_FLEX"]
+fn roboto_flex_names_its_axes_and_instances() {
+    let path = std::env::var("PHOTOCRAFT_TEST_ROBOTO_FLEX").expect("set PHOTOCRAFT_TEST_ROBOTO_FLEX to a Roboto Flex variable TTF");
+    let mut e = crate::TextEngine::new();
+    let fam = e.fonts.register_font_data(std::fs::read(path).unwrap()).into_iter().next().unwrap();
+    let d = e.fonts.face_details(&family_style(&fam));
+    let xopq = d.axis("XOPQ").unwrap();
+    assert_eq!(xopq.name.as_deref(), Some("Parametric Thick Stroke"));
+    assert_eq!((xopq.min, xopq.default, xopq.max), (27.0, 96.0, 175.0));
+    assert!(d.axes.len() >= 12, "{:?}", d.axes);
+    let black = d.instances.iter().find(|i| i.name == "Black").unwrap();
+    assert_eq!(black.coords.len(), d.axes.len());
+    assert!(black.coords.iter().any(|(t, v)| t == "wght" && *v == 900.0));
+}

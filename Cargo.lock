@@ -1223,6 +1223,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "craft-font-info"
+version = "0.1.0"
+source = "git+https://github.com/Arecsu/craft-libs?rev=38b767930135df01f5a4ba359ec9b8d3d6ed9357#38b767930135df01f5a4ba359ec9b8d3d6ed9357"
+dependencies = [
+ "skrifa",
+]
+
+[[package]]
 name = "craft-print"
 version = "0.1.0"
 source = "git+https://github.com/storytold/craft-libs?rev=3d37da389a3618ab9b76109da11416e9ca4ea719#3d37da389a3618ab9b76109da11416e9ca4ea719"
@@ -4989,6 +4997,7 @@ dependencies = [
 name = "photocraft-text"
 version = "0.9.0"
 dependencies = [
+ "craft-font-info",
  "flate2",
  "parley",
  "photocraft-color",

@@ -195,7 +195,7 @@ pub struct FontDb {
     missing_glyph_protection: bool,
     face_cache: HashMap<String, Vec<FaceInfo>>,
     /// [`Self::face_details`] by (family, PostScript name, weight, italic).
-    details_cache: HashMap<(String, Option<String>, u16, bool), Arc<crate::face_details::FaceDetails>>,
+    details_cache: HashMap<(String, Option<String>, u16, bool), Arc<crate::FaceDetails>>,
     face_aliases: HashMap<(String, usize), String>,
     /// This is the shared engine's database: registrations also move [`shared_generation`].
     shared: bool,
@@ -433,7 +433,7 @@ impl FontDb {
     /// style draws with: the exact face its PostScript name picks, else the family's closest match
     /// for its weight and italic (as layout does). An unknown family reads the default family.
     /// Cached; a face that can't be read gives empty details.
-    pub fn face_details(&mut self, style: &photocraft_doc::text::CharStyle) -> Arc<crate::face_details::FaceDetails> {
+    pub fn face_details(&mut self, style: &photocraft_doc::text::CharStyle) -> Arc<crate::FaceDetails> {
         let family = if style.font_family.is_empty() || !self.has_family(&style.font_family) { DEFAULT_FAMILY.to_string() } else { style.font_family.clone() };
         let key = (family.clone(), style.postscript_name.clone(), style.weight, style.italic);
         if let Some(d) = self.details_cache.get(&key) {
@@ -450,8 +450,7 @@ impl FontDb {
                 }
             }?;
             let blob = font.load(Some(&mut self.fcx.source_cache))?;
-            let font = skrifa::FontRef::from_index(blob.as_ref(), font.index()).ok()?;
-            Some(crate::face_details::read(&font))
+            craft_font_info::read(blob.as_ref(), font.index()).ok()
         })()
         .unwrap_or_default();
         let details = Arc::new(details);
