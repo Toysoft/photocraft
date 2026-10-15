@@ -121,6 +121,7 @@ pub mod layer_style;
 mod layer_transfer;
 pub mod layer_tree_ui;
 mod layout_keys;
+pub mod levels_clipping;
 pub mod links;
 pub mod liquify_ui;
 pub mod magnetic_lasso_ui;
@@ -684,6 +685,8 @@ pub struct PhotocraftApp {
     pub(crate) color_range: Option<color_range_ui::Preview>,
     /// Image › Adjustments dialog preview through a temporary clipped adjustment layer.
     pub(crate) adjust_preview: Option<adjust_preview::AdjustPreview>,
+    /// The Levels dialog's Alt-drag clipping display over the canvas.
+    pub(crate) levels_clipping: Option<levels_clipping::Cache>,
     /// Synthetic input events queued by automation (`ui.click`, `ui.key`, …), injected next frame.
     pub(crate) synthetic: Vec<egui::Event>,
     /// True only while a frame is processing synthetic automation input. It
@@ -882,6 +885,7 @@ impl PhotocraftApp {
             redraws: Default::default(),
             color_range: None,
             adjust_preview: None,
+            levels_clipping: None,
             synthetic: Vec::new(),
             automation_input: false,
             channel_thumbs: None,

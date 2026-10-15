@@ -1887,7 +1887,7 @@ pub(crate) fn committed_filter_preview(app: &mut PhotocraftApp, idx: usize) -> O
 
 /// The document pixels a view shows, with a margin for filtering. Uses all four canvas corners
 /// so a rotated camera still covers the visible tiles.
-fn visible_doc_rect(xf: &ViewXform) -> DRect {
+pub(crate) fn visible_doc_rect(xf: &ViewXform) -> DRect {
     let r = xf.rect;
     let docs = [xf.to_doc(r.min), xf.to_doc(pos2(r.max.x, r.min.y)), xf.to_doc(r.max), xf.to_doc(pos2(r.min.x, r.max.y))];
     let mut x0 = docs[0][0];
@@ -3053,6 +3053,8 @@ pub fn canvas_view(app: &mut PhotocraftApp, ui: &mut egui::Ui, idx: usize, rect:
                 painter.image(tex, img_rect, uv, Color32::WHITE);
             }
         }
+        // Image › Adjustments › Levels: Alt-drag on the black / white Input slider (levels_clipping.rs).
+        crate::levels_clipping::paint(app, &ctx, &painter, &xf, idx);
         crate::color_range_ui::paint_selection_preview(app, &ctx, &painter, doc.id, img_rect, flip);
         // Artboards: pasteboard between the boards, outlines and names (artboard_ui.rs).
         if doc.has_artboards() {
