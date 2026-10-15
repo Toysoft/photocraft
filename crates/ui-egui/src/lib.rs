@@ -1600,6 +1600,11 @@ impl PhotocraftApp {
             }
         };
         self.ui.status = crate::i18n::fmt(tl!("Saved {name}"), &[("name", path)]);
+        if !copy && arm {
+            // A file just saved under its own name is as recent as one just opened (File › Open
+            // Recent, the Home screen), as in Photoshop (#6016).
+            self.push_recent(path);
+        }
         if !copy {
             // A background save may finish while another document is active (or after its
             // document was closed, when there is nothing left to record).
