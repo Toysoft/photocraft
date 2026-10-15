@@ -1015,7 +1015,11 @@ mod tests {
             let ctx = h.ctx.clone();
             crate::menus::invoke(h.state_mut(), &ctx, "file.fileInfo", json!({})).unwrap();
             h.run_steps(4);
-            for (label, key) in [("Description", "description"), ("Keywords", "keywords"), ("Copyright", "copyright")] {
+            let labels = ["Document Title", "Author", "Author title", "Description", "Keywords", "Copyright status", "Copyright Notice", "Copyright Info URL"];
+            for pair in labels.windows(2) {
+                assert!(h.get_by_label(pair[0]).rect().center().y < h.get_by_label(pair[1]).rect().center().y, "field order: {pair:?}");
+            }
+            for (label, key) in [("Description", "description"), ("Keywords", "keywords"), ("Copyright Notice", "copyright")] {
                 h.get_by_label(label).click();
                 h.run_steps(1);
                 h.event(egui::Event::Text("First".into()));

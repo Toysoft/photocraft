@@ -3159,3 +3159,8 @@ curves	Smooth	Сгладить
 	set name	имя набора
 	{set} (modified)	{set} (изменён)
 	Random	Случайно
+
+# File Info metadata labels
+	Document Title	Название документа
+	Copyright Notice	Уведомление об авторских правах
+	Select Layer Under Cursor	Выбрать слой под курсором

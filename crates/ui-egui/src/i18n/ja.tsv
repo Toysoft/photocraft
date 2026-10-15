@@ -3865,3 +3865,8 @@ curves	Smooth	スムーズ
 	There are too many sets: delete one first.	セットが多すぎます。先に 1 つ削除してください。
 	set name	セット名
 	{set} (modified)	{set}（変更あり）
+
+# File Info metadata labels
+	Document Title	ドキュメントのタイトル
+	Copyright Notice	著作権表示
+	Select Layer Under Cursor	カーソル下のレイヤーを選択

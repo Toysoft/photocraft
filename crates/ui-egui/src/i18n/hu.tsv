@@ -4108,3 +4108,8 @@ cameraRaw	Yellow	Sárga
 	There are too many sets: delete one first.	Túl sok készlet van: előbb töröljön egyet.
 	set name	készlet neve
 	{set} (modified)	{set} (módosítva)
+
+# File Info metadata labels
+	Document Title	Dokumentum címe
+	Copyright Notice	Szerzői jogi közlemény
+	Select Layer Under Cursor	Kurzor alatti réteg kijelölése

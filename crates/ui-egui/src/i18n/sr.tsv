@@ -4262,3 +4262,8 @@ shape	Appearance	Izgled
 	There are too many sets: delete one first.	Previše skupova: prvo obrišite jedan.
 	set name	ime skupa
 	{set} (modified)	{set} (izmenjen)
+
+# File Info metadata labels
+	Document Title	Naslov dokumenta
+	Copyright Notice	Obaveštenje o autorskim pravima
+	Select Layer Under Cursor	Izaberi sloj ispod kursora

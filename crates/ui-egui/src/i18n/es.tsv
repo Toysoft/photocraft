@@ -4151,3 +4151,8 @@ navigator	Zoom	Zoom
 	There are too many sets: delete one first.	Hay demasiados conjuntos: elimine uno primero.
 	set name	nombre del conjunto
 	{set} (modified)	{set} (modificado)
+
+# File Info metadata labels
+	Document Title	Título del documento
+	Copyright Notice	Aviso de copyright
+	Select Layer Under Cursor	Seleccionar capa bajo el cursor

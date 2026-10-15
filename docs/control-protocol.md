@@ -651,3 +651,7 @@ dock target. The panel menu and icon rail remain
 available in custom workspaces. `window.panel.<id> {show:true}` always reveals, selects
 and expands the panel, including when another tab is selected. Workspace snapshots
 retain custom collapse settings and Timeline visibility.
+
+### Select the layer under the pointer
+
+Assign **Select Layer Under Cursor** in Keyboard Shortcuts to choose the topmost visible, pickable layer beneath the canvas pointer. Empty pixels and points outside the document leave the selection unchanged; dialogs, strokes and brush-resize gestures block it. The command follows zoom, pan, view rotation and horizontal flipping. Agents can invoke `ui.menu.invoke {"id":"layer.selectUnderCursor"}` after moving the screen pointer with `ui.move {"x": ..., "y": ...}`. The command has no default shortcut.

@@ -4310,3 +4310,8 @@ shape	Appearance	Aspetto
 	There are too many sets: delete one first.	Ci sono troppi set: eliminane prima uno.
 	set name	nome del set
 	{set} (modified)	{set} (modificato)
+
+# File Info metadata labels
+	Document Title	Titolo del documento
+	Copyright Notice	Avviso di copyright
+	Select Layer Under Cursor	Seleziona livello sotto il cursore

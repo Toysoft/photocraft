@@ -2790,3 +2790,9 @@ curves	Smooth	平滑
 	set name	組合名稱
 	{set} (modified)	{set}（已修改）
 	Random	隨機
+
+# File Info metadata labels
+	Document Title	文件標題
+	Copyright Notice	著作權聲明
+	Copyright Info URL	著作權資訊網址
+	Select Layer Under Cursor	選取游標下的圖層

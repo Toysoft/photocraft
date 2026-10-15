@@ -3919,3 +3919,8 @@ cameraData	Lens	Lens
 	There are too many sets: delete one first.	Çok fazla küme var: önce birini silin.
 	set name	küme adı
 	{set} (modified)	{set} (değiştirildi)
+
+# File Info metadata labels
+	Document Title	Belge Başlığı
+	Copyright Notice	Telif Hakkı Bildirimi
+	Select Layer Under Cursor	İmlecin Altındaki Katmanı Seç
