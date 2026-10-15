@@ -95,13 +95,33 @@ fn save_filters(suggested: &str) -> Vec<(String, Vec<String>)> {
     v
 }
 
+/// `path` as the file type picked in the save dialog writes it (#6121): the format follows the
+/// extension, so one PhotoCraft saves (`.psd` with PNG picked) becomes the type's own
+/// (`chosen[0]`), and a name with none or another (`scan.2024`) gets it appended. A name that
+/// already has one of the type's extensions (`.psb` for PSD), or no type (`chosen` empty), stays.
+#[cfg(any(target_os = "linux", test))]
+pub(crate) fn with_chosen_type(path: &Path, chosen: &[String]) -> PathBuf {
+    let Some(first) = chosen.first() else { return path.to_path_buf() };
+    let ext = path.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase);
+    match ext {
+        Some(ext) if chosen.contains(&ext) => path.to_path_buf(),
+        Some(ext) if SAVE_FILTERS.iter().chain(OTHER_SAVE_FILTERS).any(|(_, exts)| exts.contains(&ext.as_str())) => path.with_extension(first),
+        _ => {
+            let mut name = path.as_os_str().to_owned();
+            name.push(".");
+            name.push(first);
+            PathBuf::from(name)
+        }
+    }
+}
+
 /// The name the save dialog starts with. On Windows a visible extension stays put when the user
 /// picks another type (with File name extensions shown, `image.psd` saved as PhotoCraft stayed
 /// `image.psd`, #4394), while a bare name gets the chosen type's extension, so there the dialog
 /// gets the stem and the suggested type (listed first by [`save_filters`]) supplies `.psd`. A
 /// stem that still has a dot (`scan.jpg.psd`: Windows could keep `scan.jpg`) or an upper-case
 /// extension (the user's spelling) keeps the whole name. Elsewhere the whole name is kept: the
-/// macOS panel has no type list, and on Linux rfd doesn't report which type was picked.
+/// macOS panel has no type list, and on Linux the type picked fixes the extension afterwards (#6121).
 fn dialog_file_name(suggested: &str, windows: bool) -> Option<String> {
     let path = Path::new(suggested);
     let name = path.file_name()?.to_string_lossy().into_owned();
@@ -148,17 +168,45 @@ fn show_file_dialog(request: FileDialogRequest, parent: Option<&eframe::Frame>, 
             Box::pin(async move { picked.await.map(|folder| FileDialogAnswer::FolderTo(path_of(&folder))) })
         }
         FileDialogRequest::Save { suggested } => {
-            for (name, exts) in save_filters(&suggested) {
-                dialog = dialog.add_filter(name, &exts);
+            let filters = save_filters(&suggested);
+            let name = dialog_file_name(&suggested, cfg!(windows));
+            let dir = Path::new(&suggested).parent().filter(|p| !p.as_os_str().is_empty()).map(Path::to_path_buf);
+            for (name, exts) in &filters {
+                dialog = dialog.add_filter(name, exts);
             }
-            if let Some(name) = dialog_file_name(&suggested, cfg!(windows)) {
+            if let Some(name) = &name {
                 dialog = dialog.set_file_name(name);
             }
-            if let Some(dir) = Path::new(&suggested).parent().filter(|p| !p.as_os_str().is_empty()) {
+            if let Some(dir) = &dir {
                 dialog = dialog.set_directory(dir);
             }
-            let picked = dialog.save_file();
-            Box::pin(async move { picked.await.map(|file| FileDialogAnswer::SaveTo(path_of(&file))) })
+            // On Linux the portal's own dialog, which reports the file type picked (#6121); rfd if
+            // the portal can't show it.
+            #[cfg(target_os = "linux")]
+            {
+                use eframe::wgpu::rwh::HasWindowHandle;
+                let parent = crate::portal_save::parent_id(parent.and_then(|p| p.window_handle().ok()).map(|h| h.as_raw()));
+                let req = crate::portal_save::SaveRequest { parent, name, folder: dir, filters, current: Some(0) };
+                Box::pin(async move {
+                    let portal = zbus::blocking::connection::Builder::session()
+                        .and_then(|b| b.build())
+                        .map_err(|e| e.to_string())
+                        .and_then(|conn| crate::portal_save::save_as(&conn, req));
+                    match portal {
+                        Ok(path) => path.map(|p| FileDialogAnswer::SaveTo(p.to_string_lossy().into_owned())),
+                        Err(e) => {
+                            log::info!("portal save dialog unavailable ({e}), using rfd");
+                            dialog.save_file().await.map(|file| FileDialogAnswer::SaveTo(path_of(&file)))
+                        }
+                    }
+                })
+            }
+            #[cfg(not(target_os = "linux"))]
+            {
+                let _ = filters;
+                let picked = dialog.save_file();
+                Box::pin(async move { picked.await.map(|file| FileDialogAnswer::SaveTo(path_of(&file))) })
+            }
         }
     };
     // Without the thread the reply is dropped unanswered, which the app takes as Cancel.
@@ -584,6 +632,33 @@ mod tests {
     use photocraft_format::list_recovery;
     use photocraft_ui_egui::{PhotocraftApp, prefs_ui};
     use serde_json::{Value, json};
+
+    /// #6121: the file type picked in the save dialog decides the extension.
+    #[test]
+    fn the_picked_file_type_gives_the_name_its_extension() {
+        let exts = |e: &[&str]| e.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let png = exts(&["png"]);
+        let cases = [
+            ("/pics/Untitled-1.psd", &png, "/pics/Untitled-1.png"),
+            ("/pics/art.pcraft", &png, "/pics/art.png"),
+            ("/pics/ART.PSD", &png, "/pics/ART.png"),
+            // No extension, or one PhotoCraft doesn't save: appended.
+            ("/pics/art", &png, "/pics/art.png"),
+            ("/pics/scan.2024", &png, "/pics/scan.2024.png"),
+            ("/pics/my.photo.jpg", &png, "/pics/my.photo.png"),
+            // Already the type's: kept, including its other extensions.
+            ("/pics/art.png", &png, "/pics/art.png"),
+            ("/pics/art.PNG", &png, "/pics/art.PNG"),
+        ];
+        for (typed, chosen, want) in cases {
+            assert_eq!(with_chosen_type(Path::new(typed), chosen), PathBuf::from(want), "{typed}");
+        }
+        let psd = exts(&["psd", "psb"]);
+        assert_eq!(with_chosen_type(Path::new("/pics/big.psb"), &psd), PathBuf::from("/pics/big.psb"));
+        assert_eq!(with_chosen_type(Path::new("/pics/big.png"), &psd), PathBuf::from("/pics/big.psd"));
+        // No type picked: the name as typed.
+        assert_eq!(with_chosen_type(Path::new("/pics/art.psd"), &[]), PathBuf::from("/pics/art.psd"));
+    }
 
     #[cfg(all(unix, not(target_os = "macos")))]
     #[test]

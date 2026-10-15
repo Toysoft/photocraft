@@ -44,6 +44,9 @@ mod linux_libs;
 mod logging;
 mod monitor_profile;
 mod photoshop_settings;
+// Save As through the desktop portal, which reports the file type picked (#6121).
+#[cfg(target_os = "linux")]
+mod portal_save;
 mod screen_color;
 mod services;
 // Windows gets pen pressure from winit (WM_POINTER); the web runner has its own listener.
