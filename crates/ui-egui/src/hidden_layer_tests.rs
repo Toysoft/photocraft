@@ -49,7 +49,9 @@ fn auto_select_skips_hidden_layers() {
     let (mut app, id) = app(Tool::Move);
     let bg = app.session.active().unwrap().doc.layers[0].id;
     drag(&mut app, [16.0, 16.0], [30.0, 16.0]);
-    assert_eq!(app.session.active().unwrap().active_layer, Some(bg), "the visible layer under the pointer was picked");
+    // Under the hidden layer is only the locked Background, which a press never picks (a click
+    // there deselects every layer, a drag draws the layer marquee).
+    assert_ne!(app.session.active().unwrap().active_layer, Some(bg), "the locked Background was not picked");
     assert_eq!(bounds(&app, id), Rect::new(8, 8, 24, 24), "the hidden layer stayed put");
 }
 
