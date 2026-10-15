@@ -476,6 +476,10 @@ pub fn is_enabled(app: &PhotocraftApp, id: &str) -> Option<bool> {
                     || (doc && matches!(&i["window.arrange.".len()..], "floatAllInWindows" | "cascade" | "tile" | "tileAllVertically" | "tileAllHorizontally"))
             }
         },
+        // The menu path reads the picked file's bytes (`pick_file_bytes`), which the browser's
+        // picker hands over too, so Place Embedded works on the web, where the engine command's
+        // `path` can't be read (#5749). Place Linked needs a real file to link to.
+        "file.placeEmbedded" => doc,
         i if wraps(i) => app.session.is_enabled(i),
         _ => true,
     })
