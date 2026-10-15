@@ -46,7 +46,7 @@
 	Edit	編集
 	Image	画像
 	Layer	レイヤー
-	Type	文字
+	Type	書式
 	Select	選択
 	Selected	選択済み
 	Scope	範囲
@@ -257,7 +257,7 @@
 	Hue/Saturation…	色相・彩度…
 	Color Balance…	カラーバランス…
 	Black & White…	白黒…
-	Photo Filter…	写真フィルター…
+	Photo Filter…	フォトフィルター…
 	Channel Mixer…	チャンネルミキサー…
 	Color Lookup…	カラールックアップ…
 	Invert	階調の反転
@@ -268,7 +268,7 @@
 	Shadows/Highlights…	シャドウ・ハイライト…
 	HDR Toning…	HDR トーン…
 	Desaturate	彩度を下げる
-	Match Color…	カラーを一致…
+	Match Color…	カラーの適用…
 	Replace Color…	色を置き換え…
 	Equalize	平均化
 	Auto Tone	自動トーン補正
@@ -283,7 +283,7 @@
 	Trim…	トリミング…
 	Reveal All	すべてのコンテンツを表示
 	Duplicate…	複製…
-	Apply Image…	画像を適用…
+	Apply Image…	画像の操作…
 	Calculations…	演算…
 	Variables	変数
 	Define…	定義…
@@ -327,7 +327,7 @@
 	Layer Style	レイヤースタイル
 	Blending Options…	レイヤー効果…
 	Bevel & Emboss…	ベベルとエンボス…
-	Use Global Light	グローバルライトを使用
+	Use Global Light	グローバル光源を使用
 	Inner Shadow…	シャドウ (内側)…
 	Inner Glow…	光彩 (内側)…
 	Satin…	サテン…
@@ -428,7 +428,7 @@
 	Stamp Down	下のレイヤーにスタンプ
 	Flatten Image	画像を統合
 	Matting	マット処理
-	Color Decontaminate…	カラーの混入を除去…
+	Color Decontaminate…	不要なカラーを削除…
 	Remove Black Matte	黒マットを削除
 	Remove White Matte	白マットを削除
 	Defringe…	フリンジ削除…
@@ -440,7 +440,7 @@
 	Bring Forward	前面へ
 	Send Backward	背面へ
 	Send to Back	最背面へ
-	Reverse	反転
+	Reverse	逆順
 	Combine Shapes	シェイプを合成
 	Unite Shapes	シェイプを結合
 	Subtract Front Shape	前面シェイプで型抜き
@@ -468,8 +468,8 @@
 	All Layers	すべてのレイヤー
 	Hidden Layers	非表示のレイヤー
 	Mask All Objects	すべてのオブジェクトをマスク
-	Subject	被写体
-	Sky	空
+	Subject	被写体を選択
+	Sky	空を選択
 	Panels	パネル
 	Character Panel	文字パネル
 	Paragraph Panel	段落パネル
@@ -484,8 +484,8 @@
 	Windows LCD	Windows LCD
 	Windows	Windows
 	Orientation	方向
-	Horizontal	横書き
-	Vertical	縦書き
+	Horizontal	横方向
+	Vertical	縦方向
 	OpenType	OpenType
 	Standard Ligatures	標準合字
 	Contextual Alternates	文脈検索代替字形
@@ -495,11 +495,12 @@
 	Stylistic Alternates	スタイル代替字形
 	Titling Alternates	タイトル用代替字形
 	Ornaments	装飾記号
-	Ordinals	序数
-	Fractions	分数
+	Ordinals	上付き序数
+	Fractions	スラッシュの分数
 	Create Work Path	作業用パスを作成
+	Make Work Path…	作業用パスを作成…
 	Convert to Shape	シェイプに変換
-	Warp Text…	文字ワープ…
+	Warp Text…	ワープ文字…
 	Convert to Point Text	ポイント文字に変換
 	Convert to Paragraph Text	段落文字に変換
 	Default Features	既定の機能
@@ -515,13 +516,14 @@
 	Medium	中
 	Large	大
 	Extra Large	特大
-	Huge	最大
+	Huge	超特大
 	Load Default Type Styles	既定の文字スタイルを読み込み
 	Save Default Type Styles	既定の文字スタイルを保存
 	Deselect	選択を解除
 	Reselect	再選択
 	Inverse	選択範囲を反転
 	Inverse Selection	選択範囲を反転
+	Select Inverse	選択範囲を反転
 	Similar	近似色を選択
 	Color Range…	色域指定…
 	Focus Area…	焦点領域…
@@ -529,7 +531,7 @@
 # Select and Mask dialog labels
 	Smart Radius	スマート半径
 	Shift Edge	エッジをシフト
-	Decontaminate	混入を除去
+	Decontaminate	不要なカラーを削除
 	Output	出力
 	Refine Edge	境界線を調整
 	Modify	選択範囲を修正
@@ -784,6 +786,7 @@
 	Paths	パス
 	Patterns	パターン
 	Properties	プロパティ
+	Replace	置き換え
 	Shapes	シェイプ
 	Styles	スタイル
 	Swatches	スウォッチ
@@ -932,6 +935,7 @@
 	Capture	取り込み
 	Capture the visibility, position and style of every layer with + below, then switch between versions.	下の + で、各レイヤーの表示状態・位置・スタイルを取り込み、バージョンを切り替えられます。
 	Catch-up on Stroke End	ストローク終了時に追いつく
+	Ccw	反時計回り
 	Center	中央
 	Center Crop Marks	中央のトンボ
 	Center text	中央揃え
@@ -981,13 +985,14 @@
 	Commit current crop operation  ({key})	現在の切り抜きを確定({key})
 	Commit transform ({key})	変形を確定({key})
 	Commit warp ({key})	ワープを確定({key})
-	Constant	一定
+	Constant	平行調整
 	Constrain proportions	縦横比を固定
 	Contact Sheet II	コンタクトシート II
 	Content-Aware	コンテンツに応じる
 	Contiguous	隣接
 	Contrast	コントラスト
 	Control:	コントロール:
+	Convert document's colors to the working space	ドキュメントの色を作業用スペースに変換
 	Convert to sRGB	sRGB に変換
 	Copies	部数
 	Copper	銅
@@ -1026,6 +1031,7 @@
 	Curves	トーンカーブ
 	Custom	カスタム
 	Custom Shapes	カスタムシェイプ
+	Cw	時計回り
 	Cyan	シアン
 	Cyan  ·  Red	シアン · 赤
 	Darken	比較 (暗)
@@ -1162,7 +1168,7 @@
 	Format	形式
 	Frame from Layers…	レイヤーからフレーム…
 	Free	自由
-	Full Spherical	全球
+	Full Spherical	全球面
 	Fuzziness:	許容量:
 	GPU	GPU
 	Gamma Correction	ガンマ補正
@@ -1289,6 +1295,7 @@
 	Move to	移動先
 	Name	名前
 	Name:	名前:
+	Nearest	ニアレスト
 	Nearest Neighbor	ニアレストネイバー
 	Nearest Neighbor (hard edges)	ニアレストネイバー (ハードエッジ)
 	New Size	新しいサイズ
@@ -1347,7 +1354,7 @@
 	Perceptual	知覚的
 	Perspective Warp is not active	遠近法ワープは有効ではありません
 	Perspective Warp: draw planes along the image's perspective, then switch to Warp	遠近法ワープ: 画像の遠近に沿って面を描き、ワープに切り替えます
-	Photo Filter	写真フィルター
+	Photo Filter	フォトフィルター
 	PhotoCraft	PhotoCraft
 	PhotoCraft Manages Colors	PhotoCraft でカラーを管理
 	PhotoCraft — an open-source, native image editor written in Rust.	PhotoCraft — Rust で書かれた、オープンソースのネイティブ画像エディター。
@@ -1545,7 +1552,7 @@
 	Thumbnail size (smallest: list)	サムネールのサイズ (最小: リスト)
 	Tilt X	傾き X
 	Tilt Y	傾き Y
-	Tint	色かぶり補正
+	Tint	着色
 	Toggle count group visibility	カウントグループの表示を切り替え
 	Toggle text orientation	文字の方向を切り替え
 	Tolerance	許容値
@@ -1568,6 +1575,7 @@
 	Use Default	既定を使用
 	Use Legacy	従来方式を使用
 	Use Measurement Scale	測定スケールを使用
+	Use the embedded profile (instead of the working space)	埋め込みプロファイルの使用 (作業用スペースの代わり)
 	Variables bind a layer's visibility, text or pixels to a named data slot.	変数は、レイヤーの表示状態・テキスト・ピクセルを、名前付きのデータ枠に結び付けます。
 	Vertical scale	垂直比率
 	Vibrance	自然な彩度
@@ -1665,7 +1673,8 @@
 	Document Profile	ドキュメントのプロファイル
 	Document Sizes	ドキュメントのサイズ
 	Dodge Tool	覆い焼きツール
-	Down	下
+	Up	上へ
+	Down	下へ
 	Drag to draw a gradient	ドラッグしてグラデーションを描画
 	Drag to move the active layer	ドラッグしてアクティブなレイヤーを移動
 	Drag to pan  ·  hold Space with any tool	ドラッグでパン · どのツールでも Space を押しながら
@@ -1687,7 +1696,8 @@
 	Fade	フェード
 	Fill Opacity	塗りの不透明度
 	Film & Video	フィルム・ビデオ
-	From	開始
+	From	始点
+	To	終点
 	General	一般
 	GitHub	GitHub
 	Gradient Overlay	グラデーションオーバーレイ
@@ -1797,7 +1807,7 @@
 	Reds	レッド系
 	Reflected	反射形
 	Sample: foreground colour	サンプル: 描画色
-	Sampled Colors	サンプルしたカラー
+	Sampled Colors	サンプリングカラー
 	Satin	サテン
 	Save Pixel Aspect Ratio	ピクセル縦横比を保存
 	Scattering	散布
@@ -2200,6 +2210,7 @@
 	Cancelled opening {name}	{name} を開くのをキャンセルしました
 	The document “{name}” does not have an embedded {mode} profile.	ドキュメント「{name}」には埋め込み {mode} プロファイルがありません。
 	The document “{name}” has an embedded color profile that does not match the current {mode} working space.	ドキュメント「{name}」の埋め込みカラープロファイルは、現在の {mode} 作業用スペースと一致しません。
+	Embedded: {embedded}	埋め込み: {embedded}
 	Working: {working}	作業用スペース: {working}
 	Developing {name}	{name} を現像中
 	Cancelled {label}	{label} をキャンセルしました
@@ -2400,8 +2411,8 @@ cameraRaw	Color	カラー
 	Set White Point	白色点を設定
 	Unavailable in this color mode	このカラーモードでは使用できません
 	Selection Preview:	選択範囲のプレビュー:
-	Black Matte	黒の背景
-	White Matte	白の背景
+	Black Matte	黒マット
+	White Matte	白マット
 
 # Layer colour labels.
 	Seafoam	シーフォーム
@@ -2467,7 +2478,7 @@ fontWeight	Italic	斜体
 	Amplitude Max	振幅 (最大)
 	Amplitude Min	振幅 (最小)
 	Angled Strokes	斜めストローク
-	Anisotropic	異方性
+	Anisotropic	不均等
 	Around Center	中心の周囲
 	Arrangement	配置
 	Artistic	芸術風
@@ -2488,7 +2499,7 @@ fontWeight	Italic	斜体
 	Branches Height	枝の高さ
 	Branches Thickness	枝の太さ
 	Brick	レンガ
-	Bristle Detail	毛のディテール
+	Bristle Detail	毛先の詳細
 	Brush Detail	ブラシのディテール
 	Brush Size	ブラシサイズ
 	Brush Stroke	ブラシストローク
@@ -2510,7 +2521,7 @@ fontWeight	Italic	斜体
 	Charcoal Thickness	木炭の太さ
 	Chrome	クローム
 	Circle	円
-	Cleanliness	清潔さ
+	Cleanliness	クリーン度
 	Clear Amount	クリアの量
 	Clumped	密集
 	Coarse Dots	粗いドット
@@ -2614,7 +2625,7 @@ fontWeight	Italic	斜体
 	Infinite	無限
 	Ink Outlines	インクの輪郭線
 	Input Mode	入力モード
-	Intensity	強さ
+	Intensity	適用度
 	Interpolation	補間
 	Interval	間隔
 	Ivy	アイビー
@@ -2628,7 +2639,7 @@ fontWeight	Italic	斜体
 	Left Diagonal	左斜め
 	Length	長さ
 	Lens	レンズ
-	Level Based	レベル基準
+	Level Based	レベルを基準
 	Light Dark Balance	明暗のバランス
 	Light Direction	光の方向
 	Light Intensity	光の強さ
@@ -2639,12 +2650,12 @@ fontWeight	Italic	斜体
 	Light Z	光源 Z
 	Lighten Grout	目地を明るく
 	Lighten Only	明るくのみ
-	Lighting	ライティング
+	Lighting	光源
 	List	リスト
 	Long Lines	長い線
 	Long Strokes	長いストローク
 	Low	低
-	Lower	下
+	Lower	以下
 	Map Document	マップのドキュメント
 	Map Path	マップのパス
 	Margin	余白
@@ -2666,7 +2677,7 @@ fontWeight	Italic	斜体
 	Multiple Flames Path Directions	パス方向の複数の炎
 	Multiple Flames Various Length	長さの異なる複数の炎
 	Neon Glow	ネオン光彩
-	Neutralize	中和
+	Neutralize	色かぶりを補正
 	New Layer	新規レイヤー
 	Note Paper	ノート用紙
 	Number Of Levels	レベル数
@@ -2708,7 +2719,7 @@ fontWeight	Italic	斜体
 	Reduce Color Noise	カラーノイズを軽減
 	Reduce Noise	ノイズを軽減
 	Relief	レリーフ
-	Remove Jpeg Artifact	JPEG アーティファクトを除去
+	Remove Jpeg Artifact	JPEG の斑点を削除
 	Remove Tool	削除ツール
 	Reorder Layer	レイヤーを並べ替え
 	Repeat	繰り返し
@@ -2738,7 +2749,7 @@ fontWeight	Italic	斜体
 	Shadow Tone	シャドウのトーン
 	Sharpen Details	ディテールをシャープに
 	Sharpness	シャープネス
-	Shine	輝き
+	Shine	光彩
 	Short Lines	短い線
 	Short Strokes	短いストローク
 	Simple	シンプル
@@ -2760,7 +2771,7 @@ fontWeight	Italic	斜体
 	Sprayed Strokes	スプレーストローク
 	Sprinkles	散らし
 	Square Size	正方形のサイズ
-	Squareness	四角さ
+	Squareness	直角度
 	Stagger	互い違い
 	Stained Glass	ステンドグラス
 	Stamp	スタンプ
@@ -2777,7 +2788,7 @@ fontWeight	Italic	斜体
 	Stroke Pressure	ストロークの筆圧
 	Stroke Size	ストロークのサイズ
 	Stroke Width	ストロークの幅
-	Stylization	スタイル化
+	Stylization	形態
 	Sumi-e	墨絵
 	Switch Foreground and Background Colors	前景色と背景色を入れ替え
 	Taper	先細り
@@ -2794,11 +2805,11 @@ fontWeight	Italic	斜体
 	Transition	遷移
 	Triangle	三角形
 	Turbulent	乱流
-	Unaltered	変更なし
+	Unaltered	元画像
 	Undefined Areas	未定義の領域
 	Underpainting	下塗り
 	Uniform	均一
-	Upper	上
+	Upper	以上
 	Use Custom Color	カスタムカラーを使用
 	Use Selection In Source	ソースの選択範囲を使用
 	Use Selection In Target	ターゲットの選択範囲を使用
@@ -2847,7 +2858,7 @@ fontWeight	Italic	斜体
 	Circularity	真円度
 	Clipping Path	クリッピングパス
 	Clone Stamp	コピースタンプ
-	Color Decontaminate	カラーの混入を除去
+	Color Decontaminate	不要なカラーを削除
 	Color Halftone	カラーハーフトーン
 	Color Range	色域指定
 	Color Replacement	色の置き換え
@@ -2916,7 +2927,7 @@ fontWeight	Italic	斜体
 	Make	作成
 	Make Selection	選択範囲を作成
 	Make Work Path	作業用パスを作成
-	Match Color	カラーを一致
+	Match Color	カラーの一致
 	Mezzotint	メゾティント
 	Mosaic	モザイク
 	Motion Blur	ぼかし(移動)
@@ -3007,7 +3018,7 @@ fontWeight	Italic	斜体
 	Add to	追加
 	Alternative	代替
 	Apply Data Set	データセットを適用
-	Apply Image	画像を適用
+	Apply Image	画像の操作
 	Arbitrary	任意
 	Artboards to Files	アートボードをファイルへ
 	At	位置
@@ -3118,6 +3129,7 @@ fontWeight	Italic	斜体
 	Map Layer	マップレイヤー
 	Mask	マスク
 	Measure	測定
+	Merged	結合
 	Mono Contrast	モノコントラスト
 	New document	新規ドキュメント
 	Noise Color	ノイズ (カラー)
@@ -3523,7 +3535,7 @@ fontWeight	Italic	斜体
 	Auto Hide Notifications	通知を自動的に隠す
 	Notification Duration (seconds)	通知の表示時間 (秒)
 	Bundle Arrow-Key Nudges	矢印キーの移動をまとめる
-	Nudge Bundle Pause (ms)	移動をまとめる間隔（ms）
+	Nudge Bundle Pause (ms)	移動をまとめる間隔 (ms)
 	Appearance Mode	外観モード
 	Dark Theme	ダークテーマ
 	Light Theme	ライトテーマ
@@ -3674,8 +3686,8 @@ curves	Smooth	スムーズ
 	On Black	黒地
 	On White	白地
 	On Layers	レイヤー上
-	Show Edge	エッジを表示
-	Show Original	元の状態を表示
+	Show Edge	境界線を表示
+	Show Original	元の選択範囲を表示
 	F cycles the views; hold X to see the image	F で表示を切り替え、X を押している間は画像を表示
 # Select and Mask Refine Edge Brush (#2972)
 	Refine Edge Brush (R)	境界線調整ブラシ (R)
@@ -3726,7 +3738,7 @@ curves	Smooth	スムーズ
 	No object found there — drag a rectangle around it	そこにオブジェクトが見つかりません — 周囲に矩形をドラッグしてください
 	Remove after each stroke	ストロークごとに削除
 	Apply the removal ({key})	削除を適用 ({key})
-	Strokes to remove: {n} (Enter applies, Esc cancels)	削除するストローク: {n}（Enter で適用、Esc で取り消し）
+	Strokes to remove: {n} (Enter applies, Esc cancels)	削除するストローク: {n} (Enter で適用、Esc で取り消し)
 	Show home recent files	ホーム画面に最近使ったファイルを表示
 
 # Actions panel: Load/Save Actions (.atn) and kept Photoshop steps
@@ -3864,4 +3876,115 @@ curves	Smooth	スムーズ
 	Summarize…	概要…
 	There are too many sets: delete one first.	セットが多すぎます。先に 1 つ削除してください。
 	set name	セット名
-	{set} (modified)	{set}（変更あり）
+	{set} (modified)	{set} (変更あり)
+
+# Pattern Overlay
+	Checkerboard	チェッカーボード
+	Diagonal Lines	斜線
+	Bricks	レンガ
+	Weave	織物
+	Paper Noise	紙の質感
+
+# Type > Orientation menu items; the plain "Horizontal"/"Vertical" (Scroll dialog etc.) stay as they are
+@id	type.orientation.horizontal	横書き
+@id	type.orientation.vertical	縦書き
+
+# Convert to Profile	プロファイルを変換
+	Intent	マッチング
+	Bpc	黒点を補正
+
+# Color Settings	カラー設定
+	Working Rgb	作業用 RGB
+	Working Cmyk	作業用 CMYK
+	Working Gray	作業用 グレー
+	Policy Rgb	ポリシー RGB
+	Policy Cmyk	ポリシー CMYK
+	Policy Gray	ポリシー グレー
+	Ask On Mismatch	不一致時に確認
+	Ask On Missing	不明時に確認
+	Ask On Paste	ペースト時に確認(W)
+	Blend Text Gamma	テキストのブレンド部分をガンマ補正:
+	Convert	変換
+	Monitor Profile	モニタープロファイル
+	Monitor profile in use: sRGB IEC61966-2.1 (fallback: this platform doesn't report display profiles)	使用中のモニタープロファイル: sRGB IEC61966-2.1 (代替: このプラットフォームはディスプレイプロファイルを報告しません)
+
+# Conditional Mode Change	条件付きカラーモード変更
+	Any	いずれか
+
+# Lens Corrections	レンズ補正
+	Same	変更しない
+	Psd	PSD
+	Tiff	TIFF
+	Bmp	BMP
+
+# Find and Replace Text	テキストを検索して置換
+	Find	検索
+	Case Sensitive	大文字と小文字を区別
+	Whole Word	単語全体に一致
+	Forward	前方
+	Change Find	検索文字に変更
+
+# Layers to Files	レイヤーをファイルへ
+	Dir	ディレクトリ
+	Prefix	接頭辞
+	Visible only	表示レイヤーのみ
+
+# File Info	ファイル情報
+	Author title	作成者の肩書き
+	Copyright url	著作権 URL
+	Title	タイトル
+
+# Image Processor	画像プロセッサー
+	Input	入力
+
+# Script Events Manager	スクリプトイベント管理
+	Event	イベント
+	Script	スクリプト
+	Open document	ドキュメントを開く
+	Start application	アプリを起動
+	Save document	ドキュメントを保存
+	Close document	ドキュメントを閉じる
+	Everything	すべて
+
+# Contact Sheet II	コンタクトシート II
+	Auto spacing	自動間隔
+	Flatten	すべてのレイヤーを統合
+	Place across first	最初に横に並べる
+	Rotate for best fit	回転して最適サイズに合わせる
+	Cmyk	CMYK
+	Lab	LAB
+
+# Fit Image	画像を枠に合わせる
+	Dont enlarge	拡大しない
+		
+# Merge to HDR Pro	HDR 合成(Pro)
+	Remove ghosts	ゴーストを除去する
+	Use open documents	開いているドキュメントを使用する
+	Local adaptation	局所適応
+	Exposure gamma	露出ガンマ
+	Equalize histogram	ヒストグラムの均一化
+		
+# Photomerge	写真を貼り合わせ
+	Content aware fill	コンテンツに応じた塗りつぶし
+	Geometric correction	幾何学的補正
+	Vignette removal	ビネットの除去
+	Cylindrical	円筒
+	Spherical	球面
+	Collage	コラージュ
+	Reposition	位置合わせ
+
+# Save for Web (Legacy)	Web 用に保存 (従来方式)
+	GIF 128 Dithered	GIF 128 ディザ
+	GIF 128 No Dither	GIF 128 ディザなし
+	GIF 32 Dithered	GIF 32 ディザ
+	GIF 32 No Dither	GIF 32 ディザなし
+	GIF 64 Dithered	GIF 64 ディザ
+	GIF 64 No Dither	GIF 64 ディザなし
+	GIF Restrictive	GIF (制限)
+	JPEG High	JEPG 高
+	JPEG Low	JPEG 低
+	JPEG Medium	JPEG 標準
+	PNG-8 128 Dithered	PNG-8 128 ディザ
+
+# Color Range	色域指定
+	Skin Tones	肌の色
