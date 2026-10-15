@@ -366,6 +366,30 @@ impl GpuCanvas {
         true
     }
 
+    /// Replace a rectangle of mip `level` of an uploaded document (`origin` and `size` in that
+    /// level's pixels, `texels` with a row stride of `stride` texels) and rebuild the levels below
+    /// it there. The next level-0 upload of the area replaces it: a redraw's reduced first picture.
+    /// Returns false if the document isn't uploaded or the buffer is too short.
+    pub fn upload_level(&self, doc: u64, level: u32, origin: [u32; 2], size: [u32; 2], stride: u32, texels: &[u8]) -> bool {
+        if !self.health.is_ok() {
+            return false;
+        }
+        let (device, queue) = (&self.rs.device, &self.rs.queue);
+        let mut renderer = self.rs.renderer.write();
+        let Some(res) = renderer.callback_resources.get_mut::<Resources>() else { return false };
+        let Some(d) = res.docs.get(&doc) else { return false };
+        if size[0] == 0 || size[1] == 0 {
+            return true;
+        }
+        let need = (u64::from(size[1]) - 1) * u64::from(stride) + u64::from(size[0]);
+        if stride < size[0] || (texels.len() as u64) < need * texel_bytes(d.format) {
+            return false;
+        }
+        d.write_level(queue, level, origin, size, stride, texels);
+        d.regenerate_mips_from(device, queue, res, level, [origin[0], origin[1], origin[0] + size[0], origin[1] + size[1]]);
+        true
+    }
+
     /// The texture format of uploaded document `doc`.
     fn format_of(&self, doc: u64) -> Option<wgpu::TextureFormat> {
         let r = self.rs.renderer.read();
@@ -746,6 +770,12 @@ impl GpuCanvas {
     /// and debugging.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn read_texels(&self, key: u64) -> Option<(wgpu::TextureFormat, [u32; 2], Vec<[f32; 4]>)> {
+        self.read_level(key, 0)
+    }
+
+    /// [`Self::read_texels`] of mip `level` (its size is the tiles' level sizes put together).
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn read_level(&self, key: u64, level: u32) -> Option<(wgpu::TextureFormat, [u32; 2], Vec<[f32; 4]>)> {
         if !self.health.is_ok() {
             return None;
         }
@@ -753,10 +783,11 @@ impl GpuCanvas {
         let renderer = self.rs.renderer.read();
         let d = renderer.callback_resources.get::<Resources>()?.docs.get(&key)?;
         let bpp = texel_bytes(d.format);
-        let (w, h) = (d.size[0] as usize, d.size[1] as usize);
+        let rects: Vec<[u32; 4]> = d.tiles.iter().map(|t| t.level_rect(level)).collect::<Option<_>>()?;
+        let size = rects.iter().fold([0, 0], |s, r| [s[0].max(r[0] + r[2]), s[1].max(r[1] + r[3])]);
+        let (w, h) = (size[0] as usize, size[1] as usize);
         let mut out = vec![[0.0f32; 4]; w.checked_mul(h)?];
-        for t in &d.tiles {
-            let [tx, ty, tw, th] = t.rect;
+        for (t, &[tx, ty, tw, th]) in d.tiles.iter().zip(&rects) {
             let row = (tw as u64 * bpp).next_multiple_of(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as u64);
             let buf = device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("pc_canvas_readback"),
@@ -766,7 +797,7 @@ impl GpuCanvas {
             });
             let mut enc = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("pc_canvas_readback") });
             enc.copy_texture_to_buffer(
-                t.texture.as_image_copy(),
+                wgpu::TexelCopyTextureInfo { texture: &t.texture, mip_level: level, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
                 wgpu::TexelCopyBufferInfo {
                     buffer: &buf,
                     layout: wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(row as u32), rows_per_image: Some(th) },
@@ -788,7 +819,7 @@ impl GpuCanvas {
                 }
             }
         }
-        Some((d.format, d.size, out))
+        Some((d.format, size, out))
     }
 
     /// Add the paint callback drawing `params` into `rect` (clipped by the painter's clip rect).
@@ -1400,6 +1431,16 @@ struct Tile {
     _uniform: wgpu::Buffer,
 }
 
+impl Tile {
+    /// The tile's rect (x, y, w, h) in mip `level`'s pixels, or `None` when it has no such level
+    /// or doesn't start on that level's grid.
+    fn level_rect(&self, level: u32) -> Option<[u32; 4]> {
+        let [tx, ty, tw, th] = self.rect;
+        let k = 1u32.checked_shl(level)?;
+        (level < self.levels.len() as u32 && tx % k == 0 && ty % k == 0).then(|| [tx >> level, ty >> level, (tw >> level).max(1), (th >> level).max(1)])
+    }
+}
+
 fn uniform_entry(binding: u32, size: u64, vis: wgpu::ShaderStages) -> wgpu::BindGroupLayoutEntry {
     wgpu::BindGroupLayoutEntry {
         binding,
@@ -1663,10 +1704,16 @@ impl DocTextures {
     /// Write `size` pixels at document `origin` from `texels` (in the texture format, row stride
     /// `stride` pixels) into every overlapping tile's level 0.
     fn write(&self, queue: &wgpu::Queue, origin: [u32; 2], size: [u32; 2], stride: u32, texels: &[u8]) {
+        self.write_level(queue, 0, origin, size, stride, texels);
+    }
+
+    /// [`Self::write`] into mip `level`: `origin` and `size` are in that level's pixels (document
+    /// pixels / 2^level). Tiles that don't start on that level's grid are left alone.
+    fn write_level(&self, queue: &wgpu::Queue, level: u32, origin: [u32; 2], size: [u32; 2], stride: u32, texels: &[u8]) {
         let bpp = texel_bytes(self.format);
         let (x0, y0, x1, y1) = (origin[0], origin[1], origin[0] + size[0], origin[1] + size[1]);
         for t in &self.tiles {
-            let [tx, ty, tw, th] = t.rect;
+            let Some([tx, ty, tw, th]) = t.level_rect(level) else { continue };
             let (ix0, iy0, ix1, iy1) = (x0.max(tx), y0.max(ty), x1.min(tx + tw), y1.min(ty + th));
             if ix0 >= ix1 || iy0 >= iy1 {
                 continue;
@@ -1675,7 +1722,7 @@ impl DocTextures {
             queue.write_texture(
                 wgpu::TexelCopyTextureInfo {
                     texture: &t.texture,
-                    mip_level: 0,
+                    mip_level: level,
                     origin: wgpu::Origin3d { x: ix0 - tx, y: iy0 - ty, z: 0 },
                     aspect: wgpu::TextureAspect::All,
                 },
@@ -1688,16 +1735,22 @@ impl DocTextures {
 
     /// Rebuild the mip chain inside document rect `r` (x0, y0, x1, y1) with 2×2 box filtering.
     fn regenerate_mips(&self, device: &wgpu::Device, queue: &wgpu::Queue, res: &Resources, r: [u32; 4]) {
+        self.regenerate_mips_from(device, queue, res, 0, r);
+    }
+
+    /// Rebuild the levels below mip `from` inside `r`, in that level's pixels.
+    fn regenerate_mips_from(&self, device: &wgpu::Device, queue: &wgpu::Queue, res: &Resources, from: u32, r: [u32; 4]) {
         let Some(mip_pipeline) = res.mip_pipeline(self.format) else { return };
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("pc_mips") });
         for t in &self.tiles {
-            let [tx, ty, tw, th] = t.rect;
-            let (mut x0, mut y0, mut x1, mut y1) = (r[0].max(tx), r[1].max(ty), r[2].min(tx + tw), r[3].min(ty + th));
+            let [tw, th] = [t.rect[2], t.rect[3]];
+            let Some([tx, ty, lw, lh]) = t.level_rect(from) else { continue };
+            let (mut x0, mut y0, mut x1, mut y1) = (r[0].max(tx), r[1].max(ty), r[2].min(tx + lw), r[3].min(ty + lh));
             if x0 >= x1 || y0 >= y1 {
                 continue;
             }
             (x0, y0, x1, y1) = (x0 - tx, y0 - ty, x1 - tx, y1 - ty);
-            for level in 1..t.levels.len() {
+            for level in from as usize + 1..t.levels.len() {
                 let (lw, lh) = ((tw >> level).max(1), (th >> level).max(1));
                 // Damage at this level, padded by one texel for odd-size rounding.
                 (x0, y0) = ((x0 / 2).saturating_sub(1), (y0 / 2).saturating_sub(1));
