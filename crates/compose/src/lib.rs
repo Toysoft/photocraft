@@ -865,6 +865,38 @@ pub fn paint_bounds(layer: &Layer) -> Option<Rect> {
     (!r.is_empty()).then_some(r)
 }
 
+/// The frame a layer's effects are laid out in: [`paint_bounds`] for a shape, else the layer's
+/// bounds ([`layer_bounds`]). A Gradient Overlay spans it, linked patterns tile from its corner.
+pub fn effects_frame(layer: &Layer, canvas: Rect) -> Rect {
+    paint_bounds(layer).unwrap_or_else(|| layer_bounds(layer, canvas))
+}
+
+/// The pixels a change from `a` to `b` repaints beyond those it changed: where a layer whose
+/// effects span its frame ([`effects::spans_frame`]) moved that frame, the layer's whole composite
+/// before and after. Painting on a layer with a Gradient Overlay lays the one gradient out again
+/// over the grown layer, as Photoshop does after each stroke; damage that covers only the stroke
+/// leaves the old gradient around earlier strokes (#4053). Empty when no such frame moved.
+pub fn relayout_damage(a: &Document, b: &Document) -> Rect {
+    let mut out = Rect::EMPTY;
+    let mut add = |r: Rect| {
+        if !r.is_empty() {
+            out = if out.is_empty() { r } else { out.union(&r) };
+        }
+    };
+    for (_, _, y) in b.walk() {
+        if !y.visible || !effects::spans_frame(y) {
+            continue;
+        }
+        let Some(x) = a.layer(y.id) else { continue };
+        if effects_frame(x, a.bounds()) == effects_frame(y, b.bounds()) {
+            continue;
+        }
+        add(change_bounds(x, a.bounds()).unwrap_or_else(|| a.bounds()));
+        add(change_bounds(y, b.bounds()).unwrap_or_else(|| b.bounds()));
+    }
+    out
+}
+
 /// The bounding box of a shape layer's vector content: its path control bounds plus stroke width.
 pub fn shape_bounds(sh: &photocraft_doc::ShapeLayer) -> Option<Rect> {
     if sh.fill.is_none() && sh.stroke.as_ref().is_none_or(|s| s.width <= 0.0 || s.opacity <= 0.0) {
@@ -1489,15 +1521,7 @@ fn composite_layer_effects(layer: &Layer, clipped: &[Layer], backdrop: &mut Buff
     advanced::composite_clipped(clipped, &mut content, cx);
     let vstroke = vstroke.as_ref().map(|(s, m)| effects::VectorStroke { stroke: s, mask: m.as_deref() });
     let maps = effect_maps(layer, rect, cx);
-    effects::composite_with_effects_prepared(
-        layer,
-        &content,
-        backdrop,
-        &maps,
-        paint_bounds(layer).unwrap_or_else(|| layer_bounds(layer, cx.canvas)),
-        cx.patterns,
-        vstroke,
-    );
+    effects::composite_with_effects_prepared(layer, &content, backdrop, &maps, effects_frame(layer, cx.canvas), cx.patterns, vstroke);
 }
 
 /// The coverage-mixing gamma of a layer: the text blending gamma
@@ -1755,7 +1779,7 @@ fn cached_effect_maps(layer: &Layer, region: Rect, key: u64, cx: &Ctx) -> std::s
 }
 
 fn texture_ctx<'a>(layer: &Layer, region: Rect, cx: &Ctx<'a>) -> effects::TextureCtx<'a> {
-    let sb = paint_bounds(layer).unwrap_or_else(|| layer_bounds(layer, cx.canvas));
+    let sb = effects_frame(layer, cx.canvas);
     effects::TextureCtx { rect: region, patterns: cx.patterns.source(), anchor: layer.effects.reference.unwrap_or((f64::from(sb.x0), f64::from(sb.y0))) }
 }
 
@@ -1810,15 +1834,7 @@ fn composite_atop_any(layer: &Layer, base: &mut Buffer, cx: &Ctx) {
         let vstroke = vstroke.as_ref().map(|(s, m)| effects::VectorStroke { stroke: s, mask: m.as_deref() });
         let mut opaque = Buffer { rect, px: base.px.iter().map(|p| [p[0], p[1], p[2], 1.0]).collect() };
         let maps = effect_maps(layer, rect, cx);
-        effects::composite_with_effects_prepared(
-            layer,
-            &content,
-            &mut opaque,
-            &maps,
-            paint_bounds(layer).unwrap_or_else(|| layer_bounds(layer, cx.canvas)),
-            cx.patterns,
-            vstroke,
-        );
+        effects::composite_with_effects_prepared(layer, &content, &mut opaque, &maps, effects_frame(layer, cx.canvas), cx.patterns, vstroke);
         if let Some(m) = &hide {
             let plain = Buffer { rect, px: base.px.iter().map(|p| [p[0], p[1], p[2], 1.0]).collect() };
             advanced::apply_hiding_mask(&mut opaque, &plain, m);
