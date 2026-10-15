@@ -72,6 +72,10 @@ pub fn start() {
             }
         };
         let pen_target = canvas.clone();
+        // `?host=parent`: a same-origin page framing PhotoCraft (such as a Nextcloud app) opens
+        // files in it and stores what it saves (`host`). It guards leaving the page itself.
+        let bridge = if query_param("host").as_deref() == Some("parent") { crate::host::Bridge::new() } else { None };
+        let app_bridge = bridge.clone();
         let result = eframe::WebRunner::new()
             .start(
                 canvas,
@@ -83,7 +87,11 @@ pub fn start() {
                     load_font_manifest(served.clone(), cc.egui_ctx.clone());
                     let (session, warnings) = crate::preset_bridge::session(presets.clone());
                     preset_warnings.extend(warnings);
-                    let mut app = PhotocraftApp::new(session, services(inbox.clone()));
+                    let mut services = services(inbox.clone());
+                    if let Some(bridge) = &app_bridge {
+                        bridge.connect(&mut services, inbox.clone(), cc.egui_ctx.clone());
+                    }
+                    let mut app = PhotocraftApp::new(session, services);
                     if !preset_warnings.is_empty() {
                         photocraft_ui_egui::notices::post(&mut app, i18n::t("Some brush presets could not be loaded"), preset_warnings, true, None);
                     }
@@ -96,11 +104,18 @@ pub fn start() {
                         app.set_wgpu(rs);
                     }
                     let unsaved = Arc::new(AtomicBool::new(false));
-                    guard_unload(unsaved.clone());
-                    Ok(Box::new(WebShell { app, inbox, unsaved, served, database, presets }))
+                    if let Some(bridge) = &app_bridge {
+                        bridge.post_ready();
+                    } else {
+                        guard_unload(unsaved.clone());
+                    }
+                    Ok(Box::new(WebShell { app, inbox, unsaved, served, database, presets, bridge: app_bridge }))
                 }),
             )
             .await;
+        if let (Err(e), Some(bridge)) = (&result, &bridge) {
+            bridge.post_failed(&format!("{e:?}"));
+        }
         if let Some(el) = document.get_element_by_id("photocraft_loading") {
             match result {
                 Ok(()) => el.remove(),
@@ -160,6 +175,10 @@ fn guard_unload(unsaved: Arc<AtomicBool>) {
 
 fn query() -> String {
     web_sys::window().and_then(|w| w.location().search().ok()).unwrap_or_default()
+}
+
+fn query_param(key: &str) -> Option<String> {
+    web_sys::UrlSearchParams::new_with_str(&query()).ok()?.get(key)
 }
 
 /// Reads the served font manifest, if the host has one, and lists its families in the font menus.
@@ -228,6 +247,8 @@ struct WebShell {
     served: Served,
     database: Option<web_sys::IdbDatabase>,
     presets: crate::preset_bridge::Bridge,
+    /// The page embedding PhotoCraft (`?host=parent`).
+    bridge: Option<crate::host::Bridge>,
 }
 
 impl WebShell {
@@ -247,6 +268,9 @@ impl WebShell {
             });
         }
         self.unsaved.store(self.app.has_unsaved_work() || self.presets.unsaved(), Ordering::Relaxed);
+        if let Some(bridge) = &self.bridge {
+            bridge.report_dirty(self.app.has_unsaved_work());
+        }
     }
 
     /// Fetches the served families asked for (picked in a font menu, or needed by a layout) and
