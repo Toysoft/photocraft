@@ -88,7 +88,8 @@ pub fn body(ui: &mut egui::Ui, f: &mut Map<String, Value>) {
     if let Some(mut name) = f.get("name").and_then(Value::as_str).map(str::to_string) {
         ui.horizontal(|ui| {
             label(ui, tl!("Name:"));
-            if ui.add(egui::TextEdit::singleline(&mut name).desired_width(200.0)).changed() {
+            crate::bidi::rtl_arrows(ui, None, &name);
+            if ui.add(crate::bidi::singleline(&mut name).desired_width(200.0)).changed() {
                 f.insert("name".into(), json!(name));
             }
         });
@@ -188,7 +189,8 @@ pub fn new_spot_body(ui: &mut egui::Ui, f: &mut Map<String, Value>) {
     let mut name = f.get("name").and_then(Value::as_str).unwrap_or_default().to_string();
     ui.horizontal(|ui| {
         label(ui, tl!("Name:"));
-        if ui.add(egui::TextEdit::singleline(&mut name).desired_width(200.0)).changed() {
+        crate::bidi::rtl_arrows(ui, None, &name);
+        if ui.add(crate::bidi::singleline(&mut name).desired_width(200.0)).changed() {
             f.insert("name".into(), json!(name));
         }
     });

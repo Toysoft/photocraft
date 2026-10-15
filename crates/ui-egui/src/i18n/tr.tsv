@@ -1190,6 +1190,9 @@
 	Leading (set to the font size × auto-leading when Auto)	Satır Aralığı (Otomatik olduğunda yazı tipi boyutu × otomatik satır aralığına ayarlanır)
 	Leave as is (don't color manage)	Olduğu gibi bırakın (renk yönetimi yapmayın)
 	Left align text	Metni sola hizala
+	Right-to-left text direction	Sağdan sola metin yönü
+	Left-to-right text direction	Soldan sağa metin yönü
+	Right-to-left text	Sağdan sola metin
 	Length:	Uzunluk:
 	Level	Seviye
 	Levels	Seviyeler

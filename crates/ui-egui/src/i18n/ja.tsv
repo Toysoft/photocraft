@@ -1233,6 +1233,9 @@
 	Leading (set to the font size × auto-leading when Auto)	行送り (自動のときはフォントサイズ × 自動行送り)
 	Leave as is (don't color manage)	そのまま (カラーマネジメントしない)
 	Left align text	左揃え
+	Right-to-left text direction	右から左への文字方向
+	Left-to-right text direction	左から右への文字方向
+	Right-to-left text	右から左へのテキスト
 	Length:	長さ:
 	Level	レベル
 	Levels	レベル補正

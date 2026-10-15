@@ -1235,6 +1235,9 @@
 	Leading (set to the font size × auto-leading when Auto)	Interlínea (al estar en Automático se iguala al tamaño de fuente × interlínea automática)
 	Leave as is (don't color manage)	Dejar como está (no gestionar el color)
 	Left align text	Alinear texto a la izquierda
+	Right-to-left text direction	Dirección del texto de derecha a izquierda
+	Left-to-right text direction	Dirección del texto de izquierda a derecha
+	Right-to-left text	Texto de derecha a izquierda
 	Length:	Longitud:
 	Level	Nivel
 	Levels	Niveles

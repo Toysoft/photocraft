@@ -2062,3 +2062,139 @@ fn type_mask_shift_adds_and_alt_subtracts_without_a_layer_row() {
     assert!(at(&app, stem.0, stem.1) < 0.01, "⌥ subtracts the glyphs");
     assert!(at(&app, 1050, 150) > 0.99, "and keeps the rest");
 }
+
+/// Hebrew type (right-to-left): the arrow keys move the caret the way they point, as in Office
+/// and Photoshop's Middle Eastern type; the Paragraph section's direction buttons set the
+/// paragraph's direction and mirror its alignment.
+mod right_to_left {
+    use super::*;
+    use photocraft_doc::text::{TextAlign, TextDirection};
+
+    /// The app with a type layer holding `text`, its caret at character `caret`, and a harness
+    /// that only runs the Type tool's keys.
+    fn editing(text: &str, caret: usize) -> (Harness<'static, PhotocraftApp>, LayerId) {
+        let mut app = new_app();
+        let id = app.run("type.create", json!({"text": text, "size": 24})).unwrap()["layer"].as_u64().unwrap();
+        app.ui.text_edit = Some(crate::state::TextEdit {
+            layer: id,
+            caret,
+            anchor: caret,
+            session: "rtl".into(),
+            created: false,
+            mask: false,
+            dragging: false,
+            resize: None,
+            preedit: None,
+        });
+        let h = Harness::builder().build_ui_state(
+            |ui, app: &mut PhotocraftApp| {
+                super::super::handle_keys(app, ui.ctx());
+            },
+            app,
+        );
+        (h, LayerId(id))
+    }
+
+    #[test]
+    fn arrows_move_the_way_they_point_in_hebrew() {
+        // "שלום עולם": the caret at the end (index 9) is at the left end of the line.
+        let (mut h, _) = editing("שלום עולם", 9);
+        key(&mut h, egui::Key::ArrowRight);
+        assert_eq!(selection(&h).1, 8, "→ moves towards the start of the text, which is on the right");
+        key(&mut h, egui::Key::ArrowLeft);
+        key(&mut h, egui::Key::ArrowLeft);
+        assert_eq!(selection(&h).1, 9, "← moves towards the end, on the left, and stops there");
+        // Left-to-right text is unchanged.
+        let (mut h, _) = editing("Hello", 5);
+        key(&mut h, egui::Key::ArrowLeft);
+        assert_eq!(selection(&h).1, 4);
+    }
+
+    #[test]
+    fn the_paragraph_at_the_caret_decides_the_direction() {
+        let text = "Hello\nשלום 2026";
+        assert!(!super::super::paragraph_rtl_at(text, 2, TextDirection::Auto));
+        assert!(super::super::paragraph_rtl_at(text, 8, TextDirection::Auto));
+        assert!(super::super::paragraph_rtl_at(text, 2, TextDirection::Rtl), "a direction set on the paragraph wins");
+        assert!(!super::super::paragraph_rtl_at("2026 שלום", 0, TextDirection::Ltr));
+        assert!(super::super::paragraph_rtl_at("2026 שלום", 0, TextDirection::Auto), "digits are not strong");
+        // Out-of-range carets and empty text never panic.
+        assert!(!super::super::paragraph_rtl_at("", 7, TextDirection::Auto));
+        assert!(super::super::paragraph_rtl_at("שלום", 99, TextDirection::Auto));
+    }
+
+    /// The Type tool's options bar: the Right-to-left text toggle sets the reading direction of the
+    /// selected type (not just its alignment) and of new type.
+    fn options_bar(app: PhotocraftApp) -> Harness<'static, PhotocraftApp> {
+        let mut h = Harness::builder().with_size(vec2(1400.0, 60.0)).build_ui_state(
+            |ui, app: &mut PhotocraftApp| {
+                if ui.ctx().fonts(|f| f.families().contains(&egui::FontFamily::Name("medium".into()))) {
+                    ui.horizontal(|ui| super::super::options_bar(app, ui));
+                }
+            },
+            app,
+        );
+        PhotocraftApp::setup_context(&h.ctx, Default::default());
+        h.run_steps(4);
+        h
+    }
+
+    #[test]
+    fn the_options_bar_toggle_sets_new_type_right_to_left() {
+        let mut h = options_bar(new_app());
+        assert!(!h.state().ui.tool_options.type_rtl);
+        h.get_by_label("Right-to-left text").click();
+        h.run();
+        let o = &h.state().ui.tool_options;
+        assert!(o.type_rtl && o.type_align == "right", "new type reads right to left from the right edge");
+        // New type is made with it.
+        let id = LayerId(h.state_mut().run("type.create", json!({"text": "abc", "size": 24, "direction": "rtl"})).unwrap()["layer"].as_u64().unwrap());
+        assert_eq!(text(h.state(), id).paragraph_runs()[0].style.direction, TextDirection::Rtl);
+        h.get_by_label("Right-to-left text").click();
+        h.run();
+        let o = &h.state().ui.tool_options;
+        assert!(!o.type_rtl && o.type_align == "left", "and back");
+    }
+
+    #[test]
+    fn the_options_bar_toggle_switches_the_selected_type() {
+        let mut app = new_app();
+        let id = LayerId(app.run("type.create", json!({"text": "Hello 2026", "size": 24})).unwrap()["layer"].as_u64().unwrap());
+        app.run("layer.select", json!({"layer": id.0, "mode": "replace"})).unwrap();
+        let mut h = options_bar(app);
+        h.get_by_label("Right-to-left text").click();
+        h.run();
+        let p = text(h.state(), id).paragraph_runs()[0].style.clone();
+        assert_eq!((p.direction, p.align), (TextDirection::Rtl, TextAlign::Right), "the direction, and the alignment mirrored");
+        h.get_by_label("Right-to-left text").click();
+        h.run();
+        let p = text(h.state(), id).paragraph_runs()[0].style.clone();
+        assert_eq!((p.direction, p.align), (TextDirection::Ltr, TextAlign::Left));
+    }
+
+    #[test]
+    fn the_direction_buttons_set_the_direction_and_mirror_the_alignment() {
+        let mut app = new_app();
+        let id = LayerId(app.run("type.create", json!({"text": "שלום 2026", "size": 24})).unwrap()["layer"].as_u64().unwrap());
+        app.run("layer.select", json!({"layer": id.0, "mode": "replace"})).unwrap();
+        let mut h = Harness::builder().with_size(vec2(1100.0, 800.0)).build_ui_state(
+            |ui, app: &mut PhotocraftApp| {
+                if ui.ctx().fonts(|f| f.families().contains(&egui::FontFamily::Name("medium".into()))) {
+                    ui.set_width(340.0);
+                    super::super::type_properties(app, ui);
+                }
+            },
+            app,
+        );
+        PhotocraftApp::setup_context(&h.ctx, Default::default());
+        h.run_steps(4);
+        let para = |h: &Harness<'static, PhotocraftApp>| text(h.state(), id).paragraph_runs()[0].style.clone();
+        assert_eq!((para(&h).direction, para(&h).align), (TextDirection::Auto, TextAlign::Left));
+        h.get_by_label("Right-to-left text direction").click();
+        h.run();
+        assert_eq!((para(&h).direction, para(&h).align), (TextDirection::Rtl, TextAlign::Right), "right to left, from the right edge");
+        h.get_by_label("Left-to-right text direction").click();
+        h.run();
+        assert_eq!((para(&h).direction, para(&h).align), (TextDirection::Ltr, TextAlign::Left));
+    }
+}

@@ -51,9 +51,14 @@ pub fn header(ui: &mut egui::Ui, layer: &Layer) {
     // The name takes what's left between the icon and the kind (elided when long).
     let name_x = r.left() + 26.0;
     let name_w = (r.right() - kind_w - 8.0 - name_x).max(0.0);
-    let mut job = egui::text::LayoutJob::simple_singleline(layer.name.clone(), theme::medium(12.5), t.text);
-    job.wrap = egui::text::TextWrapping::truncate_at_width(name_w);
-    let name_g = ui.painter().layout_job(job);
+    // A Hebrew or Arabic name reads in bidi display order and is cut in reading order.
+    let name_g = if crate::bidi::has_rtl(&layer.name) {
+        crate::bidi::truncated(ui.ctx(), &layer.name, egui::TextFormat::simple(theme::medium(12.5), t.text), name_w, None)
+    } else {
+        let mut job = egui::text::LayoutJob::simple_singleline(layer.name.clone(), theme::medium(12.5), t.text);
+        job.wrap = egui::text::TextWrapping::truncate_at_width(name_w);
+        ui.painter().layout_job(job)
+    };
     ui.painter().galley(pos2(name_x, r.center().y - name_g.size().y / 2.0), name_g, t.text);
     if r.width() > kind_w + 60.0 {
         ui.painter().galley(pos2(r.right() - kind_w - 2.0, r.center().y - kind_g.size().y / 2.0), kind_g, t.text_faint);

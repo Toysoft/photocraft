@@ -1209,6 +1209,9 @@
 	Leading (set to the font size × auto-leading when Auto)	Leading (diatur ke ukuran font × auto-leading saat Auto)
 	Leave as is (don't color manage)	Biarkan apa adanya (tanpa manajemen warna)
 	Left align text	Teks rata kiri
+	Right-to-left text direction	Arah teks kanan ke kiri
+	Left-to-right text direction	Arah teks kiri ke kanan
+	Right-to-left text	Teks kanan ke kiri
 	Length:	Panjang:
 	Level	Level
 	Levels	Level

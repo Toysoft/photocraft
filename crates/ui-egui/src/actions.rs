@@ -403,7 +403,8 @@ fn insert_stop_dialog(app: &mut PhotocraftApp) -> Result<Value, String> {
 pub fn insert_stop_body(ui: &mut egui::Ui, fields: &mut serde_json::Map<String, Value>) {
     ui.label(tl!("Message:"));
     let mut message = fields.get("message").and_then(Value::as_str).unwrap_or_default().to_string();
-    ui.add(egui::TextEdit::multiline(&mut message).desired_rows(4).desired_width(320.0));
+    crate::bidi::rtl_arrows(ui, None, &message);
+    ui.add(crate::bidi::multiline(&mut message).desired_rows(4).desired_width(320.0));
     fields.insert("message".into(), json!(message));
     ui.add_space(6.0);
     let mut allow = fields.get("allowContinue").and_then(Value::as_bool).unwrap_or(false);
@@ -567,7 +568,8 @@ fn delete_selection(app: &mut PhotocraftApp) {
 fn rename_field(app: &mut PhotocraftApp, ui: &mut egui::Ui, index: usize, rect: Rect) -> Option<String> {
     let mut r = app.ui.actions.renaming.take().filter(|r| r.index == index)?;
     let id = egui::Id::new(("action-rename-field", index));
-    let te = ui.put(rect, egui::TextEdit::singleline(&mut r.text).id(id).font(egui::FontId::proportional(12.0)));
+    crate::bidi::rtl_arrows(ui, Some(id), &r.text);
+    let te = crate::bidi::with_font(ui, egui::FontId::proportional(12.0), |ui| ui.put(rect, crate::bidi::singleline(&mut r.text).id(id)));
     if !r.focused {
         te.request_focus();
         // Like Photoshop, the whole name starts selected so typing replaces it.

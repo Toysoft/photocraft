@@ -2790,12 +2790,14 @@ fn home_recent(app: &mut PhotocraftApp, ui: &mut egui::Ui, recent: &[String]) {
         let icon = Rect::from_center_size(egui::pos2(row.left() + 16.0, row.center().y), egui::vec2(16.0, 16.0));
         crate::icons::paint(ui, icon, "file", 14.0, t.text_dim);
         let x = row.left() + 32.0;
-        let name_g = crate::tab_strip::elided(ui, &name, egui::FontId::proportional(12.5), t.text, 170.0);
+        // File names and folders as a file manager shows them (Hebrew read from the right, the
+        // extension at the end; see `bidi::file_name`).
+        let name_g = crate::bidi::file_name_truncated(ui.ctx(), &name, egui::FontId::proportional(12.5), t.text, 170.0);
         let name_w = name_g.size().x;
         ui.painter().galley(egui::pos2(x, row.center().y - name_g.size().y / 2.0), name_g, t.text);
         let folder_max = (right - (x + name_w + 14.0)).max(0.0);
         if folder_max > 20.0 && !folder.is_empty() {
-            let fg = crate::tab_strip::elided(ui, &folder, egui::FontId::proportional(11.5), t.text_faint, folder_max);
+            let fg = crate::bidi::file_name_truncated(ui.ctx(), &folder, egui::FontId::proportional(11.5), t.text_faint, folder_max);
             ui.painter().galley(egui::pos2(right - fg.size().x, row.center().y - fg.size().y / 2.0), fg, t.text_faint);
         }
         resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &name));

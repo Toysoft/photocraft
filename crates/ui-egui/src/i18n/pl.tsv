@@ -1229,6 +1229,9 @@
 	Leading (set to the font size × auto-leading when Auto)	Interlinia (przy ustawieniu Automatycznie: rozmiar czcionki × automatyczna interlinia)
 	Leave as is (don't color manage)	Pozostaw bez zmian (bez zarządzania kolorami)
 	Left align text	Wyrównaj tekst do lewej
+	Right-to-left text direction	Kierunek tekstu od prawej do lewej
+	Left-to-right text direction	Kierunek tekstu od lewej do prawej
+	Right-to-left text	Tekst od prawej do lewej
 	Length:	Długość:
 	Level	Poziom
 	Levels	Poziomy

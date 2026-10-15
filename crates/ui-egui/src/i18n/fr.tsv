@@ -1215,6 +1215,9 @@
 	Leading (set to the font size × auto-leading when Auto)	Interlignage (en Auto : taille de police × interlignage automatique)
 	Leave as is (don't color manage)	Laisser tel quel (sans gestion des couleurs)
 	Left align text	Aligner le texte à gauche
+	Right-to-left text direction	Sens du texte de droite à gauche
+	Left-to-right text direction	Sens du texte de gauche à droite
+	Right-to-left text	Texte de droite à gauche
 	Length:	Longueur :
 	Level	Niveau
 	Levels	Niveaux

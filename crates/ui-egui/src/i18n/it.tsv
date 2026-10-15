@@ -1230,6 +1230,9 @@
 	Leading (set to the font size × auto-leading when Auto)	Interlinea (impostata a dimensione font × interlinea auto quando Auto)
 	Leave as is (don't color manage)	Lascia com'è (non gestire colore)
 	Left align text	Allinea testo a sinistra
+	Right-to-left text direction	Direzione del testo da destra a sinistra
+	Left-to-right text direction	Direzione del testo da sinistra a destra
+	Right-to-left text	Testo da destra a sinistra
 	Length:	Lunghezza:
 	Level	Livello
 	Levels	Livelli

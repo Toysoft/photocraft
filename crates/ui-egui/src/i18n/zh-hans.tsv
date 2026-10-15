@@ -1240,6 +1240,9 @@
 	Leading (set to the font size × auto-leading when Auto)	行距（自动时为字号 × 自动行距系数）
 	Leave as is (don't color manage)	保持原样（不进行色彩管理）
 	Left align text	文字左对齐
+	Right-to-left text direction	从右向左文字方向
+	Left-to-right text direction	从左向右文字方向
+	Right-to-left text	从右向左文本
 	Length:	长度：
 	Level	级别
 	Levels	色阶

@@ -776,7 +776,8 @@ fn notes_panel(app: &mut PhotocraftApp, ctx: &egui::Context) {
                 let note = &notes[i];
                 ui.label(RichText::new(if note.author.is_empty() { tl!("No author").to_string() } else { note.author.clone() }).color(t.text_dim).size(11.0));
                 let mut text = note.text.clone();
-                if ui.add(egui::TextEdit::multiline(&mut text).desired_rows(6).desired_width(f32::INFINITY)).changed() {
+                crate::bidi::rtl_arrows(ui, None, &text);
+                if ui.add(crate::bidi::multiline(&mut text).desired_rows(6).desired_width(f32::INFINITY)).changed() {
                     edit = Some(json!({"index": i, "text": text, "coalesce": format!("note-{i}")}));
                 }
             }

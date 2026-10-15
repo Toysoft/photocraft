@@ -461,7 +461,7 @@ fn save_preset(app: &mut crate::PhotocraftApp, ui: &mut egui::Ui, f: &mut Map<St
         let enter = ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
         let label = ui.label(tl!("Preset Name"));
         let mut name = get_s(f, "__presetName", "");
-        ui.add(egui::TextEdit::singleline(&mut name).id_salt("document-preset-name").desired_width(240.0).char_limit(255)).labelled_by(label.id);
+        ui.add(crate::bidi::singleline(&mut name).id_salt("document-preset-name").desired_width(240.0).char_limit(255)).labelled_by(label.id);
         f.insert("__presetName".into(), json!(name));
         ui.horizontal(|ui| {
             if widgets::secondary_button(ui, tl!("Save"), 110.0).clicked() || enter {
@@ -611,7 +611,8 @@ pub fn body(app: &mut crate::PhotocraftApp, ui: &mut egui::Ui, f: &mut Map<Strin
             // Keep the canonical English default in state; only the TextEdit shows a translation.
             let raw = get_s(f, "name", "Untitled-1");
             let mut name = if raw == "Untitled-1" { tl!("Untitled-1").to_string() } else { raw };
-            let r = ui.add(egui::TextEdit::singleline(&mut name).desired_width(250.0).font(egui::FontId::proportional(15.0)));
+            crate::bidi::rtl_arrows(ui, None, &name);
+            let r = crate::bidi::with_font(ui, egui::FontId::proportional(15.0), |ui| ui.add(crate::bidi::singleline(&mut name).desired_width(250.0)));
             if r.changed() {
                 f.insert("name".into(), json!(name));
             }

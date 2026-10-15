@@ -18,6 +18,11 @@ pub fn fit(natural: &[f32], selected: usize, avail: f32, min_w: f32, chevron_w: 
 
 /// A label laid out on one row no wider than `max_w`, cut with '…' when it doesn't fit.
 pub fn elided(ui: &Ui, text: &str, font: egui::FontId, color: egui::Color32, max_w: f32) -> std::sync::Arc<egui::Galley> {
+    // A Hebrew or Arabic name reads in bidi display order and is cut in reading order; the tab
+    // text ("name @ 50% (Layer, RGB/8)") keeps the interface's left-to-right base.
+    if crate::bidi::has_rtl(text) {
+        return crate::bidi::truncated(ui.ctx(), text, egui::TextFormat::simple(font, color), max_w.max(1.0), Some(false));
+    }
     let mut job = egui::text::LayoutJob::simple_singleline(text.to_owned(), font, color);
     job.wrap = egui::text::TextWrapping { max_width: max_w.max(1.0), max_rows: 1, break_anywhere: true, overflow_character: Some('…') };
     ui.painter().layout_job(job)

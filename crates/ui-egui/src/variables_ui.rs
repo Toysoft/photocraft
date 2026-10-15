@@ -316,7 +316,8 @@ fn data_sets_page(ui: &mut egui::Ui, _t: &Tokens, state: &mut Value, fields: &mu
                     }
                     _ => {
                         let mut txt = values[i].get("value").and_then(Value::as_str).unwrap_or("").to_string();
-                        if ui.add(egui::TextEdit::singleline(&mut txt).desired_width(240.0)).changed() {
+                        crate::bidi::rtl_arrows(ui, None, &txt);
+                        if ui.add(crate::bidi::singleline(&mut txt).desired_width(240.0)).changed() {
                             values[i]["value"] = json!(txt);
                         }
                     }

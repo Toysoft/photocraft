@@ -1144,6 +1144,9 @@
 	Leading	Sorköz
 	Leading (set to the font size × auto-leading when Auto)	Sorköz (automatikus értéknél: betűméret × automatikus sorköz)
 	Left align text	Szöveg balra igazítása
+	Right-to-left text direction	Jobbról balra irányuló szöveg
+	Left-to-right text direction	Balról jobbra irányuló szöveg
+	Right-to-left text	Jobbról balra írt szöveg
 	Letter	Letter
 	Letter Spacing	Betűköz
 	Library	Könyvtár

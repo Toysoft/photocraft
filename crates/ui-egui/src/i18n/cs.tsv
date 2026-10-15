@@ -1245,6 +1245,9 @@
 	Leading (set to the font size × auto-leading when Auto)	Proklad (při volbě Automaticky velikost písma × automatický proklad)
 	Leave as is (don't color manage)	Ponechat beze změny (bez správy barev)
 	Left align text	Zarovnat text vlevo
+	Right-to-left text direction	Směr textu zprava doleva
+	Left-to-right text direction	Směr textu zleva doprava
+	Right-to-left text	Text zprava doleva
 	Length:	Délka:
 	Level	Úroveň
 	Levels	Úrovně

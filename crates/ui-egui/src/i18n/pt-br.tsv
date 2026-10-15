@@ -1210,6 +1210,9 @@
 	Leading (set to the font size × auto-leading when Auto)	Entrelinha (no modo Automático, é o tamanho da fonte × entrelinha automática)
 	Leave as is (don't color manage)	Deixar como está (não gerenciar cores)
 	Left align text	Alinhar texto à esquerda
+	Right-to-left text direction	Direção do texto da direita para a esquerda
+	Left-to-right text direction	Direção do texto da esquerda para a direita
+	Right-to-left text	Texto da direita para a esquerda
 	Length:	Comprimento:
 	Level	Nível
 	Levels	Níveis

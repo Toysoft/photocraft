@@ -1,6 +1,6 @@
 # Localization parity
 
-> **Last reviewed:** 2026-10-12 · **Last updated:** 2026-10-13 · **Change:** minor (Spanish dynamic labels; previously minor: Serbian catalog) · **Target:** Adobe Photoshop 2026
+> **Last reviewed:** 2026-10-12 · **Last updated:** 2026-10-15 · **Change:** minor (right-to-left text in the Type tool and the interface's text fields; previously minor: Spanish dynamic labels) · **Target:** Adobe Photoshop 2026
 
 Per-language status of PhotoCraft's UI. How catalogs work and how to add one:
 [`localization.md`](localization.md). Language notes: [Korean](localization-ko.md), [Spanish](localization-es.md),
@@ -34,7 +34,7 @@ speakers, ~55% ready. Remaining: 80–140 h, plus native-speaker review (recorde
 | Simplified Chinese | `zh-hans` | 1,608 / 1,608 (100%) | 2,366 | dialogs, tooltips yes; engine messages English | CJK fonts (lazy loader), IME preedit/commit, vertical type | no | partial | 8–12 h |
 | Spanish | `es` | 1,844 / 1,844 (100%) | 4,010 | as above; complete dynamic UI key set | Latin | no | partial | 6–10 h |
 | Hindi | `hi` | 0 (0%) | – | – | Devanagari shaping in the text engine (parley/HarfRust); no Devanagari fallback font (TYPE-218-3) | no | none | 20–30 h |
-| Arabic | `ar` | 0 (0%) | – | – | Arabic shaping and bidi in the text engine, Arabic fallback font; RTL shell layout but not inside panels, and UI labels in LTR word order (DIST-220-4), paragraph direction has no UI (TYPE-218-2), layer names as tofu (#1408, #1693) | no | none | 40–60 h |
+| Arabic | `ar` | 0 (0%) | – | – | Arabic shaping and bidi in the text engine, Arabic fallback font; RTL shell layout but not inside panels, and UI labels in LTR word order (DIST-220-4) except layer names and the text fields below; paragraph direction is in Properties › Paragraph (2026-10-15); layer names as tofu without an installed Arabic face (#1408, #1693) | no | none | 40–60 h |
 | French | `fr` | 1,608 / 1,608 (100%) | 2,766 | as above | Latin | no | partial | 6–10 h |
 | Portuguese (Brazil) | `pt-br` | 1,608 / 1,608 (100%) | 2,788 | as above | Latin; every `pt` locale uses it | no | partial | 6–10 h |
 | Indonesian | `id` | 1,608 / 1,608 (100%) | 2,764 | as above | Latin | no | partial | 6–10 h |
@@ -69,7 +69,14 @@ engine localization or native review is complete.
 - Right-to-left UI layout is partial (2026-10-10): the shell mirrors for Arabic, Hebrew, Persian,
   Urdu and other right-to-left codes (`direction.rs`), but panel interiors, dialogs, menu rows,
   submenus and document tabs stay left to right. UI labels also lack an Arabic fallback font, and
-  egui 0.36 joins letters within a word but orders a line's words left to right (no bidi).
+  egui 0.36 joins letters within a word but orders a line's words left to right (no bidi), except
+  where `crates/ui-egui/src/bidi.rs` lays text out (2026-10-15): layer names in the Layers panel
+  (cut with "…" in reading order), and the layer, channel, document, preset and action name fields,
+  action messages, analysis notes and variable text, whose caret, clicks and Backspace follow the
+  text (a vendored epaint with two patches) and whose arrows move the way they point. In the Type
+  tool the arrows move the way they point in a right-to-left paragraph, and Properties ›
+  Paragraph has Right-to-left and Left-to-right text direction buttons (switching mirrors left
+  and right alignment).
 - Web build: no browser-locale detection, no CJK web fonts.
 - WebAssembly plug-ins disappear from Filter › Plug-ins when the UI isn't English (#2540).
 - A user couldn't find the language option (#2532): it is in Preferences › Interface.
@@ -81,6 +88,8 @@ engine localization or native review is complete.
 | 2026-10-10 | major | First version, measured from the catalogs with the `i18n-coverage` rules |
 | 2026-10-10 | minor | Right-to-left shell layout (menu bar, title, options and status bars, toolbox and dock sides) |
 | 2026-10-11 | minor | Czech dynamic status/notice and hardware text, render labels and Navigator zoom context; engine messages remain English |
+| 2026-10-15 | minor | Right-to-left text: paragraph direction buttons and Hebrew arrow keys in the Type tool; layer names and the main name and text fields in bidi display order with the caret following the text |
+| 2026-10-15 | minor | Type options bar: a Right-to-left text toggle (the paragraph's reading direction, also for new type, not just its alignment); Home's Recent list shows Hebrew and Arabic file names as a file manager does |
 | 2026-10-11 | minor | Czech review follow-ups: English System Info diagnostics, id-aware shortcut labels, display-only auto translation, warning punctuation and wording; catalog row count refreshed |
 | 2026-10-11 | minor | Italian: 1,287 dynamic labels added (filter parameters, Camera Raw, lighting, panels, dialogs) and terminology made consistent |
 | 2026-10-12 | minor | Added Turkish (`tr`) catalog with 100% measured UI coverage |

@@ -2608,6 +2608,9 @@
 	Leading (set to the font size × auto-leading when Auto)	Διάστιχο (μέγεθος γραμματοσειράς × αυτόματο διάστιχο στην επιλογή Αυτόματο)
 	Leave as is (don't color manage)	Διατήρηση ως έχει (χωρίς διαχείριση χρώματος)
 	Left align text	Αριστερή στοίχιση κειμένου
+	Right-to-left text direction	Κατεύθυνση κειμένου από δεξιά προς αριστερά
+	Left-to-right text direction	Κατεύθυνση κειμένου από αριστερά προς δεξιά
+	Right-to-left text	Κείμενο από δεξιά προς αριστερά
 	Legacy	Παλαιού τύπου
 	Legacy Macintosh RGB	Παλαιό Macintosh RGB
 	Legacy compositing	Παλαιός τρόπος σύνθεσης

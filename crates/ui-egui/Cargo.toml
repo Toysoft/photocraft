@@ -30,6 +30,10 @@ photocraft-format = { workspace = true }
 # Decoding the brand mark's PNG (`brand.rs`); already linked through photocraft-io.
 photocraft-codecs = { workspace = true }
 egui = { workspace = true }
+# Right-to-left text in the interface's text fields (`bidi.rs`): the font parser egui's epaint
+# and photocraft-text use, and the Unicode bidirectional algorithm (already in the tree).
+skrifa = "0.44"
+unicode-bidi = "0.3"
 egui_extras = { version = "0.36", default-features = false, features = ["svg"] }
 eframe = { workspace = true, features = ["wgpu", "accesskit"] }
 serde = { workspace = true }

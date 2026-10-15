@@ -94,8 +94,13 @@ pub fn truncated(painter: &Painter, text: &str, font: FontId, color: egui::Color
     if max_width < 8.0 {
         return None;
     }
+    let format = egui::TextFormat { font_id: font, color, italics, ..Default::default() };
+    // A Hebrew or Arabic name reads right to left and is cut in reading order (see `bidi`).
+    if crate::bidi::has_rtl(text) {
+        return Some(crate::bidi::truncated(painter.ctx(), text, format, max_width, None));
+    }
     let mut job = egui::text::LayoutJob::default();
-    job.append(text, 0.0, egui::TextFormat { font_id: font, color, italics, ..Default::default() });
+    job.append(text, 0.0, format);
     job.wrap = egui::text::TextWrapping { max_width, max_rows: 1, break_anywhere: true, overflow_character: Some('…') };
     Some(painter.layout_job(job))
 }
@@ -323,7 +328,9 @@ pub fn rename_field(ui: &mut egui::Ui, layer: u64, rect: Rect) -> Option<(String
     let ctx = ui.ctx().clone();
     let mut r = rename(&ctx).filter(|r| r.layer == layer)?;
     let id = egui::Id::new(("layer-rename-field", layer));
-    let te = ui.put(rect, egui::TextEdit::singleline(&mut r.text).id(id).font(FontId::proportional(12.5)));
+    // Hebrew and Arabic layer names read right to left, the caret following them (see `bidi`).
+    crate::bidi::rtl_arrows(ui, Some(id), &r.text);
+    let te = crate::bidi::with_font(ui, FontId::proportional(12.5), |ui| ui.put(rect, crate::bidi::singleline(&mut r.text).id(id)));
     r.pass = ctx.cumulative_pass_nr();
     if !r.focused {
         te.request_focus();

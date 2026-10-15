@@ -1205,6 +1205,9 @@
 	Leading (set to the font size × auto-leading when Auto)	행간(자동일 때 글꼴 크기 × 자동 행간으로 설정)
 	Leave as is (don't color manage)	그대로 두기(색상 관리 안 함)
 	Left align text	텍스트 왼쪽 정렬
+	Right-to-left text direction	오른쪽에서 왼쪽 텍스트 방향
+	Left-to-right text direction	왼쪽에서 오른쪽 텍스트 방향
+	Right-to-left text	오른쪽에서 왼쪽 텍스트
 	Length:	길이:
 	Level	레벨
 	Levels	레벨

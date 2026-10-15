@@ -539,6 +539,9 @@ pub struct ToolOptions {
     pub type_size: f32,
     pub type_aa: String,
     pub type_align: String,
+    /// Type tool: new type reads right to left (Hebrew, Arabic), the options bar's Right-to-left
+    /// text toggle; its paragraph direction, not just its alignment.
+    pub type_rtl: bool,
     /// Clone Stamp / Healing Brush.
     pub clone_aligned: bool,
     /// Pattern Stamp: lock the tile origin in document space across strokes.
@@ -784,6 +787,7 @@ impl Default for ToolOptions {
             type_size: 48.0,
             type_aa: "sharp".into(),
             type_align: "left".into(),
+            type_rtl: false,
             clone_aligned: true,
             pattern_stamp_aligned: true,
             pattern_stamp_impressionist: false,

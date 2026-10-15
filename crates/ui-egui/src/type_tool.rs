@@ -317,6 +317,8 @@ pub fn pointer_up(app: &mut PhotocraftApp, start: [f64; 2], end: [f64; 2]) {
         "fontStyle": o.type_style,
         "size": o.type_size,
         "align": o.type_align,
+        // The options bar's Right-to-left text toggle; otherwise the letters decide.
+        "direction": if o.type_rtl { "rtl" } else { "auto" },
         "color": hex(app.session.tools.foreground),
     });
     if w >= min && h >= min {
@@ -636,6 +638,75 @@ fn ime_update(app: &mut PhotocraftApp, s: &str, commit: bool) {
 }
 
 /// Character index of the previous / next word boundary (shared with `type.navigate`).
+/// The options bar's Right-to-left text toggle, as Photoshop's Middle Eastern options bar and
+/// Office have it: the paragraph's reading direction (Hebrew, Arabic), not just its alignment. It
+/// shows the direction of the type being edited or selected (its own, else its letters'), and for
+/// new type the tool's setting. Switching mirrors left and right alignment, so the text keeps to
+/// its start edge.
+fn rtl_toggle(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
+    let shown = target(app).and_then(|(layer, _)| {
+        let st = app.session.active()?;
+        let text = text_layer(&st.doc, LayerId(layer))?.text.clone();
+        let (_, para) = styles_at(app)?;
+        let caret = app.ui.text_edit.as_ref().map_or(0, |e| e.caret);
+        Some(paragraph_rtl_at(&text, caret, para.direction))
+    });
+    let on = shown.unwrap_or(app.ui.tool_options.type_rtl);
+    let tip = tl!("Right-to-left text");
+    let (rect, resp) = ui.allocate_exact_size(egui::vec2(28.0, 24.0), egui::Sense::click());
+    let color = crate::icons::button_chrome(ui, rect, on, resp.hovered());
+    ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, "←¶", egui::FontId::proportional(13.0), color);
+    resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Checkbox, true, on, tip));
+    if resp.on_hover_text(tip).clicked() {
+        let to_rtl = !on;
+        let o = &mut app.ui.tool_options;
+        o.type_rtl = to_rtl;
+        // Mirror the start edge: left-aligned type moves to the right with the direction.
+        let mirrored = match (to_rtl, o.type_align.as_str()) {
+            (true, "left") => Some("right"),
+            (false, "right") => Some("left"),
+            _ => None,
+        };
+        if let Some(a) = mirrored {
+            o.type_align = a.into();
+        }
+        if shown.is_some() {
+            let mut change = json!({"direction": if to_rtl { "rtl" } else { "ltr" }});
+            let para_align = styles_at(app).map(|(_, p)| p.align);
+            use photocraft_doc::text::TextAlign as A;
+            match (to_rtl, para_align) {
+                (true, Some(A::Left)) => change["align"] = json!("right"),
+                (false, Some(A::Right)) => change["align"] = json!("left"),
+                _ => {}
+            }
+            apply(app, ui.ctx(), change);
+        }
+    }
+}
+
+/// Whether the paragraph holding character `caret` of `text` reads right to left: its direction
+/// when set, else its first strong character (Unicode bidirectional rules P2 and P3).
+pub(crate) fn paragraph_rtl_at(text: &str, caret: usize, direction: photocraft_doc::text::TextDirection) -> bool {
+    use photocraft_doc::text::TextDirection;
+    match direction {
+        TextDirection::Rtl => true,
+        TextDirection::Ltr => false,
+        TextDirection::Auto => {
+            let chars: Vec<char> = text.chars().collect();
+            let brk = |c: &char| matches!(c, '\n' | '\r' | '\u{2029}');
+            let start = chars.get(..caret.min(chars.len())).and_then(|b| b.iter().rposition(brk)).map_or(0, |i| i + 1);
+            chars.get(start..).unwrap_or_default().iter().take_while(|c| !brk(c)).find_map(|c| strong_rtl(*c)).unwrap_or(false)
+        }
+    }
+}
+
+/// A strong character's direction: `Some(true)` for Hebrew, Arabic and the other right-to-left
+/// scripts' letters, `Some(false)` for other letters, `None` for digits, spaces and punctuation.
+fn strong_rtl(c: char) -> Option<bool> {
+    let rtl = matches!(u32::from(c), 0x0590..=0x08FF | 0xFB1D..=0xFDFF | 0xFE70..=0xFEFC | 0x1_0800..=0x1_0FFF | 0x1_E800..=0x1_EFFF);
+    if c.is_alphabetic() { Some(rtl) } else { None }
+}
+
 fn word_boundary(text: &str, from: usize, forward: bool) -> usize {
     photocraft_text::word_boundary(text, from, forward)
 }
@@ -879,7 +950,10 @@ pub fn handle_keys(app: &mut PhotocraftApp, ctx: &egui::Context) -> bool {
                         kern_pair(app, id, ed.caret, if *key == Key::ArrowRight { step } else { -step });
                     }
                     Key::ArrowLeft | Key::ArrowRight => {
-                        let fwd = *key == Key::ArrowRight;
+                        // In a paragraph reading right to left (Hebrew, Arabic) the arrows move the
+                        // way they point, as in Office and Photoshop's Middle Eastern type.
+                        let rtl = !vertical_flow && styles_at(app).is_some_and(|(_, p)| paragraph_rtl_at(&text, ed.caret, p.direction));
+                        let fwd = (*key == Key::ArrowRight) != rtl;
                         // Word movement: ⌘/Ctrl (Photoshop's; Alt is kerning), and Alt+Shift
                         // extends the selection by words; Home/End go to the line edges.
                         let to = if m.command || m.alt {
@@ -1778,6 +1852,7 @@ pub fn options_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
             apply(app, ui.ctx(), json!({"align": align}));
         }
     }
+    rtl_toggle(app, ui);
     ui.spacing_mut().item_spacing.x = 8.0;
     crate::widgets::vline(ui, 22.0);
     // Text colour swatch with a picker popup.
@@ -2301,6 +2376,31 @@ fn type_sections(app: &mut PhotocraftApp, ui: &mut egui::Ui, character: bool, pa
                 });
                 if clicked {
                     apply(app, ui.ctx(), json!({"align": key}));
+                }
+            }
+        });
+        ui.add_space(ROW_GAP);
+        // Paragraph direction, as in Photoshop's Middle Eastern Paragraph panel and Office: the
+        // pressed button is the direction the paragraph reads in (its own, else its letters').
+        // Switching mirrors left and right alignment, so the text keeps to its start edge.
+        let rtl = target(app)
+            .and_then(|(layer, _)| app.session.active().and_then(|st| text_layer(&st.doc, LayerId(layer)).map(|t| t.text.clone())))
+            .is_some_and(|text| paragraph_rtl_at(&text, 0, para.direction));
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 2.0;
+            for (to_rtl, label, tip) in [(true, "←¶", tl!("Right-to-left text direction")), (false, "¶→", tl!("Left-to-right text direction"))] {
+                let on = rtl == to_rtl;
+                let clicked = toggle_cell(ui, cw, on, tip, |ui, r, col| {
+                    ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, label, egui::FontId::proportional(12.0), if on { col } else { t.icon });
+                });
+                if clicked {
+                    let mut change = json!({"direction": if to_rtl { "rtl" } else { "ltr" }});
+                    match (to_rtl, para.align) {
+                        (true, A::Left) => change["align"] = json!("right"),
+                        (false, A::Right) => change["align"] = json!("left"),
+                        _ => {}
+                    }
+                    apply(app, ui.ctx(), change);
                 }
             }
         });

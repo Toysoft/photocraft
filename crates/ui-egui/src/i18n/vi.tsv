@@ -866,6 +866,9 @@
 	Drag a rectangle around the object	Kéo hình chữ nhật quanh đối tượng
 	Lasso around an area, then drag the selection	Khoanh vùng bằng Lasso, rồi kéo vùng chọn
 	Left align text	Căn chữ trái
+	Right-to-left text direction	Hướng văn bản từ phải sang trái
+	Left-to-right text direction	Hướng văn bản từ trái sang phải
+	Right-to-left text	Văn bản từ phải sang trái
 	Center text	Căn chữ giữa
 	Right align text	Căn chữ phải
 	Toggle text orientation	Đổi hướng chữ

@@ -1193,6 +1193,9 @@
 	Leading (set to the font size × auto-leading when Auto)	Prored (veličina fonta × automatski prored kada je Automatski)
 	Leave as is (don't color manage)	Ostavi kako jeste (bez upravljanja bojama)
 	Left align text	Poravnaj tekst levo
+	Right-to-left text direction	Smer teksta zdesna nalevo
+	Left-to-right text direction	Smer teksta sleva nadesno
+	Right-to-left text	Tekst zdesna nalevo
 	Length:	Dužina:
 	Level	Nivo
 	Levels	Nivoi

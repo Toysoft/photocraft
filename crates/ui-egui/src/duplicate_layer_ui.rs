@@ -49,7 +49,8 @@ pub fn body(app: &PhotocraftApp, ui: &mut egui::Ui, fields: &mut Map<String, Val
         if let Some(name) = fields.get("name").and_then(Value::as_str) {
             let mut name = name.to_string();
             ui.label(tl!("Name:"));
-            ui.add(egui::TextEdit::singleline(&mut name).desired_width(260.0));
+            crate::bidi::rtl_arrows(ui, None, &name);
+            ui.add(crate::bidi::singleline(&mut name).desired_width(260.0));
             fields.insert("name".into(), json!(name));
             ui.end_row();
         }
@@ -62,7 +63,8 @@ pub fn body(app: &PhotocraftApp, ui: &mut egui::Ui, fields: &mut Map<String, Val
         if destination == "new" {
             let mut doc_name = fields.get("documentName").and_then(Value::as_str).unwrap_or("").to_string();
             ui.label(tl!("Name:"));
-            ui.add(egui::TextEdit::singleline(&mut doc_name).desired_width(260.0));
+            crate::bidi::rtl_arrows(ui, None, &doc_name);
+            ui.add(crate::bidi::singleline(&mut doc_name).desired_width(260.0));
             fields.insert("documentName".into(), json!(doc_name));
             ui.end_row();
         }

@@ -1214,6 +1214,9 @@
 	Leading (set to the font size × auto-leading when Auto)	Interlinie (bij Automatisch: lettergrootte × automatische interlinie)
 	Leave as is (don't color manage)	Ongewijzigd laten (geen kleurbeheer)
 	Left align text	Tekst links uitlijnen
+	Right-to-left text direction	Tekstrichting van rechts naar links
+	Left-to-right text direction	Tekstrichting van links naar rechts
+	Right-to-left text	Tekst van rechts naar links
 	Length:	Lengte:
 	Level	Niveau
 	Levels	Niveaus

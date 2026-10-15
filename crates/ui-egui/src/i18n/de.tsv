@@ -1228,6 +1228,9 @@
 	Leading (set to the font size × auto-leading when Auto)	Zeilenabstand (bei „Automatisch“ auf Schriftgröße × automatischer Zeilenabstand gesetzt)
 	Leave as is (don't color manage)	Unverändert lassen (keine Farbverwaltung)
 	Left align text	Text links ausrichten
+	Right-to-left text direction	Textrichtung von rechts nach links
+	Left-to-right text direction	Textrichtung von links nach rechts
+	Right-to-left text	Text von rechts nach links
 	Length:	Länge:
 	Level	Stufe
 	Levels	Tonwertkorrektur

@@ -367,7 +367,8 @@ pub(crate) fn browser(
         let mut done = None;
         ui.horizontal(|ui| {
             ui.label(egui::RichText::new(tl!("Name:")).color(t.text_dim).size(11.5));
-            let r = ui.add(egui::TextEdit::singleline(&mut text).desired_width(ui.available_width() - 4.0));
+            crate::bidi::rtl_arrows(ui, None, &text);
+            let r = ui.add(crate::bidi::singleline(&mut text).desired_width(ui.available_width() - 4.0));
             if !r.has_focus() && !r.lost_focus() {
                 r.request_focus();
             }
@@ -1038,7 +1039,8 @@ pub fn tool_presets_panel(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     if let Some((_, key, mut text)) = app.ui.presets_ui.renaming.clone().filter(|r| r.0 == "toolPresets") {
         ui.horizontal(|ui| {
             ui.label(egui::RichText::new(tl!("Name:")).color(t.text_dim).size(11.5));
-            let r = ui.add(egui::TextEdit::singleline(&mut text).desired_width(ui.available_width() - 4.0));
+            crate::bidi::rtl_arrows(ui, None, &text);
+            let r = ui.add(crate::bidi::singleline(&mut text).desired_width(ui.available_width() - 4.0));
             if !r.has_focus() && !r.lost_focus() {
                 r.request_focus();
             }
