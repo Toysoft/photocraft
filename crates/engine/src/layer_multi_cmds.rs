@@ -1314,6 +1314,8 @@ fn merge_layers(s: &mut Session) -> Result<Value> {
         let fmt = PixelFormat::new(fmt.mode, fmt.sample, true);
         let mut merged = Layer::raster(top.name.clone(), fmt);
         merged.locks = top.locks;
+        merged.blend = top.blend;
+        merged.opacity = top.opacity;
         merged.label = top.label;
         // Clipped layers of one chain merge into a layer still clipped to their base. Clipped
         // layers of different chains don't: the result, at the top one's slot, would clip the
@@ -2130,6 +2132,17 @@ mod tests {
         let g = LayerId(s.execute("layer.groupLayers", json!({})).unwrap()["layer"].as_u64().unwrap());
         s.execute("layer.mergeGroup", json!({"layer": g.0})).unwrap();
         assert_eq!(layer_bounds(doc(&s).layer(g).unwrap()).unwrap(), Rect::new(-30, -20, 140, 120));
+    }
+
+    #[test]
+    fn merge_layers_keeps_the_top_layers_blend_mode() {
+        let mut s = session(8);
+        let lower = rect_layer(&mut s, Rect::new(0, 0, 10, 10));
+        let upper = rect_layer(&mut s, Rect::new(0, 0, 10, 10));
+        s.execute("layer.setProps", json!({"layer": upper.0, "blend": "multiply"})).unwrap();
+        select_all(&mut s, &[lower, upper]);
+        let m = LayerId(s.execute("layer.mergeLayers", json!({})).unwrap()["layer"].as_u64().unwrap());
+        assert_eq!(doc(&s).layer(m).unwrap().blend, photocraft_doc::BlendMode::Multiply, "the top layer's blend mode survives Merge Layers");
     }
 
     #[test]
