@@ -193,7 +193,36 @@ impl Keys {
             }
         };
         let consume = |m: Modifiers, k: Key| ctx.input_mut(|i| i.consume_key(m, k));
-        // Alt+letter opens that menu, open or not (an open one switches), as on Windows.
+        if open {
+            // In an open menu, a letter runs the row with that mnemonic in the level the arrows are in,
+            // whether Alt is still held (e.g. Alt+I then I for Image Size, or held-Alt submenu navigation
+            // in Photoshop) or released.
+            let letter = events.iter().find_map(|e| match e {
+                Event::Key { key, pressed: true, modifiers, .. } if !modifiers.command && !modifiers.ctrl => key_char(*key).map(|c| (*key, c, modifiers.alt)),
+                _ => None,
+            });
+            if let Some((key, c, alt_held)) = letter
+                && let Some(row) = nav.row_with_mnemonic(c)
+            {
+                consume(if alt_held { Modifiers::ALT } else { Modifiers::NONE }, key);
+                self.underline = true;
+                if let Some(cmd) = row.command.clone() {
+                    *clicked = Some(cmd);
+                    egui::Popup::close_all(ctx);
+                } else {
+                    nav.open_sub_row(ctx, row.widget);
+                }
+                ctx.request_repaint();
+                return;
+            }
+            if tap {
+                egui::Popup::close_all(ctx);
+                self.underline = false;
+                ctx.request_repaint();
+                return;
+            }
+        }
+        // Alt+letter opens that menu, open or not (an open one switches if not handled by the open menu above).
         let alt_letter = events.iter().find_map(|e| match e {
             Event::Key { key, pressed: true, modifiers, .. } if modifiers.alt && !modifiers.command && !modifiers.ctrl => key_char(*key).map(|c| (*key, c)),
             _ => None,
@@ -207,31 +236,6 @@ impl Keys {
             return;
         }
         if open {
-            // A letter runs the row with that mnemonic in the level the arrows are in.
-            let letter = events.iter().find_map(|e| match e {
-                Event::Key { key, pressed: true, modifiers, .. } if !modifiers.command && !modifiers.ctrl && !modifiers.alt => {
-                    key_char(*key).map(|c| (*key, c))
-                }
-                _ => None,
-            });
-            if let Some((key, c)) = letter
-                && let Some(row) = nav.row_with_mnemonic(c)
-            {
-                consume(Modifiers::NONE, key);
-                self.underline = true;
-                if let Some(cmd) = row.command.clone() {
-                    *clicked = Some(cmd);
-                    egui::Popup::close_all(ctx);
-                } else {
-                    nav.open_sub_row(ctx, row.widget);
-                }
-                ctx.request_repaint();
-            }
-            if tap {
-                egui::Popup::close_all(ctx);
-                self.underline = false;
-                ctx.request_repaint();
-            }
             return;
         }
         // No menu open: Alt (tapped) or F10 puts the keyboard on the bar or takes it off again.

@@ -258,7 +258,7 @@ pub fn cycle_orientation(o: &mut ToolOptions) {
 /// O / ⇧O with the Crop tool showing a box and no drag in progress. Returns true when a key was
 /// used; otherwise O stays the Dodge/Burn/Sponge tool key.
 pub fn keys(app: &mut PhotocraftApp, ctx: &egui::Context) -> bool {
-    if app.ui.tool != Tool::Crop || app.ui.crop_rect.is_none() || app.crop.drag.is_some() {
+    if app.ui.tool != Tool::Crop || app.ui.crop_rect.is_none() || app.crop.drag.is_some() || ctx.input(|i| i.modifiers.alt) {
         return false;
     }
     if ctx.input_mut(|i| i.consume_key(Modifiers::SHIFT, Key::O)) {

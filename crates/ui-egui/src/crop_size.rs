@@ -245,7 +245,7 @@ pub fn chosen(app: &mut PhotocraftApp) {
 /// I with the Crop tool (no text field focused, which the caller checks): Front Image. Returns
 /// true when the key was used; otherwise I stays the Eyedropper tool key.
 pub fn keys(app: &mut PhotocraftApp, ctx: &egui::Context) -> bool {
-    if app.ui.tool != Tool::Crop || app.crop.drag.is_some() || app.session.active().is_none() {
+    if app.ui.tool != Tool::Crop || app.crop.drag.is_some() || app.session.active().is_none() || ctx.input(|i| i.modifiers.alt) {
         return false;
     }
     if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, egui::Key::I)) {

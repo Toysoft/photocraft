@@ -210,3 +210,73 @@ fn the_shortcuts_wait_while_the_keyboard_is_on_the_bar() {
     h.run_steps(3);
     assert_ne!(h.state().ui.tool, tool, "off the bar, E picks the Eraser again");
 }
+
+/// In the whole app, Alt+letter opens that menu directly without picking a tool (#5592).
+#[test]
+fn alt_letter_opens_menus_in_whole_app_without_picking_tools() {
+    let mut h = Harness::builder().with_size(egui::vec2(1280.0, 800.0)).with_max_steps(64).build_eframe(|cc| {
+        PhotocraftApp::setup_context(&cc.egui_ctx, Default::default());
+        let mut app = app();
+        app.services.native_menu = None;
+        app
+    });
+    h.run_steps(4);
+    let tool = h.state().ui.tool;
+
+    // Alt+E opens Edit menu (E is also the Eraser tool shortcut)
+    alt_key(&mut h, egui::Key::E);
+    h.run_steps(2);
+    assert_eq!(h.state().ui.tool, tool, "Alt+E did not pick the Eraser");
+    assert!(is_open(&h.ctx) && h.query_by_label_contains("Undo").is_some(), "Alt+E opened Edit");
+    key(&mut h, egui::Key::Escape);
+    h.run_steps(2);
+    assert!(!is_open(&h.ctx));
+
+    // Alt+I opens Image menu (I is also the Eyedropper tool shortcut)
+    alt_key(&mut h, egui::Key::I);
+    h.run_steps(2);
+    assert_eq!(h.state().ui.tool, tool, "Alt+I did not pick the Eyedropper");
+    assert!(is_open(&h.ctx) && h.query_by_label_contains("Image Size…").is_some(), "Alt+I opened Image");
+    key(&mut h, egui::Key::Escape);
+    h.run_steps(2);
+    assert!(!is_open(&h.ctx));
+
+    // Alt+L opens Layer menu (L is also the Lasso tool shortcut)
+    alt_key(&mut h, egui::Key::L);
+    h.run_steps(2);
+    assert_eq!(h.state().ui.tool, tool, "Alt+L did not pick the Lasso");
+    assert!(is_open(&h.ctx) && h.query_by_label_contains("Duplicate Layer…").is_some(), "Alt+L opened Layer");
+    key(&mut h, egui::Key::Escape);
+    h.run_steps(2);
+    assert!(!is_open(&h.ctx));
+
+    // Alt+V opens View menu (V is also the Move tool shortcut)
+    alt_key(&mut h, egui::Key::V);
+    h.run_steps(2);
+    assert!(is_open(&h.ctx) && h.query_by_label_contains("Zoom In").is_some(), "Alt+V opened View");
+    key(&mut h, egui::Key::Escape);
+    h.run_steps(2);
+    assert!(!is_open(&h.ctx));
+}
+
+/// Holding Alt through sequential mnemonic presses navigates inside the open menu,
+/// as in Photoshop (e.g. Alt+V then Zoom In's mnemonic runs Zoom In, not another top menu).
+#[test]
+fn holding_alt_navigates_inside_the_open_menu() {
+    let mut h = bar();
+    // Open View with Alt+V
+    alt_key(&mut h, egui::Key::V);
+    h.run_steps(2);
+    assert!(is_open(&h.ctx) && h.query_by_label_contains("Zoom In").is_some(), "View is open");
+
+    let level = rows(&h, 0);
+    let zoom_in = level.iter().find(|r| r.command.as_deref() == Some("view.zoomIn")).expect("Zoom In row");
+    let letter = zoom_in.mnemonic.expect("Zoom In has a mnemonic");
+
+    let zoom = h.state().ui.views[0].zoom;
+    // With Alt STILL held, press the letter for Zoom In
+    alt_key(&mut h, egui::Key::from_name(&letter.to_string()).unwrap());
+    h.run_steps(3);
+    assert!(h.state().ui.views[0].zoom > zoom, "holding Alt ran Zoom In ({letter}) inside the open menu");
+    assert!(!is_open(&h.ctx), "and closed the menu");
+}

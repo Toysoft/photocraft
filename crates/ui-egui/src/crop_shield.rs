@@ -123,7 +123,7 @@ pub fn hides_outside(app: &PhotocraftApp) -> bool {
 /// Classic Mode, where the option is greyed out, H is taken and does nothing), and P Use Classic
 /// Mode. Returns true when a key was used; otherwise H stays the Hand tool key and P the Pen's.
 pub fn keys(app: &mut PhotocraftApp, ctx: &egui::Context) -> bool {
-    if app.ui.tool != Tool::Crop || app.ui.crop_rect.is_none() || app.crop.drag.is_some() {
+    if app.ui.tool != Tool::Crop || app.ui.crop_rect.is_none() || app.crop.drag.is_some() || ctx.input(|i| i.modifiers.alt) {
         return false;
     }
     if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::H)) {

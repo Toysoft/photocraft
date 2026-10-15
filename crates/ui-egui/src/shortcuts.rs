@@ -634,30 +634,35 @@ pub fn handle(app: &mut PhotocraftApp, ctx: &egui::Context) {
     // group's current tool. From another group, the key picks the group's last-used tool.
     // A held tool letter is a spring-loaded tool (#2672), not a burst of presses: its key
     // repeats are dropped rather than cycling the group.
-    ctx.input_mut(|i| i.events.retain(|e| !matches!(e, egui::Event::Key { key, pressed: true, repeat: true, .. } if crate::spring_tools::is_tool_key(*key))));
-    let shift_switch = app.session.prefs().tools.use_shift_key_for_tool_switch;
-    for t in Tool::ALL {
-        if !crate::tool_shortcuts::uses_default(app, t) {
-            continue;
-        }
-        let Some(k) = crate::spring_tools::key_of(t.key()) else { continue };
-        let cycle_shift = shift_switch && ctx.input_mut(|i| i.consume_key(Modifiers::SHIFT, k));
-        if cycle_shift || pressed(k) {
-            let before = app.ui.tool;
-            let group: Vec<Tool> = Tool::ALL.iter().copied().filter(|x| x.key() == t.key() && crate::tool_shortcuts::uses_default(app, *x)).collect();
-            app.ui.tool = match group.iter().position(|x| *x == app.ui.tool) {
-                Some(i) if shift_switch && !cycle_shift => group[i],
-                Some(i) => group[(i + 1) % group.len()],
-                None => app.ui.group_tool(t.key()).filter(|last| group.contains(last)).unwrap_or(group[0]),
-            };
-            // `consume_key` ignores extra ⇧ and ⌥: a ⇧/⌥ switch is never spring-loaded.
-            let (plain, now) = ctx.input(|i| (!cycle_shift && !i.modifiers.shift && !i.modifiers.alt, i.time));
-            crate::spring_tools::pressed(app, t.key(), before, plain, now);
-            if app.ui.spring.is_none() {
-                // Permanent key choices own the tool; held-key switches keep the pen marker.
-                app.stylus.tool_before_eraser = None;
+    // Tool keys never trigger while Alt is held (Windows mnemonics: Alt+letter opens menus, #5592).
+    if !ctx.input(|i| i.modifiers.alt) {
+        ctx.input_mut(|i| {
+            i.events.retain(|e| !matches!(e, egui::Event::Key { key, pressed: true, repeat: true, .. } if crate::spring_tools::is_tool_key(*key)))
+        });
+        let shift_switch = app.session.prefs().tools.use_shift_key_for_tool_switch;
+        for t in Tool::ALL {
+            if !crate::tool_shortcuts::uses_default(app, t) {
+                continue;
             }
-            return;
+            let Some(k) = crate::spring_tools::key_of(t.key()) else { continue };
+            let cycle_shift = shift_switch && ctx.input_mut(|i| i.consume_key(Modifiers::SHIFT, k));
+            if cycle_shift || pressed(k) {
+                let before = app.ui.tool;
+                let group: Vec<Tool> = Tool::ALL.iter().copied().filter(|x| x.key() == t.key() && crate::tool_shortcuts::uses_default(app, *x)).collect();
+                app.ui.tool = match group.iter().position(|x| *x == app.ui.tool) {
+                    Some(i) if shift_switch && !cycle_shift => group[i],
+                    Some(i) => group[(i + 1) % group.len()],
+                    None => app.ui.group_tool(t.key()).filter(|last| group.contains(last)).unwrap_or(group[0]),
+                };
+                // `consume_key` ignores extra ⇧ and ⌥: a ⇧/⌥ switch is never spring-loaded.
+                let (plain, now) = ctx.input(|i| (!cycle_shift && !i.modifiers.shift && !i.modifiers.alt, i.time));
+                crate::spring_tools::pressed(app, t.key(), before, plain, now);
+                if app.ui.spring.is_none() {
+                    // Permanent key choices own the tool; held-key switches keep the pen marker.
+                    app.stylus.tool_before_eraser = None;
+                }
+                return;
+            }
         }
     }
     // 1–0 set opacity, ⇧1–0 flow or fill (`opacity_keys`).
