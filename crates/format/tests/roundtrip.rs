@@ -782,7 +782,6 @@ fn variables_follow_layer_id_remapping() {
     assert!(back.walk().into_iter().all(|(_, _, l)| l.id != gone), "dangling target must not address a live layer");
 }
 
-#[test]
 /// A file whose deep counts decrease (a hostile or truncated edit) must be refused on load,
 /// not turned into a `total * 4` slice mismatch or an underflowing index later. The counts
 /// blob is rewritten through the save path, so the bundle itself stays valid.
