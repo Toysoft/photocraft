@@ -62,8 +62,6 @@ fn shrink_layer(l: &mut Layer, k: u32, fmt: photocraft_color::PixelFormat) {
         LayerContent::Shape(sh) => sh.cache = sh.cache.as_ref().map(|s| downsample(s, k)),
 
         LayerContent::Smart(so) => shrink_smart(so, k),
-
-        LayerContent::Smart(so) => so.cache = so.cache.as_ref().map(|s| downsample(s, k)),
         // Deep data does not scale: the proxy flattens it once and downsamples that.
         LayerContent::Deep(d) => {
             // A model the deep flattener cannot target (CMYK, Lab): keep the deep layer as is.

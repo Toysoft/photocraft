@@ -1586,8 +1586,6 @@ fn layer_identity(layer: &Layer, h: &mut std::collections::hash_map::DefaultHash
         }
         LayerContent::Adjustment(a) => format!("{a:?}").hash(h),
 
-        _ => layer.surface().map_or(0, |s| surface_fp(s, pin)).hash(h),
-
         LayerContent::Deep(d) => {
             d.width.hash(h);
             d.height.hash(h);
@@ -1597,7 +1595,7 @@ fn layer_identity(layer: &Layer, h: &mut std::collections::hash_map::DefaultHash
                 c.samples.iter().for_each(|v| v.to_bits().hash(h));
             }
         }
-        _ => layer.surface().map_or(0, surface_fp).hash(h),
+        _ => layer.surface().map_or(0, |s| surface_fp(s, pin)).hash(h),
     }
     if let Some(m) = &layer.mask {
         (surface_fp(&m.surface, pin), m.enabled, m.density.to_bits(), m.feather.to_bits()).hash(h);
