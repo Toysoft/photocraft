@@ -576,6 +576,55 @@ fn dissolve_coverage_matches_opacity() {
     assert_eq!(flatten(&d), b);
 }
 
+/// Invert at 50% Dissolve is black or white, not the gray of a Normal mix (#3050).
+#[test]
+fn dissolve_adjustment_is_a_per_pixel_choice() {
+    let mut d = doc_white(16, 16);
+    let mut inv = Layer::new("inv", LayerContent::Adjustment(Adjustment::Invert));
+    inv.blend = photocraft_color::BlendMode::Dissolve;
+    inv.opacity = 0.5;
+    d.layers.push(inv);
+    let b = flatten(&d);
+    let (black, white, other) = b.px.iter().fold((0, 0, 0), |(k, w, o), p| {
+        if close4(*p, [0.0, 0.0, 0.0, 1.0]) {
+            (k + 1, w, o)
+        } else if close4(*p, [1.0, 1.0, 1.0, 1.0]) {
+            (k, w + 1, o)
+        } else {
+            (k, w, o + 1)
+        }
+    });
+    assert_eq!(other, 0, "a partial mix would be gray");
+    assert!(black > 40 && white > 40, "black {black} white {white}");
+}
+
+/// A clipped black fill at 50% Dissolve stays black or white on an opaque base (#3052).
+#[test]
+fn clipped_dissolve_fill_is_a_per_pixel_choice() {
+    let mut d = doc_white(16, 16);
+    let mut l = solid_layer("k", Rect::new(0, 0, 16, 16), [0.0, 0.0, 0.0, 1.0]);
+    l.clipped = true;
+    l.blend = photocraft_color::BlendMode::Dissolve;
+    l.opacity = 0.5;
+    d.layers.push(l);
+    let b = flatten(&d);
+    assert!(b.px.iter().all(|p| close4(*p, [0.0, 0.0, 0.0, 1.0]) || close4(*p, [1.0; 4])));
+}
+
+/// A Color Overlay must not turn Dissolve coverage into a Normal mix (#3051).
+#[test]
+fn color_overlay_keeps_dissolve_coverage() {
+    use photocraft_doc::effects::{Effect, FxCommon};
+    let mut d = doc_white(16, 16);
+    let mut l = Layer::new("ink", LayerContent::Fill(Fill::Solid(photocraft_color::Color::BLACK)));
+    l.effects.items.push(Effect::ColorOverlay { common: FxCommon::new(photocraft_color::BlendMode::Normal, 1.0), color: photocraft_color::Color::BLACK });
+    l.blend = photocraft_color::BlendMode::Dissolve;
+    l.opacity = 0.5;
+    d.layers.push(l);
+    let b = flatten(&d);
+    assert!(b.px.iter().all(|p| close4(*p, [0.0, 0.0, 0.0, 1.0]) || close4(*p, [1.0; 4])));
+}
+
 #[test]
 fn render_is_tile_independent() {
     // Rendering a sub-rect must equal the same region of a full render.
