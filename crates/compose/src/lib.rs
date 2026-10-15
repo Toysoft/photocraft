@@ -553,7 +553,8 @@ struct Ctx<'a> {
 struct LayerKeys {
     /// Addresses of every layer in the document tree, collected on first use.
     in_doc: std::sync::OnceLock<std::collections::HashSet<usize>>,
-    ids: std::sync::Mutex<std::collections::HashMap<usize, u64>>,
+    /// One slot per layer, so parallel tiles reaching the same layer compute it once.
+    ids: std::sync::Mutex<std::collections::HashMap<usize, std::sync::Arc<std::sync::OnceLock<u64>>>>,
     /// Identities computed (tests count them).
     #[cfg(test)]
     built: std::sync::atomic::AtomicUsize,
@@ -563,14 +564,14 @@ impl LayerKeys {
     fn identity(&self, layer: &Layer, doc: Option<&Document>) -> u64 {
         let addr = std::ptr::from_ref(layer) as usize;
         let in_doc = doc.is_some_and(|d| self.in_doc.get_or_init(|| doc_layer_addresses(d)).contains(&addr));
-        if in_doc && let Some(id) = self.ids.lock().unwrap_or_else(|e| e.into_inner()).get(&addr) {
-            return *id;
+        if !in_doc {
+            return self.compute(layer);
         }
-        let id = self.compute(layer);
-        if in_doc {
-            self.ids.lock().unwrap_or_else(|e| e.into_inner()).insert(addr, id);
-        }
-        id
+        // Checking the map and inserting after computing let two tiles both miss and both build
+        // the identity. The first tile to reach a layer initializes its slot; the others wait on
+        // it. Hashing is sequential (no Rayon), so a waiting tile cannot re-enter the slot.
+        let slot = self.ids.lock().unwrap_or_else(|e| e.into_inner()).entry(addr).or_default().clone();
+        *slot.get_or_init(|| self.compute(layer))
     }
 
     fn compute(&self, layer: &Layer) -> u64 {
