@@ -458,6 +458,62 @@ pub struct FileHandling {
     pub recent_file_count: u32,
     /// Most recently opened files, newest first (File › Open Recent).
     pub recent_files: Vec<String>,
+    /// Virtual groups on the Home screen. Paths stay at their original locations on disk.
+    pub home_folders: Vec<HomeFolder>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct HomeFolder {
+    pub name: String,
+    pub paths: Vec<String>,
+}
+
+impl FileHandling {
+    pub fn create_home_folder(&mut self, name: &str) -> bool {
+        let name = name.trim();
+        if name.is_empty() || name.chars().count() > 64 || self.home_folders.len() >= 100 || self.home_folders.iter().any(|f| f.name.eq_ignore_ascii_case(name))
+        {
+            return false;
+        }
+        self.home_folders.push(HomeFolder { name: name.to_owned(), paths: Vec::new() });
+        true
+    }
+
+    pub fn rename_home_folder(&mut self, old: &str, new: &str) -> bool {
+        let new = new.trim();
+        if new.is_empty() || new.chars().count() > 64 || self.home_folders.iter().any(|f| f.name != old && f.name.eq_ignore_ascii_case(new)) {
+            return false;
+        }
+        let Some(folder) = self.home_folders.iter_mut().find(|f| f.name == old) else { return false };
+        folder.name = new.to_owned();
+        true
+    }
+
+    pub fn add_home_file(&mut self, folder: &str, path: &str) -> bool {
+        if path.is_empty() || path.len() > 4096 {
+            return false;
+        }
+        let Some(group) = self.home_folders.iter_mut().find(|f| f.name == folder) else { return false };
+        if group.paths.iter().any(|p| p == path) || group.paths.len() >= 1000 {
+            return false;
+        }
+        group.paths.push(path.to_owned());
+        true
+    }
+
+    pub fn remove_home_file(&mut self, folder: &str, path: &str) -> bool {
+        let Some(group) = self.home_folders.iter_mut().find(|f| f.name == folder) else { return false };
+        let before = group.paths.len();
+        group.paths.retain(|p| p != path);
+        group.paths.len() != before
+    }
+
+    pub fn delete_home_folder(&mut self, name: &str) -> bool {
+        let before = self.home_folders.len();
+        self.home_folders.retain(|f| f.name != name);
+        self.home_folders.len() != before
+    }
 }
 
 impl Default for FileHandling {
@@ -476,6 +532,7 @@ impl Default for FileHandling {
             rasterize_svg_groups_deeper_than: photocraft_doc::MAX_GROUP_DEPTH as u32,
             recent_file_count: 20,
             recent_files: Vec::new(),
+            home_folders: Vec::new(),
         }
     }
 }

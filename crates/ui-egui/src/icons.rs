@@ -30,8 +30,10 @@ pub fn image(name: &str, size: f32, tint: Color32) -> egui::Image<'static> {
 
 /// Paint an icon centred in `rect`.
 pub fn paint(ui: &egui::Ui, rect: Rect, name: &str, size: f32, tint: Color32) {
-    let r = Rect::from_center_size(rect.center(), Vec2::splat(size));
-    image(name, size, tint).paint_at(ui, r);
+    // Discord supplies a 64 × 48 symbol. Keep its official aspect ratio inside a square hit area.
+    let extent = if name == "discord" { Vec2::new(size, size * 0.75) } else { Vec2::splat(size) };
+    let r = Rect::from_center_size(rect.center(), extent);
+    image(name, size, tint).fit_to_exact_size(extent).paint_at(ui, r);
 }
 
 /// An icon as the pointer, above every window: `name` with its hotspot `hot` (a fraction of the
@@ -173,6 +175,11 @@ pub fn button_chrome(ui: &egui::Ui, rect: Rect, selected: bool, hovered: bool) -
 /// Square icon button: transparent until hovered; `selected` gets the accent treatment.
 pub fn button(ui: &mut egui::Ui, name: &str, box_size: f32, selected: bool, tooltip: &str) -> Response {
     button_with_icon_size(ui, name, box_size, (box_size * 0.52).round(), selected, tooltip)
+}
+
+/// Options-bar glyphs are slightly larger without changing their button hit areas or popups.
+pub fn options_button(ui: &mut egui::Ui, name: &str, box_size: f32, selected: bool, tooltip: &str) -> Response {
+    button_with_icon_size(ui, name, box_size, (box_size * 0.52).round() + 2.5, selected, tooltip)
 }
 
 /// Square icon button with an explicit glyph size, independent of its hit area.

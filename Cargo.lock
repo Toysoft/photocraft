@@ -5012,6 +5012,7 @@ dependencies = [
  "egui_kittest",
  "epaint_default_fonts",
  "flate2",
+ "image",
  "log",
  "photocraft-algo",
  "photocraft-cms",

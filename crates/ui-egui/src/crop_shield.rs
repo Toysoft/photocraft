@@ -148,7 +148,7 @@ pub fn keys(app: &mut PhotocraftApp, ctx: &egui::Context) -> bool {
 /// Picker ([`pick_custom_color`], which needs the app).
 pub fn options_button(s: &mut CropShield, ui: &mut egui::Ui) -> bool {
     let mut pick = false;
-    let r = crate::icons::button(ui, "settings", 24.0, false, tl!("Set additional Crop options"));
+    let r = crate::icons::options_button(ui, "settings", 24.0, false, tl!("Set additional Crop options"));
     egui::Popup::menu(&r).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
         ui.set_min_width(240.0);
         ui.set_max_width(300.0);

@@ -124,10 +124,10 @@ pub fn options_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui, tool: Tool) -> bo
         return false;
     }
     let ellipse = app.ui.frame_tool.ellipse;
-    if crate::icons::button(ui, "square", 24.0, !ellipse, tl!("Create a new rectangular frame")).clicked() {
+    if crate::icons::options_button(ui, "square", 24.0, !ellipse, tl!("Create a new rectangular frame")).clicked() {
         app.ui.frame_tool.ellipse = false;
     }
-    if crate::icons::button(ui, "circle", 24.0, ellipse, tl!("Create a new elliptical frame")).clicked() {
+    if crate::icons::options_button(ui, "circle", 24.0, ellipse, tl!("Create a new elliptical frame")).clicked() {
         app.ui.frame_tool.ellipse = true;
     }
     true

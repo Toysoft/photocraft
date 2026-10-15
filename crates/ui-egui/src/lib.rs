@@ -103,6 +103,7 @@ pub mod gradient_ui;
 pub mod guide_layout_ui;
 pub mod guide_select;
 pub mod hold_keys;
+mod home_ui;
 pub mod i18n;
 mod icon_data;
 pub mod icons;
@@ -540,6 +541,8 @@ pub struct PhotocraftApp {
     canvases: HashMap<(DocId, u32), canvas::CanvasCache>,
     /// Navigator textures belong to open documents, not the lifetime of the egui context.
     navigator_textures: HashMap<DocId, canvas::NavigatorCache>,
+    #[cfg(not(target_arch = "wasm32"))]
+    home_thumbnails: home_ui::Thumbnails,
     /// `canvas::display_doc`'s live-adjust and Duotone documents per document: (snapshot,
     /// preview key, the document shown).
     display_memo: HashMap<DocId, (std::sync::Weak<Document>, u64, std::sync::Arc<Document>)>,
@@ -814,6 +817,8 @@ impl PhotocraftApp {
             services,
             canvases: HashMap::new(),
             navigator_textures: HashMap::new(),
+            #[cfg(not(target_arch = "wasm32"))]
+            home_thumbnails: Default::default(),
             display_memo: HashMap::new(),
             navigator_gpu: HashMap::new(),
             navigator_plain: std::collections::HashSet::new(),
@@ -1232,6 +1237,8 @@ impl PhotocraftApp {
     /// the preferences (`fileHandling.recentFiles`), so it survives a restart; `ui.recent_files`
     /// mirrors it for the menus and the Home screen.
     pub fn push_recent(&mut self, path: &str) {
+        #[cfg(not(target_arch = "wasm32"))]
+        self.home_thumbnails.invalidate(path);
         let cap = self.recent_cap();
         let mut r = self.session.prefs().file_handling.recent_files.clone();
         r.retain(|p| p != path);
@@ -1929,19 +1936,20 @@ impl eframe::App for PhotocraftApp {
         // system title bar this is where the document name lives, as the in-app title is hidden.
         panels::sync_window_title(self, &ctx);
         let chrome = !self.ui.view.hides_chrome();
+        let home = self.jobs.opens.is_empty() && self.ui.chrome.shows_home(self.session.documents().len(), self.session.prefs().general.auto_show_home_screen);
         if chrome && self.ui.panels.menu_bar {
             panels::title_bar(self, ui);
         }
-        if chrome && self.ui.panels.options_bar {
+        if chrome && !home && self.ui.panels.options_bar {
             panels::options_bar(self, ui);
         }
-        if chrome && self.ui.panels.status_bar {
+        if chrome && !home && self.ui.panels.status_bar {
             panels::status_bar(self, ui);
         }
-        if chrome && self.ui.panels.toolbar {
+        if chrome && !home && self.ui.panels.toolbar {
             panels::toolbar(self, ui);
         }
-        if chrome && self.ui.panels.dock {
+        if chrome && !home && self.ui.panels.dock {
             panels::right_dock(self, ui);
         }
         let t = theme::Tokens::get(&ctx);

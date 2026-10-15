@@ -22,6 +22,28 @@ fn defaults_match_photoshop() {
     }
 }
 
+#[test]
+fn home_folders_preserve_old_recent_files_without_moving_them() {
+    let mut session = Session::new();
+    session.load_prefs_json(r#"{"fileHandling":{"recentFiles":["/work/old.psd","/work/older.png"]}}"#).unwrap();
+    assert_eq!(session.prefs().file_handling.recent_files, ["/work/old.psd", "/work/older.png"]);
+    assert!(session.prefs().file_handling.home_folders.is_empty(), "old settings have no groups yet");
+
+    session.prefs.edit(|p| {
+        let handling = &mut p.file_handling;
+        assert!(handling.create_home_folder("Client A"));
+        assert!(!handling.create_home_folder("client a"));
+        assert!(handling.add_home_file("Client A", "/work/old.psd"));
+        assert!(!handling.add_home_file("Client A", "/work/old.psd"));
+    });
+    let mut restored = Session::new();
+    restored.load_prefs_json(&session.prefs_to_json()).unwrap();
+    assert_eq!(restored.prefs().file_handling.recent_files, ["/work/old.psd", "/work/older.png"]);
+    assert_eq!(restored.prefs().file_handling.home_folders[0].paths, ["/work/old.psd"]);
+    assert!(restored.prefs.edit(|p| p.file_handling.delete_home_folder("Client A")));
+    assert_eq!(restored.prefs().file_handling.recent_files, ["/work/old.psd", "/work/older.png"], "deleting a group leaves Recent intact");
+}
+
 /// #2264: the Studio workspace dot pattern can be hidden without changing themes.
 #[test]
 fn canvas_dot_grid_can_be_disabled_persisted_and_reset() {

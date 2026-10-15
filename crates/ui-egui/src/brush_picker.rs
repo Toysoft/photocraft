@@ -188,7 +188,7 @@ pub fn open_settings(app: &mut PhotocraftApp, ctx: &egui::Context) {
 pub fn settings_toggle(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     let on = app.ui.panels.brush_settings;
     let tooltip = "Toggle the Brush Settings panel  (F5)";
-    if named(icons::button(ui, "sliders-horizontal", 24.0, on, tl!(tooltip)), "Toggle the Brush Settings panel").clicked()
+    if named(icons::options_button(ui, "sliders-horizontal", 24.0, on, tl!(tooltip)), "Toggle the Brush Settings panel").clicked()
         && let Err(e) = crate::menus::invoke(app, ui.ctx(), "window.panel.brushSettings", json!({}))
     {
         app.ui.status = e;

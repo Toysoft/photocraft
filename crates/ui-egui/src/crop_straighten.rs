@@ -162,7 +162,7 @@ pub fn draw(app: &PhotocraftApp, painter: &egui::Painter, to_screen: impl Fn([f6
 
 /// The options-bar Straighten button (Photoshop's level icon), lit while armed.
 pub fn options_button(s: &mut Straighten, ui: &mut egui::Ui) {
-    if crate::icons::button(ui, "ruler", 24.0, s.armed, tl!("Straighten the image by drawing a line on it")).clicked() {
+    if crate::icons::options_button(ui, "ruler", 24.0, s.armed, tl!("Straighten the image by drawing a line on it")).clicked() {
         s.toggle();
     }
 }

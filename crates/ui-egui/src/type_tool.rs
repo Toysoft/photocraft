@@ -1716,7 +1716,7 @@ pub fn options_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
         Some((f, s, z, _)) => (f.clone(), if s.is_empty() { "Regular".into() } else { s.clone() }, *z),
         None => (o.type_font.clone(), o.type_style.clone(), o.type_size),
     };
-    if crate::icons::button(ui, "text-cursor", 24.0, false, tl!("Toggle text orientation")).clicked()
+    if crate::icons::options_button(ui, "text-cursor", 24.0, false, tl!("Toggle text orientation")).clicked()
         && let Some((layer, _)) = target(app)
         && let Some(params) = formatting_params(app)
     {
@@ -1773,7 +1773,7 @@ pub fn options_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     for (align, icon, tip) in
         [("left", "align-left", tl!("Left align text")), ("center", "align-center", tl!("Center text")), ("right", "align-right", tl!("Right align text"))]
     {
-        if crate::icons::button(ui, icon, 24.0, o.type_align == align, tip).clicked() {
+        if crate::icons::options_button(ui, icon, 24.0, o.type_align == align, tip).clicked() {
             app.ui.tool_options.type_align = align.into();
             apply(app, ui.ctx(), json!({"align": align}));
         }
@@ -1801,7 +1801,7 @@ pub fn options_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     if app.ui.text_edit.is_some() {
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             ui.add_space(8.0);
-            if crate::icons::button(
+            if crate::icons::options_button(
                 ui,
                 "check",
                 24.0,
@@ -1812,7 +1812,7 @@ pub fn options_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
             {
                 commit_with(app, ui.input(|i| i.modifiers));
             }
-            if crate::icons::button(ui, "ban", 24.0, false, tl!("Cancel any current edits (Esc)")).clicked() {
+            if crate::icons::options_button(ui, "ban", 24.0, false, tl!("Cancel any current edits (Esc)")).clicked() {
                 cancel(app);
             }
         });

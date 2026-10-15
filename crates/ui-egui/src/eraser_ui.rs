@@ -105,7 +105,7 @@ pub fn options_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui, tool: Tool) -> bo
                 ("once", "circle-dot", tl!("Sampling: Once")),
                 ("backgroundSwatch", "square", tl!("Sampling: Background Swatch")),
             ] {
-                if icons::button(ui, icon, 24.0, o.bg_sampling == k, tip).clicked() {
+                if icons::options_button(ui, icon, 24.0, o.bg_sampling == k, tip).clicked() {
                     o.bg_sampling = k.into();
                 }
             }

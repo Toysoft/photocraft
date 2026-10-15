@@ -533,7 +533,7 @@ pub fn options_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui, tool: Tool) -> bo
                 }
                 let g = &m.count_groups[gi];
                 let eye = if g.visible { "eye" } else { "eye-off" };
-                if crate::icons::button(ui, eye, 22.0, false, tl!("Toggle count group visibility")).clicked() {
+                if crate::icons::options_button(ui, eye, 22.0, false, tl!("Toggle count group visibility")).clicked() {
                     let _ = app.run("count.setGroup", json!({"group": gi, "visible": !g.visible}));
                 }
                 let rgb = g.color.to_rgb();
@@ -547,11 +547,11 @@ pub fn options_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui, tool: Tool) -> bo
                         json!({"group": gi}),
                     );
                 }
-                if crate::icons::button(ui, "trash", 22.0, false, tl!("Delete count group")).clicked() {
+                if crate::icons::options_button(ui, "trash", 22.0, false, tl!("Delete count group")).clicked() {
                     let _ = app.run("count.deleteGroup", json!({"group": gi}));
                 }
             }
-            if crate::icons::button(ui, "folder-plus", 22.0, false, tl!("Create a new count group")).clicked() {
+            if crate::icons::options_button(ui, "folder-plus", 22.0, false, tl!("Create a new count group")).clicked() {
                 let _ = app.run("count.newGroup", json!({}));
             }
             if crate::widgets::secondary_button(ui, tl!("Clear"), 0.0).clicked() && m.count_total() > 0 {
@@ -583,7 +583,7 @@ pub fn options_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui, tool: Tool) -> bo
                 let _ = app.run("notes.delete", json!({"all": true}));
                 app.ui.analysis.note_selected = None;
             }
-            if crate::icons::button(ui, "message-square", 22.0, app.ui.analysis.notes, tl!("Show or hide the Notes panel")).clicked() {
+            if crate::icons::options_button(ui, "message-square", 22.0, app.ui.analysis.notes, tl!("Show or hide the Notes panel")).clicked() {
                 app.ui.analysis.notes = !app.ui.analysis.notes;
             }
             true

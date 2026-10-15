@@ -3159,3 +3159,27 @@ curves	Smooth	Сгладить
 	set name	имя набора
 	{set} (modified)	{set} (изменён)
 	Random	Случайно
+
+# Home screen work folders and file browser
+	Home page	Главная
+	Work folders	Папки работ
+	New folder	Новая папка
+	Rename folder	Переименовать папку
+	Delete folder	Удалить папку
+	Folder name	Имя папки
+	Files stay on disk	Файлы останутся на диске
+	Add to folder	Добавить в папку
+	Add files…	Добавить файлы…
+	Remove from folder	Убрать из папки
+	Search files…	Поиск файлов…
+	Return to document	Вернуться к документу
+	Back to project	Назад к проекту
+	Close Home	Закрыть главную
+	Search results	Результаты поиска
+	No recent files	Недавних файлов пока нет
+	List view	Список
+	Grid view	Плитки
+	This folder is empty. Add a recent file from its menu.	Папка пуста. Добавьте файл через меню в разделе «Главная».
+	This folder is empty. Use Add files above.	Папка пуста. Добавьте файлы кнопкой выше.
+	Choose a different folder name	Выберите другое имя папки
+	Home folders	Папки работ

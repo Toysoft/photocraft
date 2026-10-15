@@ -516,12 +516,12 @@ pub fn options_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui, tool: Tool) -> bo
             if crate::cam_transform::active(app) {
                 // The box on the dropped patch: ✓ computes the move, ⊘ drops it (as ↩ / Esc).
                 let tip = crate::i18n::fmt(tl!("Commit transform ({key})"), &[("key", &crate::shortcuts::pretty("Enter"))]);
-                let commit = crate::icons::button(ui, "check", 26.0, false, &tip);
+                let commit = crate::icons::options_button(ui, "check", 26.0, false, &tip);
                 commit.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Commit transform"));
                 if commit.clicked() {
                     crate::cam_transform::commit(app);
                 }
-                let cancel = crate::icons::button(ui, "ban", 26.0, false, tl!("Cancel transform (Esc)"));
+                let cancel = crate::icons::options_button(ui, "ban", 26.0, false, tl!("Cancel transform (Esc)"));
                 cancel.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Cancel transform"));
                 if cancel.clicked() {
                     crate::cam_transform::cancel(app);
@@ -587,7 +587,7 @@ pub fn options_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui, tool: Tool) -> bo
                 ("once", "circle-dot", "Sampling: Once"),
                 ("backgroundSwatch", "square", "Sampling: Background Swatch"),
             ] {
-                if crate::brush_picker::named(crate::icons::button(ui, icon, 24.0, o.cr_sampling == k, tl!(tip)), tip).clicked() {
+                if crate::brush_picker::named(crate::icons::options_button(ui, icon, 24.0, o.cr_sampling == k, tl!(tip)), tip).clicked() {
                     o.cr_sampling = k.into();
                 }
             }

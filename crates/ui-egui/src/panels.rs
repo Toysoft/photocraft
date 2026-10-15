@@ -572,6 +572,7 @@ pub fn title_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     let t = Tokens::get(ui.ctx());
     let custom = app.custom_titlebar;
     let system = system_title_bar(app);
+    let compact_windows = cfg!(target_os = "windows") && custom;
     // The caption buttons' room at each end (`titlebar`); a side with buttons has no margin.
     let (caption_left, caption_right) = crate::titlebar::reserved(app, ui.ctx());
     let left = if cfg!(target_os = "macos") && app.integrated_titlebar {
@@ -583,7 +584,17 @@ pub fn title_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     };
     let right = if caption_right > 0.0 { 0 } else { 10 };
     let bar = egui::Panel::top("title_bar")
-        .exact_size(crate::titlebar::bar_height(app, ui.ctx(), if t.pro { 32.0 } else { 38.0 }))
+        .exact_size(crate::titlebar::bar_height(
+            app,
+            ui.ctx(),
+            if compact_windows {
+                42.0
+            } else if t.pro {
+                32.0
+            } else {
+                38.0
+            },
+        ))
         .frame(egui::Frame::NONE.fill(t.chrome).inner_margin(egui::Margin { left, right, top: 0, bottom: 0 }))
         .show(ui, |ui| {
             let full = ui.max_rect();
@@ -599,8 +610,7 @@ pub fn title_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                 ui.ctx().send_viewport_cmd(egui::ViewportCommand::StartDrag);
             }
             if drag.double_clicked() {
-                let max = ui.ctx().input(|i| i.viewport().maximized.unwrap_or(false));
-                ui.ctx().send_viewport_cmd(egui::ViewportCommand::Maximized(!max));
+                crate::titlebar::toggle_maximize(ui.ctx());
             }
             let title = app.session.active().map(|d| format!("{}{}", d.doc.name, if d.is_dirty() { "  •" } else { "" })).unwrap_or_else(|| "PhotoCraft".into());
             // The menus and the far-end controls are laid out first; the title is centred in
@@ -616,10 +626,19 @@ pub fn title_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                     ui.add_space(lead + 4.0);
                 }
                 if !system {
-                    let side = if t.pro { 18.0 } else { 20.0 };
+                    let side = if compact_windows || t.pro { 18.0 } else { 20.0 };
                     let (mark, _) = ui.allocate_exact_size(vec2(side, side), Sense::hover());
                     crate::brand::paint_mark(ui, mark);
-                    ui.add_space(6.0);
+                    if compact_windows {
+                        ui.add_space(7.0);
+                        let font = theme::medium(13.0);
+                        let name_width = ui.painter().layout_no_wrap(title.clone(), font.clone(), t.text).size().x.min(220.0);
+                        ui.add_sized([name_width, 24.0], egui::Label::new(egui::RichText::new(&title).font(font).color(t.text)).truncate())
+                            .on_hover_text(&title);
+                        ui.add_space(12.0);
+                    } else {
+                        ui.add_space(6.0);
+                    }
                 }
                 // With the macOS menu bar the menus are at the top of the screen instead. Either way
                 // this is the menus' inner edge, facing the title.
@@ -641,57 +660,69 @@ pub fn title_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                 let controls_end = {
                     let ui = &mut group_ui;
                     ui.spacing_mut().item_spacing.x = 6.0;
-                    let mut ws = app.ui.workspace.clone();
-                    let opts = [
-                        // Keys stay English (`apply_workspace` matches them); the dropdown
-                        // shows the labels in the UI language.
-                        ("Essentials".to_string(), tl!("Essentials")),
-                        ("Photography".to_string(), tl!("Photography")),
-                        ("Painting".to_string(), tl!("Painting")),
-                        ("Graphic and Web".to_string(), tl!("Graphic and Web")),
-                        ("Pixel Art".to_string(), tl!("Pixel Art")),
-                        ("Motion".to_string(), tl!("Motion")),
-                    ];
-                    // A narrow bar drops what is also in a menu, the theme toggle first
-                    // (Preferences), then search (Edit › Search), and narrows the switcher
-                    // (Window › Workspace) before anything runs over.
-                    let room = ui.available_width();
-                    let icons_shown: u8 = if room >= WORKSPACE_MIN + 2.0 * ICON_SLOT {
-                        2
-                    } else if room >= WORKSPACE_MIN + ICON_SLOT {
-                        1
-                    } else {
-                        0
-                    };
-                    let ws_width = (room - f32::from(icons_shown) * ICON_SLOT - 6.0).clamp(WORKSPACE_MIN, 130.0);
-                    if room >= WORKSPACE_MIN && widgets::dropdown(ui, "workspace", &mut ws, &opts, ws_width) {
-                        app.ui.workspace = ws;
-                        crate::menus::apply_workspace(app);
-                    }
-                    if icons_shown >= 1
-                        && icons::button(ui, "search", 28.0, app.ui.palette_open, &crate::shortcuts::tip_label(app, "Search commands", "edit.search")).clicked()
-                    {
-                        app.ui.palette_open = !app.ui.palette_open;
-                    }
-                    let (theme_icon, appearance_label) = match app.session.prefs().interface.appearance_mode {
-                        photocraft_engine::prefs::AppearanceMode::Auto => ("monitor", tl!("Auto")),
-                        photocraft_engine::prefs::AppearanceMode::Dark => ("moon", tl!("Dark")),
-                        photocraft_engine::prefs::AppearanceMode::Light => ("sun", tl!("Light")),
-                    };
-                    let appearance_tip = format!("{}: {}", tl!("Appearance Mode"), appearance_label);
-                    if icons_shown >= 2 {
-                        let button = icons::button(ui, theme_icon, 28.0, false, &appearance_tip);
-                        if button.clicked() {
-                            crate::prefs_ui::cycle_appearance(app, ui.ctx());
+                    if compact_windows {
+                        // The document title is on its tab; the Windows caption row keeps just
+                        // the community link beside the window controls, as in the compact mockup.
+                        ui.add_space(14.0);
+                        let tip = tl!("Join the ArtCraft Discord…");
+                        if icons::button_with_icon_size(ui, "discord", 32.0, 17.0, false, tip).clicked() {
+                            crate::links::open(app, ui.ctx(), crate::links::DISCORD);
                         }
-                        button.context_menu(|ui| crate::prefs_ui::appearance_context_menu(app, ui));
+                        if rtl { ui.min_rect().right() } else { ui.min_rect().left() }
+                    } else {
+                        let mut ws = app.ui.workspace.clone();
+                        let opts = [
+                            // Keys stay English (`apply_workspace` matches them); the dropdown
+                            // shows the labels in the UI language.
+                            ("Essentials".to_string(), tl!("Essentials")),
+                            ("Photography".to_string(), tl!("Photography")),
+                            ("Painting".to_string(), tl!("Painting")),
+                            ("Graphic and Web".to_string(), tl!("Graphic and Web")),
+                            ("Pixel Art".to_string(), tl!("Pixel Art")),
+                            ("Motion".to_string(), tl!("Motion")),
+                        ];
+                        // A narrow bar drops what is also in a menu, Discord first (below), then
+                        // the theme toggle (Preferences), then search (Edit › Search), and narrows
+                        // the switcher (Window › Workspace) before anything runs over.
+                        let room = ui.available_width();
+                        let icons_shown: u8 = if room >= WORKSPACE_MIN + 2.0 * ICON_SLOT {
+                            2
+                        } else if room >= WORKSPACE_MIN + ICON_SLOT {
+                            1
+                        } else {
+                            0
+                        };
+                        let ws_width = (room - f32::from(icons_shown) * ICON_SLOT - 6.0).clamp(WORKSPACE_MIN, 130.0);
+                        if room >= WORKSPACE_MIN && widgets::dropdown(ui, "workspace", &mut ws, &opts, ws_width) {
+                            app.ui.workspace = ws;
+                            crate::menus::apply_workspace(app);
+                        }
+                        if icons_shown >= 1
+                            && icons::button(ui, "search", 28.0, app.ui.palette_open, &crate::shortcuts::tip_label(app, "Search commands", "edit.search"))
+                                .clicked()
+                        {
+                            app.ui.palette_open = !app.ui.palette_open;
+                        }
+                        let (theme_icon, appearance_label) = match app.session.prefs().interface.appearance_mode {
+                            photocraft_engine::prefs::AppearanceMode::Auto => ("monitor", tl!("Auto")),
+                            photocraft_engine::prefs::AppearanceMode::Dark => ("moon", tl!("Dark")),
+                            photocraft_engine::prefs::AppearanceMode::Light => ("sun", tl!("Light")),
+                        };
+                        let appearance_tip = format!("{}: {}", tl!("Appearance Mode"), appearance_label);
+                        if icons_shown >= 2 {
+                            let button = icons::button(ui, theme_icon, 28.0, false, &appearance_tip);
+                            if button.clicked() {
+                                crate::prefs_ui::cycle_appearance(app, ui.ctx());
+                            }
+                            button.context_menu(|ui| crate::prefs_ui::appearance_context_menu(app, ui));
+                        }
+                        if rtl { ui.min_rect().right() } else { ui.min_rect().left() }
                     }
-                    if rtl { ui.min_rect().right() } else { ui.min_rect().left() }
                 };
                 free = if rtl { (controls_end, menus_end) } else { (menus_end, controls_end) };
             });
             ui.ctx().data_mut(|d| d.insert_temp(span_id, free));
-            if system {
+            if system || compact_windows {
                 return;
             }
             let font = theme::medium(13.0);
@@ -834,7 +865,7 @@ mod title_tests {
             let system = system_title_bar(&app);
             assert_eq!(system, !custom && !cfg!(target_os = "macos"));
             assert_eq!(crate::brand::mark_rect(&ctx).is_some(), !system, "mark in system mode (custom={custom})");
-            assert_eq!(texts.iter().any(|t| t.contains("foo.psd")), !system, "centred title in system mode (custom={custom}): {texts:?}");
+            assert_eq!(texts.iter().any(|t| t.contains("foo.psd")), !system, "document title in system mode (custom={custom}): {texts:?}");
         }
     }
 
@@ -922,7 +953,7 @@ pub fn options_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                     crate::chrome_ui::home_button(app, ui);
                     widgets::vline(ui, 22.0);
                 }
-                let tool_icon = icons::button(ui, icons::tool_icon(app.ui.tool), if t.pro { 26.0 } else { 28.0 }, !t.pro, tl!(app.ui.tool.label()));
+                let tool_icon = icons::options_button(ui, icons::tool_icon(app.ui.tool), if t.pro { 26.0 } else { 28.0 }, !t.pro, tl!(app.ui.tool.label()));
                 // Photoshop: right-click the tool icon for Reset Tool / Reset All Tools (#2825).
                 let mut reset = None;
                 tool_icon.context_menu(|ui| {
@@ -942,7 +973,7 @@ pub fn options_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                 }
                 if t.pro {
                     let (r, _) = ui.allocate_exact_size(vec2(10.0, 20.0), Sense::hover());
-                    icons::paint(ui, r, "chevron-down", 10.0, t.text_faint);
+                    icons::paint(ui, r, "chevron-down", 12.5, t.text_faint);
                 }
                 widgets::vline(ui, 22.0);
                 if app.ui.transform.is_some() {
@@ -1003,14 +1034,14 @@ pub fn options_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                         }
                         ui.add_enabled_ui(!block, |ui| {
                             percent_field(ui, tl!("Opacity"), &mut b.opacity, 0.0..=100.0, 62.0);
-                            if icons::button(ui, "circle-dot", 24.0, b.pressure_opacity, tl!("Always use pressure for opacity")).clicked() {
+                            if icons::options_button(ui, "circle-dot", 24.0, b.pressure_opacity, tl!("Always use pressure for opacity")).clicked() {
                                 b.pressure_opacity = !b.pressure_opacity;
                             }
                         });
                         // A Pencil- or Block-mode Eraser is always full flow, without build-up (Photoshop).
                         ui.add_enabled_ui(!block && !crate::eraser_ui::pencil_mode(app, app.ui.tool), |ui| {
                             percent_field(ui, tl!("Flow"), &mut b.flow, 1.0..=100.0, 62.0);
-                            let airbrush = icons::button(ui, "sparkles", 24.0, b.build_up, tl!("Enable airbrush-style build-up effects"));
+                            let airbrush = icons::options_button(ui, "sparkles", 24.0, b.build_up, tl!("Enable airbrush-style build-up effects"));
                             if crate::brush_picker::named(airbrush, "Enable airbrush-style build-up effects").clicked() {
                                 b.build_up = !b.build_up;
                             }
@@ -1019,7 +1050,7 @@ pub fn options_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                         smoothing_field(ui, b, 58.0);
                         smoothing_options(ui, b);
                         widgets::vline(ui, 22.0);
-                        if icons::button(ui, "circle-dot", 24.0, b.pressure_size, tl!("Always use pressure for size")).clicked() {
+                        if icons::options_button(ui, "circle-dot", 24.0, b.pressure_size, tl!("Always use pressure for size")).clicked() {
                             b.pressure_size = !b.pressure_size;
                         }
                     }
@@ -1100,7 +1131,7 @@ pub fn options_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                         .iter()
                         .enumerate()
                         {
-                            if icons::button(ui, icon, 24.0, app.ui.selection_mode == i as u8, tip).clicked() {
+                            if icons::options_button(ui, icon, 24.0, app.ui.selection_mode == i as u8, tip).clicked() {
                                 app.ui.selection_mode = i as u8;
                             }
                         }
@@ -1128,7 +1159,7 @@ pub fn options_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                         ui.add_enabled_ui(fixed, |ui| {
                             opt_label(ui, tl!("Width"));
                             widgets::value_field(ui, &mut o.marquee_width, range.clone(), unit, 62.0);
-                            if icons::button(ui, "arrow-left-right", 22.0, false, tl!("Swaps height and width")).clicked() {
+                            if icons::options_button(ui, "arrow-left-right", 22.0, false, tl!("Swaps height and width")).clicked() {
                                 std::mem::swap(&mut o.marquee_width, &mut o.marquee_height);
                             }
                             opt_label(ui, tl!("Height"));
@@ -1157,7 +1188,7 @@ pub fn options_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                             opt_label(ui, tl!("Frequency"));
                             widgets::value_field(ui, &mut o.magnetic_frequency, 0.0..=100.0, "", 50.0)
                                 .on_hover_text(tl!("How often fastening points are placed by themselves"));
-                            if icons::button(ui, "circle-dot", 24.0, o.magnetic_pressure, tl!("Use tablet pressure to change pen width")).clicked() {
+                            if icons::options_button(ui, "circle-dot", 24.0, o.magnetic_pressure, tl!("Use tablet pressure to change pen width")).clicked() {
                                 o.magnetic_pressure = !o.magnetic_pressure;
                             }
                             widgets::vline(ui, 22.0);
@@ -1239,7 +1270,7 @@ pub fn options_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                             ("reflected", "arrow-left-right", tl!("Reflected Gradient")),
                             ("diamond", "diamond", tl!("Diamond Gradient")),
                         ] {
-                            if icons::button(ui, icon, 24.0, app.ui.tool_options.gradient_style == style, tip).clicked() {
+                            if icons::options_button(ui, icon, 24.0, app.ui.tool_options.gradient_style == style, tip).clicked() {
                                 app.ui.tool_options.gradient_style = style.into();
                             }
                         }
@@ -1280,7 +1311,7 @@ pub fn options_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                             // Original Ratio shows the document's numbers, as Photoshop does.
                             let (mut rw, mut rh) = crate::crop_size::custom_ratio_fields(o, doc_size);
                             let cw = widgets::value_field(ui, &mut rw, 0.0..=99_999.0, "", 54.0).changed();
-                            let swap = icons::button(ui, "arrow-left-right", 22.0, false, tl!("Swaps height and width")).clicked();
+                            let swap = icons::options_button(ui, "arrow-left-right", 22.0, false, tl!("Swaps height and width")).clicked();
                             let ch = widgets::value_field(ui, &mut rh, 0.0..=99_999.0, "", 54.0).changed();
                             if swap {
                                 std::mem::swap(&mut rw, &mut rh);
@@ -1318,7 +1349,7 @@ pub fn options_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                             crate::crop_shield::pick_custom_color(app);
                         }
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if icons::button(
+                            if icons::options_button(
                                 ui,
                                 "check",
                                 26.0,
@@ -1329,7 +1360,7 @@ pub fn options_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                             {
                                 crate::canvas::commit_crop(app);
                             }
-                            if icons::button(ui, "ban", 26.0, false, tl!("Cancel current crop operation  (Esc)")).clicked() {
+                            if icons::options_button(ui, "ban", 26.0, false, tl!("Cancel current crop operation  (Esc)")).clicked() {
                                 crate::crop_ui::cancel(app);
                             }
                         });
@@ -1356,12 +1387,12 @@ pub fn options_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                             ("panel-right", tl!("Align right edges"), "layer.align.rightEdges"),
                         ] {
                             let on = app.session.is_enabled(cmd);
-                            if ui.add_enabled_ui(on, |ui| icons::button(ui, icon, 24.0, false, tip)).inner.clicked() {
+                            if ui.add_enabled_ui(on, |ui| icons::options_button(ui, icon, 24.0, false, tip)).inner.clicked() {
                                 let _ = app.run(cmd, json!({}));
                             }
                         }
                         ui.add_space(6.0);
-                        let more = icons::button(ui, "ellipsis", 24.0, false, tl!("Align and distribute"));
+                        let more = icons::options_button(ui, "ellipsis", 24.0, false, tl!("Align and distribute"));
                         egui::Popup::menu(&more).show(|ui| {
                             ui.set_min_width(200.0);
                             let mut section = |ui: &mut egui::Ui, title: &str, prefix: &str| {
@@ -3822,19 +3853,6 @@ fn hex_edit(ui: &mut egui::Ui, id: egui::Id, color: &mut [f32; 4]) -> bool {
     false
 }
 
-/// Photoshop's brush preset picker chip: a soft/hard round tip preview with the size underneath.
-/// Draw a round brush tip preview (hard core fading to a soft edge).
-fn brush_tip(p: &egui::Painter, c: egui::Pos2, rad: f32, hardness: f32, color: Color32) {
-    let inner = rad * hardness.clamp(0.05, 1.0);
-    let steps = 8;
-    for k in (0..=steps).rev() {
-        let f = k as f32 / steps as f32;
-        let rr = inner + (rad - inner) * f;
-        let a = if hardness >= 0.99 { 1.0 } else { (1.0 - f).powf(1.5) };
-        p.circle_filled(c, rr, color.gamma_multiply(a));
-    }
-}
-
 /// The Brush's or Pencil's Mode dropdown: the blend modes, with Photoshop's painting-only Clear
 /// after Dissolve (#3439). Clear erases with the brush (`clear`); it shows while chosen, or while
 /// `~` is held (`held`). The wheel over it steps the mode, as over the Layers panel's (#2061).
@@ -3863,7 +3881,7 @@ fn smoothing_field(ui: &mut egui::Ui, b: &mut photocraft_engine::BrushSettings, 
 /// Options-bar gear beside Smoothing: Photoshop's smoothing options popup, edited on the brush
 /// like the Smoothing % (so they stay per tool and reach the live stroke and the commit).
 fn smoothing_options(ui: &mut egui::Ui, b: &mut photocraft_engine::BrushSettings) {
-    let resp = icons::button(ui, "settings", 24.0, false, tl!("Set additional smoothing options"));
+    let resp = icons::options_button(ui, "settings", 24.0, false, tl!("Set additional smoothing options"));
     let resp = crate::brush_picker::named(resp, "Set additional smoothing options");
     egui::Popup::from_toggle_button_response(&resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
         let s = &mut b.smoothing;
@@ -3886,9 +3904,11 @@ fn brush_preset_chip(ui: &mut egui::Ui, b: &photocraft_engine::BrushSettings, st
     let c = pos2(r.left() + 14.0, r.top() + 11.0);
     // Photoshop's white tip vanishes on light chrome; light themes use their icon colour.
     let tip = if t.dark() { Color32::WHITE } else { t.icon };
-    brush_tip(ui.painter(), c, 7.0, b.hardness, tip);
+    // Rasterize the preview at 64 px: egui's tiny vector circle has visible facets.
+    let texture = crate::brush_preview::tip_texture(ui.ctx(), "options-brush-tip", &photocraft_engine::paint::TipShape::Round, (b.hardness, 0.0, 1.0), 64, tip);
+    ui.painter().image(texture.id(), Rect::from_center_size(c, vec2(16.5, 16.5)), Rect::from_min_max(egui::Pos2::ZERO, pos2(1.0, 1.0)), Color32::WHITE);
     ui.painter().text(pos2(c.x, r.bottom() - 5.0), Align2::CENTER_CENTER, format!("{}", b.size.round() as i64), egui::FontId::proportional(9.5), t.text_dim);
-    icons::paint(ui, Rect::from_center_size(pos2(r.right() - 9.0, c.y), vec2(10.0, 10.0)), "chevron-down", 9.0, t.text_faint);
+    icons::paint(ui, Rect::from_center_size(pos2(r.right() - 9.0, c.y), vec2(12.0, 12.0)), "chevron-down", 11.0, t.text_faint);
     resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, tl!("Brush Preset picker")));
     if resp.on_hover_text(tl!("Brush Preset picker")).clicked() {
         if state.brush_picker.is_some() {
@@ -5675,6 +5695,7 @@ mod embedding_tests {
         let mut h = egui_kittest::Harness::builder().with_size(vec2(1280.0, 800.0)).with_max_steps(64).build_eframe(move |cc| {
             PhotocraftApp::setup_context(&cc.egui_ctx, Default::default());
             let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+            app.session.edit_prefs(|p| p.general.auto_show_home_screen = false);
             app.ui.panels.rail = rail;
             app.ui.panels.menu_bar = menu_bar;
             app

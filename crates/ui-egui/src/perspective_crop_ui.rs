@@ -285,10 +285,10 @@ pub fn options_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     crate::widgets::checkbox(ui, &mut app.ui.tool_options.perspective_crop_grid, tl!("Show Grid"));
     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
         let commit_tip = crate::i18n::fmt(tl!("Commit current crop operation  ({key})"), &[("key", &crate::shortcuts::pretty("Enter"))]);
-        if crate::icons::button(ui, "check", 26.0, false, &commit_tip).clicked() {
+        if crate::icons::options_button(ui, "check", 26.0, false, &commit_tip).clicked() {
             commit(app);
         }
-        if crate::icons::button(ui, "ban", 26.0, false, tl!("Cancel current crop operation  (Esc)")).clicked() {
+        if crate::icons::options_button(ui, "ban", 26.0, false, tl!("Cancel current crop operation  (Esc)")).clicked() {
             cancel(app);
         }
     });

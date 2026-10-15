@@ -27,7 +27,9 @@ fn dialog(answers: Vec<&str>) -> (Harness<'static, PhotocraftApp>, u64, Written)
             log.borrow_mut().push((path.to_string(), bytes.to_vec()));
             Ok(())
         }));
-        PhotocraftApp::new(photocraft_engine::Session::new(), services)
+        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), services);
+        app.session.edit_prefs(|p| p.general.auto_show_home_screen = false);
+        app
     });
     let ctx = h.ctx.clone();
     let id = crate::menus::invoke(h.state_mut(), &ctx, "edit.keyboardShortcuts", json!({})).unwrap()["dialog"].as_u64().unwrap();

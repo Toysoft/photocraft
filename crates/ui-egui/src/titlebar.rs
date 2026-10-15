@@ -71,8 +71,7 @@ pub(crate) fn modal_drag_overlay(ctx: &egui::Context) {
             ctx.send_viewport_cmd(ViewportCommand::StartDrag);
         }
         if response.double_clicked() {
-            let max = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
-            ctx.send_viewport_cmd(ViewportCommand::Maximized(!max));
+            toggle_maximize(ctx);
         }
     });
 }
@@ -248,8 +247,11 @@ fn maximized(ctx: &egui::Context) -> bool {
     ctx.input(|i| i.viewport().maximized.unwrap_or(false))
 }
 
-fn toggle_maximize(ctx: &egui::Context) {
+pub(crate) fn toggle_maximize(ctx: &egui::Context) {
     ctx.send_viewport_cmd(ViewportCommand::Maximized(!maximized(ctx)));
+    // winit applies the window-style change after this frame. Give the Windows frame guard a
+    // following frame to remove the OS caption again even if the pointer stays still.
+    ctx.request_repaint_after(std::time::Duration::from_millis(16));
 }
 
 /// The caption buttons at the ends of `bar` (the title bar's outer rect), full bar height, flush
@@ -670,7 +672,7 @@ mod tests {
             assert!(close.height() >= 31.0 && [min, max, close].iter().all(|r| r.width() == BUTTON_WIDTH));
             assert_eq!((min.right(), max.right()), (max.left(), close.left()));
             let widgets = w.bar_widgets();
-            assert!(widgets.len() >= 10, "menus, search, theme, workspace: {widgets:?}");
+            assert!(widgets.len() >= 10, "menus and title-bar controls: {widgets:?}");
             for a in &widgets {
                 assert!(a.right() <= min.left(), "{a:?} runs into the caption buttons at {width}");
             }
