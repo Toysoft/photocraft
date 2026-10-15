@@ -1019,6 +1019,10 @@
 	Create new pattern from the selection	从选区创建图案
 	Create new shape from the current path	从当前路径创建形状
 	Create new snapshot	创建快照
+	From:	自：
+	Full Document	完整文档
+	Merged Layers	合并的图层
+	New Snapshot	新建快照
 	Create new tool preset	创建工具预设
 	Crop Factor	裁切系数
 	Ctrl	Ctrl
@@ -2705,6 +2709,11 @@ curves	Smooth	平滑
 	Click to place · Alt-click or drag off-canvas to remove	单击以放置 · Alt 单击或拖到画布外以移除
 	No document open	未打开任何文档
 	{n} of {max} sample points	{max} 个取样点中的 {n} 个
+
+# History panel › History Options… (#2966)
+	History Options…	历史记录选项…
+	Allow Non-Linear History	允许非线性历史记录
+	Make Layer Visibility Changes Undoable	允许撤销图层可见性更改
 # Print dialog (#2697)
 	Emulsion Down	药膜朝下
 	Functions	功能
@@ -2767,6 +2776,9 @@ curves	Smooth	平滑
 	Sent to {printer}	已发送到 {printer}
 	set in Print Settings…	在打印设置中设置…
 	ICO is limited to 256 × 256 pixels	ICO 最大为 256 × 256 像素
+	Automatically Create First Snapshot	自动创建第一幅快照
+	Automatically Create New Snapshot When Saving	存储时自动创建新快照
+	Show New Snapshot Dialog by Default	默认显示新建快照对话框
 # Embedded Profile Mismatch: profile names beside the choices, Remember this choice
 	Use the embedded profile ({profile})	使用嵌入的配置文件（{profile}）
 	Convert to the working space ({profile})	转换到工作空间（{profile}）

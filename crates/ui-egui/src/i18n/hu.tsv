@@ -3696,6 +3696,12 @@ cameraRaw	Yellow	Sárga
 	Auto-leading %	Automatikus sorköz %
 	Automatically Create First Snapshot	Első pillanatkép automatikus létrehozása
 	Automatically Create New Snapshot When Saving	Új pillanatkép automatikus létrehozása mentéskor
+	From:	Forrás:
+	Full Document	Teljes dokumentum
+	Merged Layers	Egyesített rétegek
+	History Options…	Előzménybeállítások…
+	Allow Non-Linear History	Nemlineáris előzmények engedélyezése
+	Make Layer Visibility Changes Undoable	A rétegláthatóság módosításai visszavonhatók legyenek
 	Avoid Widows/Orphans	Fattyúsorok elkerülése
 	Blend RGB Colors Using Gamma 1.0	RGB-színek keverése 1,0 gammával
 	Blending Mode	Keverési mód

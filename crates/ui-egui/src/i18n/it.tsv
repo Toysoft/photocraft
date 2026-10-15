@@ -1012,6 +1012,9 @@
 	Create new pattern from the selection	Crea nuovo pattern dalla selezione
 	Create new shape from the current path	Crea nuova forma dal tracciato corrente
 	Create new snapshot	Crea nuova istantanea
+	From:	Da:
+	Full Document	Documento intero
+	Merged Layers	Livelli uniti
 	Create new style (from the selected type)	Crea nuovo stile (dal testo selezionato)
 	Create new style from the selected layer	Crea nuovo stile dal livello selezionato
 	Create new tool preset	Crea nuovo predefinito strumento
@@ -2753,6 +2756,11 @@ curves	Smooth	Leviga
 	Click to place · Alt-click or drag off-canvas to remove	Fai clic per posizionare · Alt-clic o trascina fuori dal quadro per rimuovere
 	No document open	Nessun documento aperto
 	{n} of {max} sample points	{n} di {max} punti di campionamento
+
+# History panel › History Options… (#2966)
+	History Options…	Opzioni cronologia…
+	Allow Non-Linear History	Consenti cronologia non lineare
+	Make Layer Visibility Changes Undoable	Rendi annullabili le modifiche di visibilità dei livelli
 # Print dialog (#2697)
 	Emulsion Down	Emulsione sotto
 	Functions	Funzioni

@@ -2688,6 +2688,12 @@ cameraRaw	Color	Renk
 	Set New Snapshot as Default	Yeni Anlık Görüntüyü Varsayılan Olarak Ayarla
 	Automatically Create First Snapshot	İlk Anlık Görüntüyü Otomatik Olarak Oluştur
 	Automatically Create New Snapshot When Saving	Kaydederken Otomatik Olarak Yeni Anlık Görüntü Oluştur
+	From:	Kaynak:
+	Full Document	Tam Belge
+	Merged Layers	Birleştirilmiş Katmanlar
+	History Options…	Geçmiş Seçenekleri…
+	Allow Non-Linear History	Doğrusal Olmayan Geçmişe İzin Ver
+	Make Layer Visibility Changes Undoable	Katman Görünürlüğü Değişikliklerini Geri Alınabilir Yap
 	Show New Snapshot Dialog by Default	Yeni Anlık Görüntü İletişim Kutusunu Varsayılan Olarak Göster
 	Clear History	Geçmişi Temizle
 	Panel Options…	Panel Seçenekleri…

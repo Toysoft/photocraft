@@ -271,6 +271,8 @@ impl Headless {
             if let Some(st) = self.session.active_mut() {
                 st.saved_to(target.to_string_lossy().into_owned());
             }
+            // History Options › Automatically Create New Snapshot When Saving (#2966).
+            photocraft_engine::history_options_cmds::snapshot_on_save(&mut self.session);
             if let Some(active) = previously_active {
                 self.session.set_active(active);
             }

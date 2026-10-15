@@ -56,6 +56,7 @@ pub mod group_view_cmds;
 pub mod guide_layout;
 pub mod hidden_target;
 pub mod history_cmds;
+pub mod history_options_cmds;
 pub mod history_select_cmds;
 pub mod image_cmds;
 pub mod inspect;
@@ -227,11 +228,16 @@ pub struct DocState {
     /// pixel coordinates. Per-document view state: discarded when the document closes, never saved
     /// to `.pcraft` or PSD, and not a history step.
     pub color_samplers: Vec<[f64; 2]>,
-    /// History panel snapshots, oldest first (`history.newSnapshot`, #2966). Kept for the
-    /// session only, as in Photoshop: not history states, and not saved with the document.
+    /// History panel snapshots, oldest first (`history.newSnapshot`, #2966): the first (id 0) is
+    /// the document as opened (unless History Options › Automatically Create First Snapshot is
+    /// off). Kept for the session only, as in Photoshop: not history states,
+    /// and not saved with the document.
     pub snapshots: Vec<history_cmds::Snapshot>,
     /// The id the next snapshot gets; ids are never reused, so deleting one keeps the others.
     next_snapshot: u64,
+    /// The snapshot the latest save added (History Options › Automatically Create New Snapshot
+    /// When Saving), so saving an unchanged document again doesn't add a duplicate row.
+    save_snapshot: Option<u64>,
 }
 
 impl DocState {
@@ -252,9 +258,14 @@ impl DocState {
     pub fn new(doc: Document, path: Option<String>) -> Self {
         let active_layer = doc.top_layer();
         let mut history = History::default();
-        history.set_current_layers(LayerTarget { active: active_layer, selected: active_layer.into_iter().collect() });
+        let target = LayerTarget { active: active_layer, selected: active_layer.into_iter().collect() };
+        history.set_current_layers(target.clone());
+        let doc = Arc::new(doc);
+        // Photoshop's first snapshot: the document as opened, named after it, so the History
+        // panel's top row can always bring it back (#2966).
+        let first = history_cmds::Snapshot { id: 0, name: doc.name.clone(), doc: doc.clone(), layers: target };
         Self {
-            doc: Arc::new(doc),
+            doc,
             history,
             active_layer,
             selected_layers: active_layer.into_iter().collect(),
@@ -273,8 +284,9 @@ impl DocState {
             show_only: None,
             floating: None,
             color_samplers: Vec::new(),
-            snapshots: Vec::new(),
+            snapshots: vec![first],
             next_snapshot: 1,
+            save_snapshot: None,
         }
     }
     /// The selected layers in bottom-to-top document order, always including the active layer.
@@ -561,6 +573,12 @@ impl Session {
         let mut st = DocState::new(doc, path);
         st.history.max_states = self.prefs.get().performance.history_states.max(1) as usize;
         st.history.max_bytes = self.prefs.get().performance.history_budget_bytes();
+        st.history.non_linear = self.prefs.get().history_options.allow_non_linear_history;
+        // History Options › Automatically Create First Snapshot off: no snapshot of the document
+        // as opened, so the History panel starts at the opening state (#2966).
+        if !self.prefs.get().history_options.automatically_create_first_snapshot {
+            st.snapshots.clear();
+        }
         self.docs.push(st);
         let i = self.docs.len() - 1;
         self.active = Some(i);
@@ -708,6 +726,25 @@ impl Session {
 
     /// Apply an undoable edit to the active document.
     pub fn edit<R>(&mut self, label: &str, f: impl FnOnce(&mut Document, &mut Option<LayerId>) -> Result<R>) -> Result<R> {
+        self.edit_with(label, true, f)
+    }
+
+    /// Apply a change of layer visibility (and nothing else): a history state when History
+    /// Options › Make Layer Visibility Changes Undoable is on (the default, as in Photoshop),
+    /// otherwise the document changes without one, so the History panel and Undo skip it.
+    pub fn edit_visibility<R>(&mut self, label: &str, f: impl FnOnce(&mut Document, &mut Option<LayerId>) -> Result<R>) -> Result<R> {
+        let record = self.visibility_undoable();
+        self.edit_with(label, record, f)
+    }
+
+    /// History Options › Make Layer Visibility Changes Undoable.
+    pub fn visibility_undoable(&self) -> bool {
+        self.prefs().history_options.make_layer_visibility_changes_undoable
+    }
+
+    /// [`Self::edit`], recording a history state only when `record` is set. An unrecorded change
+    /// still marks the document modified and leaves the redo states alone.
+    pub(crate) fn edit_with<R>(&mut self, label: &str, record: bool, f: impl FnOnce(&mut Document, &mut Option<LayerId>) -> Result<R>) -> Result<R> {
         let restrict = self.color_restrict;
         let sampler_map = self.sampler_map.take();
         let st = self.active_mut().ok_or(EngineError::NoDocument)?;
@@ -754,14 +791,18 @@ impl Session {
         let key = self.coalesce_request.clone();
         let st = self.active_mut().ok_or(EngineError::NoDocument)?;
         let layers = st.layer_target();
-        if key.is_none() || st.coalesce != key || !st.history.can_undo() {
+        if !record {
+            // Nothing to coalesce with: the next recorded step starts a state of its own.
+            st.coalesce = None;
+        } else if key.is_none() || st.coalesce != key || !st.history.can_undo() {
             st.history.set_current_layers(prior);
             st.history.record(label, before, layers);
             st.trim_history();
+            st.coalesce = key;
         } else {
             st.history.set_current_layers(layers);
+            st.coalesce = key;
         }
-        st.coalesce = key;
         st.revision += 1;
         st.last_damage = damage;
         self.samplers_removed += samplers_removed;

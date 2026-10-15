@@ -1027,6 +1027,10 @@
 	Create new pattern from the selection	Vytvořit nový vzorek z výběru
 	Create new shape from the current path	Vytvořit nový tvar z aktuální cesty
 	Create new snapshot	Vytvořit nový snímek
+	From:	Z:
+	Full Document	Celý dokument
+	Merged Layers	Sloučené vrstvy
+	New Snapshot	Nový snímek
 	Create new tool preset	Vytvořit nové přednastavení nástroje
 	Crop Factor	Crop faktor
 	Ctrl	Ctrl
@@ -3531,6 +3535,11 @@ curves	Smooth	Vyhladit
 	Click to place · Alt-click or drag off-canvas to remove	Kliknutím umístíte · Alt-kliknutím nebo přetažením mimo plátno odeberete
 	No document open	Není otevřen žádný dokument
 	{n} of {max} sample points	{n} z {max} bodů měření
+
+# History panel › History Options… (#2966)
+	History Options…	Volby historie…
+	Allow Non-Linear History	Povolit nelineární historii
+	Make Layer Visibility Changes Undoable	Umožnit vrácení změn viditelnosti vrstev
 	Drag (lasso) or click points (polygonal) · {add} add · {sub} subtract	Táhněte (laso) nebo klikejte na body (mnohoúhelník) · {add} přidat · {sub} odečíst
 	The current gradient (pick one in Window › Gradients)	Aktuální přechod (vyberte v Okno › Přechody)
 # Canvas context menus, Channels panel menu, Layer Style blending page (labels rendered through a variable).
@@ -3763,6 +3772,9 @@ navigator	Zoom	Zvětšení
 	Sent to {printer}	Odesláno do {printer}
 	set in Print Settings…	nastavuje se v nastavení tisku…
 	ICO is limited to 256 × 256 pixels	ICO je omezen na 256 × 256 pixelů
+	Automatically Create First Snapshot	Automaticky vytvořit první snímek
+	Automatically Create New Snapshot When Saving	Automaticky vytvořit nový snímek při ukládání
+	Show New Snapshot Dialog by Default	Ve výchozím nastavení zobrazit dialog Nový snímek
 # Embedded Profile Mismatch: profile names beside the choices, Remember this choice
 	Use the embedded profile ({profile})	Použít vložený profil ({profile})
 	Convert to the working space ({profile})	Převést do pracovního prostoru barev ({profile})
