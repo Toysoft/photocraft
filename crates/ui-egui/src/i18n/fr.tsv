@@ -3194,3 +3194,5 @@ curves	Smooth	Lisser
 	set name	nom du jeu
 	{set} (modified)	{set} (modifié)
 	Random	Aléatoire
+	Set Source	Définir la source
+	Click to set the source	Cliquez pour définir la source

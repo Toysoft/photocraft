@@ -2805,3 +2805,5 @@ curves	Smooth	平滑
 	set name	组名称
 	{set} (modified)	{set}（已修改）
 	Random	随机
+	Set Source	设置源点
+	Click to set the source	单击以设置源点
