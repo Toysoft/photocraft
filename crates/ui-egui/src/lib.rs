@@ -1012,18 +1012,6 @@ impl PhotocraftApp {
         if let Some(result) = mask_trash_prompt::intercept(self, id, &params) {
             return result;
         }
-        // A new layer while Free Transform is open applies the transform first, as Photoshop does
-        // (#5667): History reads the transform (or Place Embedded), then New Layer. A transform
-        // still being applied in the background has to finish first.
-        if id.starts_with("layer.new.") && self.ui.transform.is_some() {
-            transform_tool::commit(self);
-            if transform_tool::committing(self).is_some() {
-                return Err("the transform is still being applied; try again when it has finished".into());
-            }
-            if self.ui.transform.is_some() {
-                transform_tool::cancel(self);
-            }
-        }
         // Automation input also gates every step a command runs on its behalf (`actions.play`).
         let gate = if self.automation_input && self.session.authorize.is_none() { self.services.automation_authorize } else { None };
         if gate.is_some() {
@@ -1055,6 +1043,22 @@ impl PhotocraftApp {
             && let Some(authorize) = self.services.automation_command.as_ref()
         {
             authorize(id, &params)?;
+        }
+        // A new layer while Free Transform is open applies the transform first, as Photoshop does
+        // (#5667): History reads the transform (or Place Embedded), then New Layer. Only for a
+        // command that can run; a transform refused or still being applied keeps the box open and
+        // the command doesn't run.
+        if id.starts_with("layer.new.") && self.ui.transform.is_some() {
+            if let Some(reason) = self.session.disabled_reason_with(id, &params) {
+                return Err(reason);
+            }
+            transform_tool::commit(self);
+            if transform_tool::committing(self).is_some() {
+                return Err("the transform is still being applied; try again when it has finished".into());
+            }
+            if self.ui.transform.is_some() {
+                return Err(if self.ui.status.is_empty() { "the transform couldn't be applied".into() } else { self.ui.status.clone() });
+            }
         }
         if let Some(result) = panel_docking::command(self, id, &params) {
             return result;

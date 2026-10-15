@@ -173,3 +173,35 @@ fn cancelling_the_placed_fixture_removes_its_layer() {
     h.run_steps(2);
     assert_eq!(h.state().session.active().unwrap().doc.layers.len(), 1);
 }
+
+/// A new-layer command that can't run (Artboard from Group with a pixel layer active) leaves the box and the
+/// placed layer as they were.
+#[test]
+fn a_new_layer_command_that_cant_run_leaves_the_box_open() {
+    let mut h = placed_app();
+    placed_and_moved(&mut h);
+    let before = history(&h);
+    assert!(h.state_mut().run("layer.new.artboardFromGroup", json!({})).is_err());
+    h.run_steps(2);
+    assert!(h.state().ui.transform.is_some(), "the box stays open");
+    assert_eq!(h.state().session.active().unwrap().doc.layers.len(), 2, "the placed layer stays");
+    assert_eq!(history(&h), before);
+}
+
+/// A transform the engine refuses (a result far over the pixel budget, #3773) keeps the box open
+/// with the placed layer, and the new layer isn't made: the refusal comes back.
+#[test]
+fn a_refused_transform_keeps_the_placed_layer_and_refuses_the_new_layer() {
+    let mut h = placed_app();
+    placed_and_moved(&mut h);
+    let t = h.state_mut().ui.transform.as_mut().unwrap();
+    t.quad = [[0.0, 0.0], [4.0e6, 0.0], [4.0e6, 4.0e6], [0.0, 4.0e6]];
+    h.run_steps(2);
+    let before = history(&h);
+    let r = h.state_mut().run("layer.new.layer", json!({}));
+    h.run_steps(2);
+    assert!(r.is_err(), "{r:?}");
+    assert!(h.state().ui.transform.is_some(), "the box stays open");
+    assert_eq!(h.state().session.active().unwrap().doc.layers.len(), 2, "the placed layer stays, no new layer");
+    assert_eq!(history(&h), before);
+}
