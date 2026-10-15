@@ -659,6 +659,25 @@ impl Session {
         self.live_commit = None;
     }
 
+    /// Check a call without running it: the command exists, its params have the shape
+    /// [`Self::execute`] requires (New Layer's fully), and it can run now. For a caller that does
+    /// something first only when the command will go through: Free Transform applies its box
+    /// before a new layer is made.
+    pub fn precheck(&self, id: &str, params: &Value) -> Result<()> {
+        let spec = crate::commands::find(id).ok_or_else(|| EngineError::UnknownCommand(id.to_string()))?;
+        if !(params.is_object() || params.is_null()) {
+            return Err(EngineError::BadParams { cmd: id.to_string(), msg: "params must be a JSON object".into() });
+        }
+        crate::param_check::check(spec, params)?;
+        if id == "layer.new.layer" {
+            crate::new_layer::parse(params)?;
+        }
+        match self.disabled_reason_with(id, params) {
+            Some(why) => Err(EngineError::Disabled(id.to_string(), why)),
+            None => Ok(()),
+        }
+    }
+
     /// Is the command currently runnable? (drives menu enablement)
     pub fn is_enabled(&self, id: &str) -> bool {
         self.is_enabled_with(id, &Value::Null)
