@@ -21,6 +21,7 @@ use serde_json::{Map, Value, json};
 use crate::theme::Tokens;
 use crate::{PhotocraftApp, widgets};
 
+pub(crate) mod blend_hover;
 pub(crate) mod color_picker;
 mod contour;
 
@@ -771,10 +772,13 @@ fn fx_checkbox(p: &egui::Painter, cb: egui::Rect, on: bool, t: &Tokens) {
     }
 }
 
-pub fn body(app: &mut PhotocraftApp, ui: &mut egui::Ui, f: &mut Map<String, Value>) {
+/// The page of Layer Style dialog `dialog`, whose fields are `f`.
+pub fn body(app: &mut PhotocraftApp, ui: &mut egui::Ui, f: &mut Map<String, Value>, dialog: u64) {
     let t = Tokens::get(ui.ctx());
     let selected = f.get("selected").and_then(Value::as_str).unwrap_or("dropShadow").to_string();
     let mut style_click: Option<String> = None;
+    // The mode under the pointer in the page's open Blend Mode list (live preview, #5945).
+    let mut blend_hovered: Option<(&'static str, String)> = None;
     let mut new_style = false;
     let invalid = validate_params(f).err();
     ui.horizontal_top(|ui| {
@@ -946,7 +950,7 @@ pub fn body(app: &mut PhotocraftApp, ui: &mut egui::Ui, f: &mut Map<String, Valu
                 let names = channel_names_of(f);
                 let key = format!("p:{BLENDING}");
                 let Some(mut p) = f.get(&key).filter(|v| v.is_object()).cloned() else { return };
-                blending_page(ui, &mut p, &names);
+                blend_hovered = blending_page(ui, &mut p, &names).map(|mode| ("blend", mode));
                 f.insert(key, p);
                 return;
             }
@@ -1000,10 +1004,13 @@ pub fn body(app: &mut PhotocraftApp, ui: &mut egui::Ui, f: &mut Map<String, Valu
                             let mut cur = disp.get(key).and_then(Value::as_str).unwrap_or("Normal").to_string();
                             let opts: Vec<(String, &str)> =
                                 photocraft_color::BlendMode::LAYER_MODES.iter().map(|m| (m.label().to_string(), m.label())).collect();
-                            if widgets::dropdown(ui, &format!("fx-blend-{sel_kind}"), &mut cur, &opts, 150.0) {
+                            let (chosen, hovered) = widgets::dropdown_hovered(ui, &format!("fx-blend-{sel_kind}"), &mut cur, &opts, 150.0);
+                            if chosen {
                                 let value = json!(cur);
                                 disp[key] = value.clone();
                                 set_param(f, &selected, key, value);
+                            } else if let Some(mode) = hovered.filter(|_| ui.is_enabled()) {
+                                blend_hovered = Some((key, mode));
                             }
                         });
                     }
@@ -1076,6 +1083,7 @@ pub fn body(app: &mut PhotocraftApp, ui: &mut egui::Ui, f: &mut Map<String, Valu
             });
         });
     });
+    blend_hover::hover(app, ui.ctx(), dialog, &selected, blend_hovered);
     // Style swatch clicks apply to the layer (Photoshop does this immediately);
     // New Style… saves the dialog's pending state as a preset.
     if let Some(name) = style_click {
@@ -1153,20 +1161,26 @@ fn channel_names_of(f: &Map<String, Value>) -> Vec<String> {
 }
 
 /// The Blending Options page: General Blending, Advanced Blending and Blend If, as in Photoshop.
-fn blending_page(ui: &mut egui::Ui, p: &mut Value, names: &[String]) {
+/// Returns the layer blend mode under the pointer in the open Blend Mode list, if any.
+fn blending_page(ui: &mut egui::Ui, p: &mut Value, names: &[String]) -> Option<String> {
     let t = Tokens::get(ui.ctx());
     let num = |p: &Value, k: &str, d: f64| p.get(k).and_then(Value::as_f64).unwrap_or(d) as f32;
     widgets::section_label(ui, "General Blending");
-    ui.horizontal(|ui| {
-        ui.label(RichText::new(tl!("Blend Mode")).color(t.text_dim));
-        let mut cur = p.get("blend").and_then(Value::as_str).unwrap_or("Normal").to_string();
-        // Photoshop's modes, plus the layer's own Paint.NET mode when it has one (an imported .pdn).
-        let own = photocraft_color::BlendMode::PAINT_NET_MODES.into_iter().find(|m| m.label() == cur);
-        let opts: Vec<(String, &str)> = photocraft_color::BlendMode::LAYER_MODES.into_iter().chain(own).map(|m| (m.label().to_string(), m.label())).collect();
-        if widgets::dropdown(ui, "fx-blend-blendingOptions", &mut cur, &opts, 150.0) {
-            p["blend"] = json!(cur);
-        }
-    });
+    let hovered = ui
+        .horizontal(|ui| {
+            ui.label(RichText::new(tl!("Blend Mode")).color(t.text_dim));
+            let mut cur = p.get("blend").and_then(Value::as_str).unwrap_or("Normal").to_string();
+            // Photoshop's modes, plus the layer's own Paint.NET mode when it has one (an imported .pdn).
+            let own = photocraft_color::BlendMode::PAINT_NET_MODES.into_iter().find(|m| m.label() == cur);
+            let opts: Vec<(String, &str)> =
+                photocraft_color::BlendMode::LAYER_MODES.into_iter().chain(own).map(|m| (m.label().to_string(), m.label())).collect();
+            let (chosen, hovered) = widgets::dropdown_hovered(ui, "fx-blend-blendingOptions", &mut cur, &opts, 150.0);
+            if chosen {
+                p["blend"] = json!(cur);
+            }
+            hovered.filter(|_| !chosen && ui.is_enabled())
+        })
+        .inner;
     let mut v = num(p, "opacity", 100.0);
     if widgets::slider_row(ui, "Opacity", &mut v, 0.0..=100.0, "%", None).changed() {
         p["opacity"] = json!(v.round());
@@ -1212,7 +1226,7 @@ fn blending_page(ui: &mut egui::Ui, p: &mut Value, names: &[String]) {
     // Blend If: the channel, then This Layer / Underlying Layer split sliders (Alt-drag splits).
     let entries = p.get("blendIf").and_then(Value::as_array).map_or(0, Vec::len);
     if entries == 0 {
-        return;
+        return hovered;
     }
     let sel = p.get("blendIfChannel").and_then(Value::as_u64).map_or(0, |v| v as usize).min(entries - 1);
     ui.horizontal(|ui| {
@@ -1250,6 +1264,7 @@ fn blending_page(ui: &mut egui::Ui, p: &mut Value, names: &[String]) {
         }
         ui.add_space(4.0);
     }
+    hovered
 }
 
 /// A Blend If range from the dialog's JSON (`[blackLo, blackHi, whiteLo, whiteHi]`), full when absent.
@@ -1448,7 +1463,7 @@ mod tests {
                     return;
                 }
                 let mut f = fields.clone();
-                body(app, ui, &mut f);
+                body(app, ui, &mut f, 0);
             },
             app,
         );
@@ -1689,7 +1704,7 @@ mod tests {
             fields.insert("selected".into(), json!("fx1"));
             fields.insert("effects".into(), json!([{"id": "fx1", "kind": "dropShadow", "on": true, "params": bad.clone()}]));
 
-            let mut out = ctx.run_ui(Default::default(), |ui| body(&mut app, ui, &mut fields));
+            let mut out = ctx.run_ui(Default::default(), |ui| body(&mut app, ui, &mut fields, 0));
             out.textures_delta.clear();
 
             assert_eq!(entry(&fields, "fx1").unwrap()["params"], bad);
@@ -1699,7 +1714,7 @@ mod tests {
             fields.insert("selected".into(), json!(BLENDING));
             fields.insert("p:blendingOptions".into(), bad.clone());
             fields.insert("effects".into(), bad.clone());
-            let mut out = ctx.run_ui(Default::default(), |ui| body(&mut app, ui, &mut fields));
+            let mut out = ctx.run_ui(Default::default(), |ui| body(&mut app, ui, &mut fields, 0));
             out.textures_delta.clear();
             assert_eq!(fields.get("p:blendingOptions"), Some(&bad));
         }
@@ -1727,7 +1742,7 @@ mod tests {
         {
             let mut f = initial_fields(&layer, Some(BLENDING), 120.0);
             set_blending_fields(&mut f, &layer, mode);
-            let mut out = ctx.run_ui(Default::default(), |ui| body(&mut app, ui, &mut f));
+            let mut out = ctx.run_ui(Default::default(), |ui| body(&mut app, ui, &mut f, 0));
             out.textures_delta.clear();
             assert_eq!(f["p:blendingOptions"]["knockout"], "deep", "{mode:?}");
             // Hostile dialog state (only reachable through `ui.dialog.set`) still renders.
@@ -1736,7 +1751,7 @@ mod tests {
             bo["channels"] = json!("x");
             bo["blendIf"] = json!([{"thisLayer": [300, -5, "a"]}]);
             f.insert("channelNames".into(), json!([]));
-            let mut out = ctx.run_ui(Default::default(), |ui| body(&mut app, ui, &mut f));
+            let mut out = ctx.run_ui(Default::default(), |ui| body(&mut app, ui, &mut f, 0));
             out.textures_delta.clear();
         }
     }
