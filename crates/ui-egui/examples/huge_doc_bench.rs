@@ -200,7 +200,7 @@ fn main() {
         .map(|s| s.tiles().map(|(_, t)| t.bytes().len() as u64).sum::<u64>())
         .sum();
     let ram = photocraft_ui_egui::gpu_canvas::physical_memory();
-    let budget = photocraft_ui_egui::gpu_canvas::memory_budget(allowance, pixels, ram);
+    let budget = photocraft_ui_egui::gpu_canvas::memory_budget(allowance, pixels, ram, g.dedicated_memory(), 0);
     g.set_memory_budget(budget);
     println!("RAM {} MB, document pixels {} MB, Memory Usage {} MB -> GPU budget {} MB", ram.unwrap_or(0) >> 20, pixels >> 20, allowance >> 20, budget >> 20);
     let first_view = Rect::from_xywh((w as f32 * 0.1) as i32, (h as f32 * 0.1) as i32, 2560, 1440);

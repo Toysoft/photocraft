@@ -283,6 +283,34 @@ impl GpuCanvas {
         Some((c.resident_bytes(), c.fx_cache_bytes().saturating_add(usize::try_from(c.composite_cache_bytes()).unwrap_or(usize::MAX))))
     }
 
+    /// Whether the adapter has memory of its own (a discrete card): the document's pixels and
+    /// History don't share it ([`memory_budget`]).
+    pub fn dedicated_memory(&self) -> bool {
+        self.rs.adapter.get_info().device_type == wgpu::DeviceType::DiscreteGpu
+    }
+
+    /// Whether `doc`'s layers fit the budget as it now stands, measured without a refresh (a GPU
+    /// Memory change shows in the status bar at once). `None` before the compositor exists.
+    pub fn measure_fit(&self, doc: &photocraft_doc::Document) -> Option<LayerFit> {
+        let mut r = self.rs.renderer.write();
+        let res = r.callback_resources.get_mut::<Resources>()?;
+        let budget = res.compositor_budget;
+        let comp = res.compositor.as_mut()?;
+        if let Some(b) = budget {
+            comp.set_memory_budget(b);
+        }
+        let fit = LayerFit { doc: doc.id.0, needed: comp.working_set(doc, doc.bounds()), budget: comp.resident_budget() };
+        res.layer_fit = Some(fit);
+        Some(fit)
+    }
+
+    /// Whether the layers of the last full (or large) refresh fit the GPU memory budget, and by
+    /// how much (`None` before the first one).
+    pub fn layer_fit(&self) -> Option<LayerFit> {
+        let r = self.rs.renderer.read();
+        r.callback_resources.get::<Resources>()?.layer_fit
+    }
+
     /// Set the checkerboard and gamut warning colours.
     pub fn set_style(&self, style: CanvasStyle) {
         let mut r = self.rs.renderer.write();
@@ -451,9 +479,13 @@ impl GpuCanvas {
         // compositor does it (in the background on desktop). So does a large damage rect, such
         // as hiding a big layer (#4024); small edits in the view stay on the GPU.
         let large = region.width() as u64 * region.height() as u64 >= DEFER_PX;
-        if (region == doc.bounds() || large) && !comp.fits_budget(doc, region) {
-            res.compositor = Some(comp);
-            return Err(photocraft_gpu::Unsupported(OVER_BUDGET.into()));
+        if region == doc.bounds() || large {
+            let fit = LayerFit { doc: doc.id.0, needed: comp.working_set(doc, region), budget: comp.resident_budget() };
+            res.layer_fit = Some(fit);
+            if !fit.fits() {
+                res.compositor = Some(comp);
+                return Err(photocraft_gpu::Unsupported(OVER_BUDGET.into()));
+            }
         }
         if fresh {
             let Some(tex) = DocTextures::new(device, res, size, self.tile, format) else {
@@ -906,9 +938,13 @@ pub struct Perf {
     /// GPU memory the compositor may hold for layer pages and effect maps (MB; see
     /// [`memory_budget`]).
     pub gpu_budget_mb: u64,
-    /// The Memory Usage allowance (bytes) `gpu_budget_mb` was computed from.
+    /// The Memory Usage allowance and the GPU Memory preference (bytes) `gpu_budget_mb` was
+    /// computed from.
     #[serde(skip)]
-    pub gpu_budget_allowance: u64,
+    pub gpu_budget_allowance: (u64, u64),
+    /// The layer pages the last full refresh needed against the part of the budget they may
+    /// hold; when they don't fit, edits that redraw the whole document do it on the CPU.
+    pub gpu_layer_fit: Option<LayerFit>,
     /// Last command run through the app and its duration (ms).
     pub last_command: String,
     pub command_ms: f64,
@@ -1185,21 +1221,44 @@ fn texel_to_f32(format: wgpu::TextureFormat, b: &[u8]) -> [f32; 4] {
 // ---------------------------------------------------------------------------------------------
 // GPU resources
 
+/// The GPU memory a refresh's layer pages need against what they may hold (bytes).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LayerFit {
+    /// The document refreshed.
+    pub doc: u64,
+    pub needed: u64,
+    pub budget: u64,
+}
+
+impl LayerFit {
+    pub fn fits(&self) -> bool {
+        self.needed <= self.budget
+    }
+}
+
 /// Floor of the compositor's memory budget: enough for a viewport's pages of a dozen layers.
 pub const MIN_GPU_BUDGET: u64 = 512 << 20;
 
 /// Why a full refresh whose layer pages don't fit [`memory_budget`] goes to the CPU compositor.
 pub const OVER_BUDGET: &str = "layers exceed the GPU memory budget; full refresh on the CPU";
 
-/// GPU memory the wgpu compositor may hold for layer pages and effect maps: what Memory Usage
-/// (`allowance`, Preferences › Performance) leaves after the document's pixels and History
-/// (`pixels`), at most a quarter of physical memory (`ram`; 16 GB assumed when unknown), and at
-/// least [`MIN_GPU_BUDGET`]. On unified-memory machines these textures share RAM with the
-/// document, so a huge document keeps its layers on the GPU only as far as memory allows; the
-/// rest is uploaded per refresh as the view needs it.
-pub fn memory_budget(allowance: u64, pixels: u64, ram: Option<u64>) -> u64 {
+/// GPU memory the wgpu compositor may hold for layer pages and effect maps.
+///
+/// `fixed` (Preferences › Performance › GPU Memory, bytes) sets it outright when it isn't 0.
+/// Otherwise it is Memory Usage (`allowance`) within a quarter of physical memory (`ram`; 16 GB
+/// assumed when unknown). Where the GPU shares the system's memory (integrated and software
+/// adapters, `dedicated` false), these textures share RAM with the document, so the document's
+/// pixels and History (`pixels`) come off first; a graphics card's own memory doesn't hold them.
+/// Never below [`MIN_GPU_BUDGET`]. Layers beyond it redraw full refreshes on the CPU
+/// ([`OVER_BUDGET`]).
+pub fn memory_budget(allowance: u64, pixels: u64, ram: Option<u64>, dedicated: bool, fixed: u64) -> u64 {
+    if fixed > 0 {
+        return fixed.max(MIN_GPU_BUDGET);
+    }
     let ram = ram.unwrap_or(16 << 30);
-    allowance.saturating_sub(pixels).min(ram / 4).max(MIN_GPU_BUDGET)
+    let shared = if dedicated { 0 } else { pixels };
+    allowance.saturating_sub(shared).min(ram / 4).max(MIN_GPU_BUDGET)
 }
 
 /// Why a document whose display textures don't fit [`canvas_budget`] is drawn on the CPU canvas.
@@ -1312,6 +1371,9 @@ struct Resources {
     /// GPU memory the compositor may hold (`None`: its default), and the document area the
     /// view shows; applied before every composite.
     compositor_budget: Option<u64>,
+    /// The layer pages the last full (or large) refresh needed and the budget they had to fit
+    /// (bytes): when they don't fit, full refreshes go to the CPU ([`OVER_BUDGET`]).
+    layer_fit: Option<LayerFit>,
     compositor_cache_budget: Option<u64>,
     compositor_focus: Option<photocraft_geom::Rect>,
     /// GPU bytes one document's display texture set may take (see [`canvas_budget`]).
@@ -1579,6 +1641,7 @@ impl Resources {
             compositor_failed: None,
             health: photocraft_gpu::DeviceHealth::new(),
             compositor_budget: None,
+            layer_fit: None,
             compositor_cache_budget: None,
             compositor_focus: None,
             canvas_budget: canvas_budget(physical_memory()),
@@ -2237,13 +2300,20 @@ mod tests {
     #[test]
     fn gpu_budget_follows_memory_usage_and_ram() {
         const G: u64 = 1 << 30;
-        // What Memory Usage leaves after the document, within a quarter of RAM.
-        assert_eq!(memory_budget(8 * G, 3 * G, Some(48 * G)), 5 * G);
-        assert_eq!(memory_budget(8 * G, 3 * G, Some(16 * G)), 4 * G);
-        assert_eq!(memory_budget(64 * G, 3 * G, Some(16 * G)), 4 * G);
+        // Shared memory: what Memory Usage leaves after the document, within a quarter of RAM.
+        assert_eq!(memory_budget(8 * G, 3 * G, Some(48 * G), false, 0), 5 * G);
+        assert_eq!(memory_budget(8 * G, 3 * G, Some(16 * G), false, 0), 4 * G);
+        assert_eq!(memory_budget(64 * G, 3 * G, Some(16 * G), false, 0), 4 * G);
         // Never below the floor, even with nothing left; 16 GB assumed when RAM is unknown.
-        assert_eq!(memory_budget(8 * G, 10 * G, Some(48 * G)), MIN_GPU_BUDGET);
-        assert_eq!(memory_budget(64 * G, 0, None), 4 * G);
+        assert_eq!(memory_budget(8 * G, 10 * G, Some(48 * G), false, 0), MIN_GPU_BUDGET);
+        assert_eq!(memory_budget(64 * G, 0, None, false, 0), 4 * G);
+        // A graphics card's own memory doesn't hold the document's pixels: 150 layers of 6 MP
+        // (3.6 GB) no longer squeeze it below what they need.
+        assert_eq!(memory_budget(8 * G, 10 * G, Some(32 * G), true, 0), 8 * G);
+        assert_eq!(memory_budget(8 * G, 10 * G, Some(16 * G), true, 0), 4 * G);
+        // GPU Memory set: exactly that, above the floor, whatever the adapter.
+        assert_eq!(memory_budget(8 * G, 10 * G, Some(16 * G), false, 12 * G), 12 * G);
+        assert_eq!(memory_budget(8 * G, 0, None, true, 1 << 20), MIN_GPU_BUDGET);
         assert!(physical_memory().is_none_or(|b| b >= 256 << 20));
     }
 
