@@ -988,8 +988,12 @@ pub(crate) fn psd_to_document_decoded(
         if h.color_mode == PsdMode::Indexed && file.color_mode_data.len() >= 768 {
             // Planar palette: 256 reds, 256 greens, 256 blues (the Color Table).
             let m = &file.color_mode_data;
-            let colors = (0..256).map(|i| [m[i], m[256 + i], m[512 + i]]).collect();
-            doc.color_table = Some(photocraft_doc::ColorTable { colors, transparent: None });
+            // Resource 1046 says how many entries are used, 1047 which one is transparent.
+            let u16_of = |id: u16| file.resource(id).and_then(|r| r.data.get(..2)).map(|b| u16::from_be_bytes([b[0], b[1]]));
+            let count = u16_of(crate::palette_map::COLOR_TABLE_COUNT).map_or(256, usize::from).clamp(1, 256);
+            let colors = (0..count).map(|i| [m[i], m[256 + i], m[512 + i]]).collect();
+            let transparent = u16_of(crate::palette_map::TRANSPARENCY_INDEX).filter(|&i| usize::from(i) < count).map(|i| i as u8);
+            doc.color_table = Some(photocraft_doc::ColorTable { colors, transparent });
         } else if h.color_mode == PsdMode::Duotone && !file.color_mode_data.is_empty() {
             // The duotone ink block is undocumented: keep it raw; the image shows as its gray plate.
             doc.duotone =
