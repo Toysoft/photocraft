@@ -12,6 +12,7 @@
 //!
 //! [`BrushSettings`]: photocraft_paint::BrushSettings
 
+use photocraft_color::convert::hsb_to_rgb;
 use serde_json::{Value, json};
 
 use crate::commands::CommandSpec;
@@ -236,22 +237,6 @@ pub fn specs() -> Vec<CommandSpec> {
 }
 
 // ------------------------------------------------------------------ gradients (.grd)
-
-fn hsb_to_rgb([h, s, v]: [f32; 3]) -> [f32; 3] {
-    let h = h.rem_euclid(360.0) / 60.0;
-    let c = v * s;
-    let x = c * (1.0 - (h % 2.0 - 1.0).abs());
-    let (r, g, b) = match h as u32 {
-        0 => (c, x, 0.0),
-        1 => (x, c, 0.0),
-        2 => (0.0, c, x),
-        3 => (0.0, x, c),
-        4 => (x, 0.0, c),
-        _ => (c, 0.0, x),
-    };
-    let m = v - c;
-    [r + m, g + m, b + m]
-}
 
 /// CIE Lab (D50, as Photoshop stores it) to sRGB through XYZ with Bradford adaptation to D65.
 fn lab_to_rgb([l, a, b]: [f32; 3]) -> [f32; 3] {

@@ -18,6 +18,7 @@
 
 use photocraft_cms::{Builtin, Intent, Lut3d, Transform};
 use photocraft_color::SampleType;
+use photocraft_color::convert::{linear_to_srgb, srgb_to_linear};
 use photocraft_doc::Document;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -98,7 +99,7 @@ impl HdrPreview {
         if self.is_identity() {
             return v;
         }
-        let lin = srgb_decode(v) * 2f32.powf(self.exposure);
+        let lin = srgb_to_linear(v) * 2f32.powf(self.exposure);
         srgb_encode(lin.max(0.0).powf(1.0 / self.gamma).min(1.0))
     }
 }
@@ -115,13 +116,8 @@ pub fn signature(c: &ColorState, doc: &Document) -> String {
     format!("{:?} {:?}", pv.setup.kind, h)
 }
 
-fn srgb_decode(v: f32) -> f32 {
-    if v <= 0.04045 { v / 12.92 } else { ((v + 0.055) / 1.055).powf(2.4) }
-}
-
 fn srgb_encode(v: f32) -> f32 {
-    let v = v.clamp(0.0, 1.0);
-    if v <= 0.003_130_8 { v * 12.92 } else { 1.055 * v.powf(1.0 / 2.4) - 0.055 }
+    linear_to_srgb(v.clamp(0.0, 1.0))
 }
 
 /// Viénot et al. (1999): linear RGB → LMS.
@@ -201,7 +197,7 @@ pub fn display_lut_with(c: &ColorState, doc: &Document, size: usize, include_hdr
             let protan = kind == ProofKind::Protanopia;
             Box::new(move |v| {
                 let s = eval3(&to_srgb, &v);
-                let sim = dichromat(s.map(srgb_decode), protan).map(srgb_encode);
+                let sim = dichromat(s.map(srgb_to_linear), protan).map(srgb_encode);
                 eval3(&to_mon, &sim)
             })
         }
