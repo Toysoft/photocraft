@@ -1054,6 +1054,9 @@ pub struct DockTabs {
 pub struct ColorPanelState {
     /// The panel edits the background colour (its chip was clicked), not the foreground.
     pub background: bool,
+    /// Color Picker › Only Web Colors, kept across opens like Photoshop (#4995).
+    #[serde(default)]
+    pub web_only: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
