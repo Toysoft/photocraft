@@ -101,6 +101,7 @@ pub mod render_cmds;
 pub mod retouch_cmds;
 pub mod sample_cmds;
 pub mod sampler_cmds;
+mod saved_history;
 pub mod select_extra_cmds;
 pub mod selection_cmds;
 pub mod shortcut_sets;
@@ -558,9 +559,13 @@ impl Session {
         while self.docs.iter().any(|st| st.doc.id == doc.id) {
             doc.id = photocraft_doc::DocId::fresh();
         }
+        let saved = doc.saved_history.take();
         let mut st = DocState::new(doc, path);
         st.history.max_states = self.prefs.get().performance.history_states.max(1) as usize;
         st.history.max_bytes = self.prefs.get().performance.history_budget_bytes();
+        if let Some(saved) = saved {
+            saved_history::restore(&mut st, &saved);
+        }
         self.docs.push(st);
         let i = self.docs.len() - 1;
         self.active = Some(i);
