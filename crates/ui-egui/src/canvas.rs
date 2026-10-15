@@ -15,6 +15,13 @@ use crate::state::{Tool, View};
 /// Largest texture side we upload; bigger documents display downsampled until the GPU path lands.
 pub const MAX_TEXTURE: u32 = 4096;
 
+/// The largest texture side to upload on this device: [`MAX_TEXTURE`], or less where the GPU
+/// allows less (2048 on some older or low-end GPUs and WebGL contexts). Past the device's limit
+/// egui asserts and the backend fails to create the texture.
+fn texture_side(ctx: &egui::Context) -> u32 {
+    u32::try_from(ctx.input(|i| i.max_texture_side)).unwrap_or(MAX_TEXTURE).clamp(1, MAX_TEXTURE)
+}
+
 pub(crate) struct ClonePreviewCache {
     key: String,
     texture: egui::TextureHandle,
@@ -1421,7 +1428,7 @@ pub fn ensure_texture(app: &mut PhotocraftApp, ctx: &egui::Context, idx: usize, 
     if cache.tex_revision != revision || cache.texture.is_none() || cache.tex_preview_key != preview_key {
         let t0 = crate::gpu_canvas::now_ms();
         let longest = doc.size.width.max(doc.size.height);
-        let factor = longest.div_ceil(MAX_TEXTURE).max(1);
+        let factor = longest.div_ceil(texture_side(ctx)).max(1);
         let (w, h) = ((doc.size.width / factor).max(1), (doc.size.height / factor).max(1));
         let current = cache.texture.as_mut().filter(|t| t.size() == [w as usize, h as usize]);
         if let (Some(d), Some(t)) = (damage, current) {
@@ -4520,8 +4527,8 @@ fn draw_beyond_canvas(app: &mut PhotocraftApp, painter: &egui::Painter, xf: &Vie
         None => {
             let t0 = crate::gpu_canvas::now_ms();
             let extent = photocraft_engine::extra_cmds::reveal_all_bounds(&doc);
-            // One texel per `k` document pixels keeps every texture within MAX_TEXTURE.
-            let k = extent.width().max(extent.height()).div_ceil(MAX_TEXTURE).max(1);
+            // One texel per `k` document pixels keeps every texture within the device's side.
+            let k = extent.width().max(extent.height()).div_ceil(texture_side(&ctx)).max(1);
             let proxy = (k > 1).then(|| photocraft_compose::proxy::proxy_document(&doc, k));
             let src = proxy.as_ref().unwrap_or(&*doc);
             let k = k as i32;
@@ -6525,6 +6532,25 @@ mod tests {
         assert_eq!(uploads(&ctx), vec![(true, crisp)], "a partial update keeps the crisp sampling");
     }
 
+    /// A device that allows smaller textures than MAX_TEXTURE (2048 on some older GPUs and WebGL
+    /// contexts, and on the fallback adapter the GPU tests sometimes get under load): the canvas
+    /// texture is reduced to fit it. A 2600 px document was uploaded at full size, which egui
+    /// asserts on and the backend can't create.
+    #[test]
+    fn cpu_canvas_texture_fits_the_device_limit() {
+        for (side, (w, h), want) in [(2048, (2600, 1700), [1300, 850]), (2048, (5000, 2000), [1666, 666]), (8192, (5000, 2000), [2500, 1000])] {
+            let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), Default::default());
+            app.run("file.new", json!({"width": w, "height": h})).unwrap();
+            let ctx = egui::Context::default();
+            ctx.input_mut(|i| i.max_texture_side = side);
+            let (tex, _) = ensure_texture(&mut app, &ctx, 0, None).unwrap();
+            let mut delta = ctx.tex_manager().write().take_delta();
+            let sizes: Vec<_> = delta.set.get(&tex).into_iter().flatten().map(|d| d.image.size()).collect();
+            delta.clear();
+            assert_eq!(sizes, vec![want], "{w}x{h} on a {side} px device");
+        }
+    }
+
     #[test]
     fn cpu_canvas_of_a_reduced_document_stays_bilinear() {
         // Over MAX_TEXTURE the texture holds one texel per `factor` pixels: a texel is not a
@@ -6542,6 +6568,7 @@ mod tests {
 
     #[test]
     fn gpu_display_luts_are_per_display() {
+        let _gpu = photocraft_testkit::gpu_lock();
         let Ok(rs) = std::panic::catch_unwind(|| egui_kittest::wgpu::create_render_state(crate::gpu_canvas::wgpu_setup(), Default::default())) else {
             eprintln!("skipping: no GPU adapter");
             return;
@@ -7460,6 +7487,7 @@ mod tests {
         // must update only the reduced pixels it touched.
         let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), Default::default());
         let ctx = egui::Context::default();
+        ctx.input_mut(|i| i.max_texture_side = 8192);
         app.run("file.new", json!({"width": 4097, "height": 90, "background": "transparent"})).unwrap();
         let tilt = json!({"size": 30, "hardness": 1.0, "spacing": 0.05, "shapeDynamics": {"enabled": true, "size": {"control": "penTilt"}}});
         app.run("tools.setBrush", json!({ "brush": tilt })).unwrap();

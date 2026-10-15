@@ -5979,6 +5979,7 @@ mod compact_visual_regressions {
 
     #[test]
     fn capture_compact_visual_fixtures() {
+        let _gpu = photocraft_testkit::gpu_lock();
         let Some(directory) = std::env::var_os("CRAFT_UI_VISUAL_FIXTURES").map(std::path::PathBuf::from) else { return };
         std::fs::create_dir_all(&directory).unwrap();
         for kind in crate::theme::ThemeKind::ALL {
