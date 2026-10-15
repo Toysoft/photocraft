@@ -90,12 +90,12 @@
 	Export As…	Exportar como…
 	Export Preferences…	Preferencias de exportación…
 	Save for Web (Legacy)…	Guardar para web (heredado)…
-	Artboards to Files…	Mesas de trabajo en archivos…
-	Artboards to PDF…	Mesas de trabajo en PDF…
-	Layers to Files…	Capas en archivos…
-	Layer Comps to Files…	Composiciones de capa en archivos…
+	Artboards to Files…	Mesas de trabajo a archivos…
+	Artboards to PDF…	Mesas de trabajo a PDF…
+	Layers to Files…	Capas a archivos…
+	Layer Comps to Files…	Composiciones de capas a archivos…
 	Color Lookup Tables…	Tablas de consulta de colores…
-	Data Sets as Files…	Conjuntos de datos en archivos…
+	Data Sets as Files…	Conjuntos de datos a archivos…
 	Paths to Illustrator…	Trazados a Illustrator…
 	Render Video…	Procesar vídeo…
 	Generate	Generar
@@ -145,7 +145,7 @@
 	Copy Merged	Copiar combinado
 	Paste	Pegar
 	Paste Special	Pegado especial
-	Paste in Place	Pegar en contexto
+	Paste in Place	Pegar en el mismo lugar
 	Paste Into	Pegar dentro
 	Paste Outside	Pegar fuera
 	Paste Lorem Ipsum	Pegar Lorem Ipsum
@@ -167,7 +167,7 @@
 	Transform	Transformar
 	Again	Repetir
 	Transform Again on a Copy	Transformar de nuevo una copia
-	Scale	Escalar
+	Scale	Escala
 	Rotate	Rotar
 	Set horizontal skew	Definir sesgado horizontal
 	Set vertical skew	Definir sesgado vertical
@@ -191,7 +191,7 @@
 	Define Custom Shape…	Definir forma personalizada…
 	Purge	Purgar
 	Clipboard	Portapapeles
-	Histories	Historias
+	Histories	Historia
 	Video Cache	Caché de vídeo
 	All	Todo
 	Presets	Ajustes preestablecidos
@@ -200,7 +200,7 @@
 	Export/Import Presets…	Exportar/importar ajustes preestablecidos…
 	Color Settings…	Ajustes de color…
 	Assign Profile…	Asignar perfil…
-	Convert to Profile…	Convertir a perfil…
+	Convert to Profile…	Convertir en perfil…
 	Keyboard Shortcuts…	Métodos abreviados de teclado…
 	Menus…	Menús…
 	Toolbar…	Barra de herramientas…
@@ -267,7 +267,7 @@
 	Gradient Map…	Mapa de degradado…
 	Selective Color…	Corrección selectiva…
 	Shadows/Highlights…	Sombras/iluminaciones…
-	HDR Toning…	Tonificación HDR…
+	HDR Toning…	Virado de HDR…
 	Desaturate	Desaturar
 	Match Color…	Igualar color…
 	Replace Color…	Reemplazar color…
@@ -421,12 +421,12 @@
 	Merge Group	Combinar grupo
 	Merge Visible	Combinar visibles
 	Stamp Visible	Sellar visibles
-	Select Layer Above	Seleccionar la capa de arriba
-	Select Layer Below	Seleccionar la capa de abajo
+	Select Layer Above	Seleccionar la capa siguiente
+	Select Layer Below	Seleccionar la capa anterior
 	Select Top Layer	Seleccionar la capa superior
 	Select Bottom Layer	Seleccionar la capa inferior
-	Add Layer Above to Selection	Añadir la capa de arriba a la selección
-	Add Layer Below to Selection	Añadir la capa de abajo a la selección
+	Add Layer Above to Selection	Añadir la capa siguiente a la selección
+	Add Layer Below to Selection	Añadir la capa anterior a la selección
 	Stamp Down	Sellar hacia abajo
 	Flatten Image	Acoplar imagen
 	Matting	Halos
@@ -527,7 +527,7 @@
 	Similar	Similar
 	Color Range…	Gama de colores…
 	Focus Area…	Área de enfoque…
-	Select and Mask…	Selección y máscara…
+	Select and Mask…	Seleccionar y aplicar máscara…
 # Select and Mask dialog labels
 	Smart Radius	Radio inteligente
 	Shift Edge	Desplazar borde
@@ -565,9 +565,9 @@
 	Iris Blur…	Desenfoque de iris…
 	Tilt-Shift…	Cambio de inclinación…
 	Path Blur…	Desenfoque de trazado…
-	Spin Blur…	Desenfoque de rotación…
+	Spin Blur…	Desenfoque de giro…
 	Blur More	Desenfocar más
-	Box Blur…	Desenfoque de cuadro…
+	Box Blur…	Desenfoque de rectángulo…
 	Gaussian Blur…	Desenfoque gaussiano…
 	Lens Blur…	Desenfoque de lente…
 	Motion Blur…	Desenfoque de movimiento…
@@ -580,9 +580,9 @@
 	Pinch…	Pellizcar…
 	Polar Coordinates…	Coordenadas polares…
 	Ripple…	Ondulación…
-	Shear…	Inclinación…
+	Shear…	Curvar…
 	Spherize…	Esferizar…
-	Twirl…	Remolino…
+	Twirl…	Molinete…
 	Wave…	Onda…
 	ZigZag…	Zigzag…
 	Noise	Ruido
@@ -598,7 +598,7 @@
 	Fragment	Fragmento
 	Mezzotint…	Grabado…
 	Mosaic…	Mosaico…
-	Pointillize…	Puntillista…
+	Pointillize…	Puntillismo…
 	Render	Interpretar
 	Clouds	Nubes
 	Difference Clouds	Nubes de diferencia
@@ -733,7 +733,7 @@
 	Float All in Windows	Hacer flotantes todas en ventanas
 	New Window for Document	Nueva ventana para el documento
 	Workspace	Espacio de trabajo
-	Essentials	Esenciales
+	Essentials	Aspectos esenciales
 	Graphic and Web	Gráficos y web
 	Painting	Pintura
 	Photography	Fotografía
@@ -771,7 +771,7 @@
 	Channels	Canales
 	Character	Carácter
 	Character Styles	Estilos de carácter
-	Clone Source	Origen de clonado
+	Clone Source	Origen de clonación
 	Color	Color
 	Glyphs	Glifos
 	Gradients	Degradados
@@ -829,7 +829,7 @@
 	Adaptive Wide Angle isn't open	Gran angular adaptable no está abierto
 	Add	Añadir
 	Add Layer Mask	Añadir máscara de capa
-	Add Stop	Añadir parada
+	Add Stop	Añadir punto de degradado
 	Add a layer style	Añadir un estilo de capa
 	Add a mask  (from the selection; {key} inverts)	Añadir una máscara  (de la selección; {key} la invierte)
 	Add an adjustment	Añadir un ajuste
@@ -951,7 +951,7 @@
 	Clear Samples	Borrar muestras
 	Click sets foreground · right-click sets background	El clic establece el color frontal · el clic derecho establece el de fondo
 	Click the first point or press {key} to close · Esc cancels	Haga clic en el primer punto o pulse {key} para cerrar · Esc cancela
-	Click to add a point · drag off or {key}-click or Delete to remove	Clic para añadir un punto · arrastre fuera, {key}-clic o Delete para quitar
+	Click to add a point · drag off or {key}-click or Delete to remove	Clic para añadir un punto · arrastre fuera, {key}-clic o Supr para quitar
 	Click to apply, {key}-click to clear overrides, double-click for Style Options	Clic para aplicar, {key}-clic para quitar excepciones, doble clic para Opciones de estilo
 	Click to edit the gradient	Haga clic para editar el degradado
 	Click to restore the current colour	Haga clic para restaurar el color actual
@@ -1416,7 +1416,7 @@
 	Remove Background	Quitar el fondo
 	Remove Planes	Quitar los planos
 	Remove Tool	Herramienta Quitar
-	Remove stop	Quitar parada
+	Remove stop	Quitar punto de degradado
 	Remove variable	Quitar variable
 	Rename	Cambiar nombre
 	Rename Group…	Cambiar nombre del grupo…
@@ -1688,7 +1688,7 @@
 	ExtraBold	Extra negrita
 	ExtraLight	Extra fina
 	Eyedropper Tool	Herramienta Cuentagotas
-	Fade	Desvanecer
+	Fade	Transición
 	Fill Opacity	Opacidad del relleno
 	Film & Video	Película y vídeo
 	From	Desde
@@ -2004,7 +2004,7 @@
 	Same folder	Misma carpeta
 	Save in background	Guardar en segundo plano
 	Scratch Disks	Discos de memoria virtual
-	Screen	Pantalla
+	Screen	Trama
 	Screen resolution	Resolución de pantalla
 	Scrubby slider acceleration	Aceleración de deslizador
 	Sessions only	Solo sesiones
@@ -2089,7 +2089,7 @@
 	Expand	Expandir
 	Expand Panel Group	Expandir grupo de paneles
 	Expand group  ({key}-click: all groups)	Expandir grupo  ({key}-clic: todos los grupos)
-	Fade steps	Pasos de desvanecimiento
+	Fade steps	Pasos de transición
 	Hide the layer's effects  ({key}-click: all layers)	Ocultar los efectos de la capa  ({key}-clic: todas las capas)
 	Import Brushes… (.abr or image)	Importar pinceles… (.abr o imagen)
 	Import Brush from Image…	Importar pincel desde imagen…
@@ -2116,7 +2116,7 @@
 	Click to sample the foreground colour  ·  {key}-click for background	Clic para muestrear el color frontal  ·  {key}-clic para el de fondo
 	{key}-click to set the source	{key}-clic para establecer el origen
 	{key} to subtract	{key} para restar
-	Clone source {n} ({key}-click with Clone Stamp to set)	Origen de clonado {n} ({key}-clic con Tampón de clonar para establecerlo)
+	Clone source {n} ({key}-click with Clone Stamp to set)	Origen de clonación {n} ({key}-clic con Tampón de clonar para establecerlo)
 	Source: not set ({key}-click with Clone Stamp)	Origen: no establecido ({key}-clic con Tampón de clonar)
 	Pixel Layer	Capa de píxeles
 	Type Layer	Capa de texto
@@ -2176,7 +2176,7 @@
 	Save As Preset	Guardar como ajuste preestablecido
 	The gradient the Gradient tool paints with	El degradado con el que pinta la herramienta Degradado
 	Adds the current gradient to the Gradients panel	Añade el degradado actual al panel Degradados
-	Gradient stops	Paradas de degradado
+	Gradient stops	Puntos de degradado
 	Select a type layer to edit its character and paragraph settings.	Seleccione una capa de texto para editar sus ajustes de carácter y párrafo.
 	Text color	Color del texto
 	Type Options	Opciones de texto
@@ -2638,7 +2638,7 @@ fontWeight	Italic	Cursiva
 	Remove pair	Quitar par
 	Dash offset	Desplazamiento de guiones
 	Open paths use centered strokes	Los trazados abiertos usan trazos centrados
-	Use finite lengths and a positive pattern total	Use longitudes finitas y un total de patrón positivo
+	Use finite lengths and a positive pattern total	Use longitudes finitas y un total de motivo positivo
 	No subject found — try Object Selection or the Lasso	No se encontró ningún sujeto — pruebe Selección de objetos o el Lazo
 	Quick Selection found nothing there	Selección rápida no encontró nada ahí
 	Object Selection found nothing there — try a tighter rectangle	Selección de objetos no encontró nada ahí — pruebe un rectángulo más ajustado
@@ -2738,7 +2738,7 @@ curves	Smooth	Suavizar
 	Drag to draw the curve · {key}-click draws a straight line	Arrastre para dibujar la curva · {key}-clic traza una línea recta
 	Edit Plane	Editar plano
 	Create Plane	Crear plano
-	Grid Size:	Tamaño de rejilla:
+	Grid Size:	Tamaño de cuadrícula:
 	Vanishing Point: click four corners to create a plane	Punto de fuga: haga clic en cuatro esquinas para crear un plano
 	Vanishing Point is not active	Punto de fuga no está activo
 	Apply Vanishing Point ({key})	Aplicar punto de fuga ({key})
@@ -2751,7 +2751,7 @@ curves	Smooth	Suavizar
 	On Layers	Sobre capas
 	Show Edge	Mostrar borde
 	Show Original	Mostrar original
-	F cycles the views; hold X to see the image	F alterna las vistas; mantén X para ver la imagen
+	F cycles the views; hold X to see the image	F alterna entre las vistas; mantenga pulsada X para ver la imagen
 # Select and Mask Refine Edge Brush (#2972)
 	Refine Edge Brush (R)	Pincel para perfeccionar bordes (R)
 	Expand Detection Area	Ampliar área de detección
@@ -2798,7 +2798,7 @@ curves	Smooth	Suavizar
 	Medium Blue	Azul medio
 	Light Gray	Gris claro
 	Object Finder	Buscador de objetos
-	No object found there — drag a rectangle around it	No se encontró ningún objeto ahí; arrastra un rectángulo a su alrededor
+	No object found there — drag a rectangle around it	No se encontró ningún objeto allí; arrastre un rectángulo a su alrededor
 	Remove after each stroke	Eliminar después de cada trazo
 	Apply the removal ({key})	Aplicar la eliminación ({key})
 	Strokes to remove: {n} (Enter applies, Esc cancels)	Trazos por eliminar: {n} (Intro aplica, Esc cancela)
@@ -3413,7 +3413,7 @@ layerLabel	No Color	Sin color
 	Out Black	Negro de salida
 	Out White	Blanco de salida
 	Tint Color	Color de tinte
-	Stops	Paradas
+	Stops	Puntos de degradado
 	Center X	Centro X
 	Center Y	Centro Y
 	Cell Size	Tamaño de celda
@@ -3775,7 +3775,7 @@ layerLabel	No Color	Sin color
 	Gaussian Blur	Desenfoque gaussiano
 	Global Light	Luz global
 	Group from Layers	Grupo a partir de capas
-	HDR Toning	Tonificación HDR
+	HDR Toning	Virado de HDR
 	High Pass	Paso alto
 	Highlight	Iluminación
 	Image Processor	Procesador de imágenes

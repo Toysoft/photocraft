@@ -77,6 +77,15 @@ Raw, droplet, OpenType, sRGB, Wayland) are not translated.
 Engine-generated error details, status text and parameter help that do not pass through the UI
 catalog remain English in every language (see
 [`localization-parity.md`](localization-parity.md)). User document, layer and preset names and
-automation command IDs also remain unchanged. The completion was contributed by
-@gorevyoneticisi with OpenAI Codex as an AI contributor under the repository's MIT OR
-Apache-2.0 terms; a review by a native speaker is still welcome.
+automation command IDs also remain unchanged. The dynamic completion was contributed by
+@gorevyoneticisi with OpenAI Codex under MIT OR Apache-2.0 terms.
+
+## Native review
+
+2026-10-14: a native Spanish speaker (@Daniels-123) audited the catalog, fixed mistranslations and terminology clashes against Photoshop's Spanish UI:
+- **Blend modes**: corrected `Screen` from «Pantalla» to «Trama».
+- **Edit & Image menus**: corrected `Fade` from «Desvanecer» to «Transición» (and `Fade steps` to «Pasos de transición»), `HDR Toning` from «Tonificación HDR» to «Virado de HDR», `Paste in Place` from «Pegar en contexto» to «Pegar en el mismo lugar», and `Scale` to «Escala».
+- **Layers & Panels**: corrected `Essentials` workspace from «Esenciales» to «Aspectos esenciales», `Clone Source` from «Origen de clonado» to «Origen de clonación», `Histories` in Purge from «Historias» to «Historia», `Select and Mask` from «Selección y máscara…» to «Seleccionar y aplicar máscara…», layer navigation from colloquial «capa de arriba/abajo» to «capa siguiente/anterior», and export submenus from «… en archivos…» to «… a archivos…».
+- **Gradients & Filters**: corrected gradient stops from «paradas» to «puntos de degradado», and filter names `Shear` («Curvar…»), `Twirl` («Molinete…»), `Pointillize` («Puntillismo…»), `Box Blur` («Desenfoque de rectángulo…»), and `Spin Blur` («Desenfoque de giro…»).
+- **Interactive Prompts**: resolved remaining tuteo/imperative inconsistencies into formal "usted", fixed residual English keys («Delete» -> «Supr»), and aligned «cuadrícula» and «motivo».
+

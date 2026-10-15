@@ -1,6 +1,6 @@
 # Localization parity
 
-> **Last reviewed:** 2026-10-12 · **Last updated:** 2026-10-13 · **Change:** minor (Spanish dynamic labels; previously minor: Serbian catalog) · **Target:** Adobe Photoshop 2026
+> **Last reviewed:** 2026-10-12 · **Last updated:** 2026-10-14 · **Change:** minor (Spanish native review and terminology audit; previously minor: Serbian catalog) · **Target:** Adobe Photoshop 2026
 
 Per-language status of PhotoCraft's UI. How catalogs work and how to add one:
 [`localization.md`](localization.md). Language notes: [Korean](localization-ko.md), [Spanish](localization-es.md),
@@ -23,8 +23,8 @@ composer, and its text engine handles RTL, Devanagari and Indic scripts.
 
 **Summary.** 7 of the 12 key languages at 100% of measured keys (status `partial` because of the
 engine messages), 3 absent (Hindi, Arabic, Vietnamese), plus 8 other languages. Weighted by
-speakers, ~55% ready. Remaining: 80–140 h, plus native-speaker review (recorded only for Italian,
-2026-10-12).
+speakers, ~55% ready. Remaining: 80–140 h, plus native-speaker review (recorded for Italian,
+2026-10-12, and Spanish, 2026-10-14).
 
 ## The twelve key languages
 
@@ -32,7 +32,7 @@ speakers, ~55% ready. Remaining: 80–140 h, plus native-speaker review (recorde
 |---|---|---|---:|---|---|---|---|---:|
 | English | `en` | 1,608 / 1,608 (100%) | source | all | Latin | – | full | 0 h |
 | Simplified Chinese | `zh-hans` | 1,608 / 1,608 (100%) | 2,366 | dialogs, tooltips yes; engine messages English | CJK fonts (lazy loader), IME preedit/commit, vertical type | no | partial | 8–12 h |
-| Spanish | `es` | 1,844 / 1,844 (100%) | 4,010 | as above; complete dynamic UI key set | Latin | no | partial | 6–10 h |
+| Spanish | `es` | 1,871 / 1,871 (100%) | 4,139 | as above; complete dynamic UI key set; reviewed against Photoshop ES terminology | Latin | yes (2026-10-14) | partial | 4–6 h |
 | Hindi | `hi` | 0 (0%) | – | – | Devanagari shaping in the text engine (parley/HarfRust); no Devanagari fallback font (TYPE-218-3) | no | none | 20–30 h |
 | Arabic | `ar` | 0 (0%) | – | – | Arabic shaping and bidi in the text engine, Arabic fallback font; RTL shell layout but not inside panels, and UI labels in LTR word order (DIST-220-4), paragraph direction has no UI (TYPE-218-2), layer names as tofu (#1408, #1693) | no | none | 40–60 h |
 | French | `fr` | 1,608 / 1,608 (100%) | 2,766 | as above | Latin | no | partial | 6–10 h |
