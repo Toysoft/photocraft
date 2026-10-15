@@ -268,6 +268,7 @@ fn stroke_with(s: &mut Session, cmd: &str, p: &Value, label: &str, brush: BrushS
     let fg = brush.color;
     let symmetry = s.active().and_then(|st| st.symmetry.clone());
     let (id, brush, zoom) = stroke_target(s, p, brush)?;
+    let fit = flag(p, "fitCurve", false);
     let cmyk = doc_cmyk_space(s);
     // The live stroke the canvas already rendered for exactly these params: take its pixels
     // instead of rendering the whole stroke again (the hitch at pen-up).
@@ -293,23 +294,31 @@ fn stroke_with(s: &mut Session, cmd: &str, p: &Value, label: &str, brush: BrushS
                     .iter()
                     .filter(|p| crate::symmetry_cmds::SymmetryAxis::has_distinct_mirror(&pts, p))
                     .map(|p| {
-                        let mut renderer = StrokeRenderer::new(&brush, Some(surf.format()), zoom);
+                        let mut renderer = StrokeRenderer::new(&brush, Some(surf.format()), zoom).fit_curve(fit);
                         renderer.push(p);
                         renderer.finish();
                         renderer
                     })
                     .collect();
                 if copies.is_empty() {
-                    render_stroke(surf, &brush, &pts, sel.as_ref(), lock, zoom)
+                    let pre = surf.clone();
+                    let mut r = StrokeRenderer::new(&brush, Some(surf.format()), zoom).fit_curve(fit);
+                    r.push(&pts);
+                    r.finish();
+                    r.composite(&pre, surf, sel.as_ref(), lock, true)
                 } else {
                     let pre = surf.clone();
-                    let mut original = StrokeRenderer::new(&brush, Some(surf.format()), zoom);
+                    let mut original = StrokeRenderer::new(&brush, Some(surf.format()), zoom).fit_curve(fit);
                     original.push(&pts);
                     original.finish();
                     original.composite_union_many(&copies, &pre, surf, sel.as_ref(), lock)
                 }
             } else {
-                render_stroke(surf, &brush, &pts, sel.as_ref(), lock, zoom)
+                let pre = surf.clone();
+                let mut r = StrokeRenderer::new(&brush, Some(surf.format()), zoom).fit_curve(fit);
+                r.push(&pts);
+                r.finish();
+                r.composite(&pre, surf, sel.as_ref(), lock, true)
             };
             Ok(damage)
         })
@@ -500,6 +509,7 @@ impl LiveStroke {
         let brush = if pencil { pencil_brush(s, p)? } else { with_blend_mode(resolve_brush(s, p, cmd)?, p) };
         let (seed, fg) = (brush.seed, brush.color);
         let (layer, mut brush, zoom) = stroke_target(s, p, brush)?;
+        let fit = flag(p, "fitCurve", false);
         let st = s.active().ok_or(EngineError::NoDocument)?;
         let base = (st.doc.id, st.revision);
         let mut doc = (*st.doc).clone();
@@ -509,9 +519,9 @@ impl LiveStroke {
         if pencil && flag(p, "autoErase", false) {
             apply_auto_erase(&mut brush, surf, pts.first(), fg, s.tools.background);
         }
-        let renderer = StrokeRenderer::new(&brush, Some(surf.format()), zoom);
+        let renderer = StrokeRenderer::new(&brush, Some(surf.format()), zoom).fit_curve(fit);
         let symmetry = s.active().and_then(|st| st.symmetry.clone());
-        let mirrors: Vec<_> = (0..symmetry.as_ref().map_or(0, |s| s.mirror_count())).map(|_| StrokeRenderer::new(&brush, Some(surf.format()), zoom)).collect();
+        let mirrors: Vec<_> = (0..symmetry.as_ref().map_or(0, |s| s.mirror_count())).map(|_| StrokeRenderer::new(&brush, Some(surf.format()), zoom).fit_curve(fit)).collect();
         let mirror_distinct = vec![false; mirrors.len()];
         let pre = surf.clone();
         let mut live = Self {
@@ -652,7 +662,7 @@ fn mixer_brush(s: &mut Session, p: &Value) -> Result<Value> {
         state.load(color(p.get("color"), s.tools.foreground));
     }
     let id = if crate::channel_cmds::is_channel_target(p) { None } else { Some(layer_id(s, p)?) };
-    let stroke = Stroke { brush, points: pts };
+    let stroke = Stroke { brush, points: pts, fit_curve: false };
     let dmg = s.edit("Mixer Brush", |doc, _| {
         let sel = doc.selection.clone();
         let sample = if sample_all {
@@ -702,7 +712,7 @@ fn color_replacement_setup(s: &Session, p: &Value) -> Result<(Stroke, ReplaceSet
         background: s.tools.background,
     };
     let id = layer_id(s, p)?;
-    Ok((Stroke { brush, points: pts }, rs, id))
+    Ok((Stroke { brush, points: pts, fit_curve: false }, rs, id))
 }
 
 fn color_replacement(s: &mut Session, p: &Value) -> Result<Value> {

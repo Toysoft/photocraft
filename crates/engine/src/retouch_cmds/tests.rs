@@ -1578,6 +1578,7 @@ fn live_dodge_matches_the_commit_across_cells() {
     let mut live = LiveDab::begin(&s, "paint.dodge", &opts(&all[..1])).unwrap();
     live.push(&pts(&all[1..3])).unwrap();
     live.push(&pts(&all[3..])).unwrap();
+    live.finish().unwrap();
     let shown = live.doc.clone();
     s.execute("paint.dodge", opts(&all)).unwrap();
     let id = s.active().unwrap().active_layer.unwrap();

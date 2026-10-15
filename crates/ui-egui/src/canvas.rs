@@ -535,6 +535,10 @@ fn live_stroke(app: &PhotocraftApp, idx: usize) -> Option<&LiveStroke> {
 fn stroke_params(app: &PhotocraftApp, d: &Drag, points: &[Vec<f64>]) -> serde_json::Value {
     let tool = d.tool;
     let mut p = json!({ "points": points, "erase": d.erase, "zoom": app.point_zoom(), "target": paint_target(app) });
+    // Round fast curves for the Brush and Eraser; the Pencil follows its points exactly.
+    if tool != Tool::Pencil && !crate::eraser_ui::pencil_mode(app, tool) && !crate::eraser_ui::block_mode(app, tool) {
+        p["fitCurve"] = json!(true);
+    }
     if d.clear {
         p["mode"] = json!("clear");
     }
@@ -7571,7 +7575,7 @@ mod tests {
         let mut pts = vec![json!([10.0, 40.0, 1.0])];
         pts.extend(xs.iter().map(|&x| json!([x, 40.0 + (x / 7.0).sin() * 8.0, 1.0])));
         // (Round tips without dynamics draw the same for any seed.)
-        s.execute("paint.stroke", json!({"points": pts, "seed": 0})).unwrap();
+        s.execute("paint.stroke", json!({"points": pts, "seed": 0,"fitCurve": true})).unwrap();
         assert!(same_pixels(&s.active().unwrap().doc, &done));
     }
 
@@ -7940,7 +7944,7 @@ mod tests {
         // The stroke the heal gets on release, and its coverage.
         let points = app.drag.as_ref().unwrap().points.iter().map(|p| photocraft_paint::StrokePoint::new(p[0], p[1], p[2] as f32)).collect();
         let brush = photocraft_engine::retouch_cmds::stroke_brush(&app.session.tools.brush, &json!({}));
-        let (b, cov) = photocraft_paint::retouch::stroke_coverage(&photocraft_paint::Stroke { brush, points });
+        let (b, cov) = photocraft_paint::retouch::stroke_coverage(&photocraft_paint::Stroke { brush, points, fit_curve: false });
         let trail = app.trail.as_ref().unwrap();
         let mut soft = 0;
         for y in 0..60 {
