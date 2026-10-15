@@ -26,6 +26,8 @@ mod canvas_geom;
 mod channel_clip;
 pub mod channel_cmds;
 mod clip_group;
+pub mod collaboration;
+pub mod collaboration_cmds;
 pub mod color_cmds;
 pub mod color_to_alpha_cmds;
 pub mod commands;
@@ -428,6 +430,8 @@ pub struct Session {
     pub tools: ToolState,
     /// Log of executed commands (for action recording and debugging).
     pub journal: Vec<(String, Value)>,
+    /// Live collaboration state shared by UI, CLI and network transports.
+    pub collab: collaboration::CollaborationState,
     /// Coalescing key of the command being executed.
     coalesce_request: Option<String>,
     /// Pixels copied with Edit › Copy / Cut (shared by all documents, like Photoshop).
@@ -634,6 +638,14 @@ impl Session {
             // Not reached: inline dispatch never starts a job. Waiting is still correct.
             jobs::Started::Job(j) => self.wait_job(j),
         }
+    }
+
+    /// Apply a command received from a collaboration peer. The command is not rebroadcast by the engine.
+    pub fn execute_remote(&mut self, id: &str, params: Value) -> Result<Value> {
+        self.dispatch(id, params, false).and_then(|started| match started {
+            jobs::Started::Done(v) => Ok(v),
+            jobs::Started::Job(j) => self.wait_job(j),
+        })
     }
 
     /// Offer a finished live stroke to the next command: a `paint.stroke` / `paint.pencil` whose

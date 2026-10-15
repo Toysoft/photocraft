@@ -26,6 +26,8 @@ base64 = "0.22"
 schemars = "1"
 getrandom = { workspace = true }
 cap-std = "4"
+futures-util = { workspace = true }
+tokio-tungstenite = { workspace = true }
 
 [dev-dependencies]
 rmcp = { version = "3.5", default-features = false, features = ["client", "server", "macros", "transport-io"] }

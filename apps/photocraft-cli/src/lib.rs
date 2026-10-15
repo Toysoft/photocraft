@@ -6,7 +6,7 @@
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use photocraft_automation::{AuthorizedWorkspace, Headless, PhotocraftMcp, files, security};
+use photocraft_automation::{AuthorizedWorkspace, CollaborationServer, CollaborationServerConfig, Headless, PhotocraftMcp, files, security};
 use photocraft_engine::actions_cmds::Action;
 use photocraft_io::ExportOptions;
 use serde_json::{Value, json};
@@ -49,6 +49,8 @@ USAGE:
       or on 127.0.0.1:<port>. Methods: engine.execute, jobs.list/cancel, engine.commands,
       doc.open/new/place/save/exportLayers/exportDataSets/importDataSets/inspect/render/select/close, session.list, batch, methods
       (docs/control-protocol.md#headless-server).
+  photocraft-cli collab-server [--bind <host:port>] [--control-token <64-hex> | --control-token-file <path>]
+      Run the authenticated WebSocket collaboration relay.
 
   photocraft-cli <subcommand> --help (or -h) prints this text. A flag the subcommand doesn't take is
   an error.
@@ -97,6 +99,7 @@ const SUBCOMMANDS: &[Subcommand] = &[
         bare: &[],
         run: |a, _, err| serve(a, err),
     },
+    Subcommand { name: "collab-server", values: &["--bind", "--control-token", "--control-token-file"], bare: &[], run: |a, _, err| collab_server(a, err) },
 ];
 
 /// The subcommand's arguments, or `None` when they ask for help (`--help` or `-h`).
@@ -577,6 +580,21 @@ fn serve(a: &Args, err: &mut dyn Write) -> R {
             photocraft_automation::rpc::serve_lines(&h, stdin.lock(), std::io::stdout()).map_err(|e| e.to_string())
         }
     }
+}
+
+fn collab_server(a: &Args, err: &mut dyn Write) -> R {
+    let bind = a.get("--bind").unwrap_or("127.0.0.1:7879").to_owned();
+    let (supplied, token_file) = security::token_inputs(a.get("--control-token").map(str::to_owned), a.get("--control-token-file").map(PathBuf::from));
+    let token = security::server_token(supplied.as_deref(), token_file.as_deref()).map_err(|e| e.to_string())?;
+    if let Some(path) = token_file {
+        writeln!(err, "photocraft collaboration token file: {}", path.display()).map_err(|e| e.to_string())?;
+    } else if supplied.is_none() {
+        writeln!(err, "photocraft collaboration token: {token}").map_err(|e| e.to_string())?;
+    }
+    let server = CollaborationServer::new(CollaborationServerConfig { bind: bind.clone(), token, ..Default::default() });
+    writeln!(err, "photocraft collaboration WebSocket listening on {bind}").map_err(|e| e.to_string())?;
+    let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build().map_err(|e| e.to_string())?;
+    runtime.block_on(server.serve()).map_err(|e| e.to_string())
 }
 
 fn mcp(a: &Args) -> R {

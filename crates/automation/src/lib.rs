@@ -18,6 +18,7 @@
 
 pub mod bridge;
 pub mod budgets;
+pub mod collaboration_ws;
 pub mod files;
 pub mod headless;
 pub mod rpc;
@@ -26,6 +27,7 @@ pub mod server;
 pub mod workspace;
 
 pub use bridge::BridgeClient;
+pub use collaboration_ws::{CollaborationServer, CollaborationServerConfig};
 pub use headless::Headless;
 pub use server::{Backend, PhotocraftMcp};
 pub use workspace::AuthorizedWorkspace;
