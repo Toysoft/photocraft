@@ -33,6 +33,10 @@ pub struct PenPath {
     /// Curvature Pen: the anchor being dragged.
     #[serde(skip)]
     pub moving: Option<usize>,
+    /// The document the path is drawn on (set at its first anchor): another document becoming
+    /// active drops it ([`pen_cancel_stale`]).
+    #[serde(default)]
+    pub doc: Option<photocraft_doc::DocId>,
 }
 
 impl PenPath {
@@ -223,7 +227,10 @@ pub fn closes_path_at(app: &PhotocraftApp, tool: Tool, x: f64, y: f64) -> bool {
 /// lands on the nearest 45° ray from the previous one, at the pointer's projection onto it.
 pub fn pen_down(app: &mut PhotocraftApp, x: f64, y: f64, shift: bool) {
     let tol = 6.0 / app.point_zoom().max(0.01) as f64;
-    let pen = app.ui.pen.get_or_insert_with(PenPath::default);
+    pen_cancel_stale(app);
+    let doc = app.session.active().map(|st| st.doc.id);
+    let pen = app.ui.pen.get_or_insert_with(|| PenPath { doc, ..Default::default() });
+    pen.doc = pen.doc.or(doc);
     if let Some(first) = pen.knots.first().map(|k| k[0])
         && on_closing_anchor(pen, x, y, tol)
     {
@@ -285,6 +292,7 @@ fn shift_45(origin: [f64; 2], p: [f64; 2], shift: bool) -> [f64; 2] {
 /// clicking the first anchor commits the path. Therefore Cmd/Ctrl+Z must consume one
 /// knot rather than undoing an unrelated, already committed document operation.
 pub fn pen_undo_last_point(app: &mut PhotocraftApp) -> bool {
+    pen_cancel_stale(app);
     let Some(pen) = app.ui.pen.as_mut() else { return false };
     if pen.knots.pop().is_none() {
         return false;
@@ -423,8 +431,24 @@ pub(crate) fn pen_replace(app: &mut PhotocraftApp, path: &Path) {
     }
 }
 
+/// The path being drawn belongs to the document it was started on ([`PenPath::doc`]): once
+/// another document becomes active (File › New, Open, a tab switch or closing it) it is dropped,
+/// so it neither shows on nor gets committed to the other document (#5373). Like the Polygonal
+/// Lasso's ([`crate::canvas::polygon_cancel_stale`]).
+pub fn pen_cancel_stale(app: &mut PhotocraftApp) {
+    let active = app.session.active().map(|st| st.doc.id);
+    if app.ui.pen.as_ref().is_some_and(|p| p.doc.is_some_and(|d| Some(d) != active)) {
+        app.ui.pen = None;
+        if app.ui.direct_selection.target == Some(crate::direct_select::PathRef::Pen) {
+            app.ui.direct_selection = Default::default();
+        }
+    }
+}
+
 /// Finish the pen path: a work path (Path mode) or a new shape layer (Shape mode).
 pub fn pen_commit(app: &mut PhotocraftApp, closed: bool) {
+    // A path left on another document is never committed to this one (#5373).
+    pen_cancel_stale(app);
     let Some(mut pen) = app.ui.pen.take() else { return };
     if app.ui.direct_selection.target == Some(crate::direct_select::PathRef::Pen) {
         // Its anchors are no longer the Pen's: the committed path is another path.
@@ -592,6 +616,7 @@ fn curvature_hit(app: &PhotocraftApp, x: f64, y: f64) -> Option<usize> {
 /// Curvature Pen press: clicking the first anchor closes the path, pressing another anchor
 /// grabs it to move, anywhere else adds a smooth anchor (still draggable until the release).
 pub fn curvature_down(app: &mut PhotocraftApp, x: f64, y: f64) {
+    pen_cancel_stale(app);
     if app.ui.pen.as_ref().is_some_and(|p| !p.curvature) {
         pen_commit(app, false);
     }
@@ -600,7 +625,9 @@ pub fn curvature_down(app: &mut PhotocraftApp, x: f64, y: f64) {
         pen_commit(app, true);
         return;
     }
-    let pen = app.ui.pen.get_or_insert_with(|| PenPath { curvature: true, ..Default::default() });
+    let doc = app.session.active().map(|st| st.doc.id);
+    let pen = app.ui.pen.get_or_insert_with(|| PenPath { curvature: true, doc, ..Default::default() });
+    pen.doc = pen.doc.or(doc);
     if hit.is_none() {
         pen.knots.push([[x, y]; 3]);
     }
@@ -1020,8 +1047,10 @@ pub fn draw_overlay(app: &PhotocraftApp, painter: &egui::Painter, xf: &ViewXform
     }
     // Pen path in progress, with handles of the last knot and a rubber band to the pointer. While
     // ⌘/Ctrl drags it, Direct Selection draws its preview instead.
+    // Only on the document it is drawn on (#5373).
     let edited = matches!(&app.ui.direct_selection.drag, Some(crate::direct_select::Drag::Edit { target: crate::direct_select::PathRef::Pen, .. }));
-    if let Some(pen) = app.ui.pen.as_ref().filter(|_| !edited) {
+    let active = app.session.active().map(|st| st.doc.id);
+    if let Some(pen) = app.ui.pen.as_ref().filter(|p| !edited && p.doc.is_none_or(|d| Some(d) == active)) {
         let mut pts = Vec::new();
         // A close-drag shows the first segment bending with the handle being pulled out.
         let mut knots = pen.knots.clone();
@@ -2070,6 +2099,59 @@ mod tests {
         app.ui.pen = Some(PenPath { knots: vec![[[20.0, 20.0]; 3], [[60.0, 40.0]; 3]], ..Default::default() });
         toggle(&mut app, "view.show.targetPath");
         assert!(overlay_shapes(&app, &ctx) > 0, "the pen path in progress is still drawn");
+    }
+
+    /// #5373: an unfinished Pen or Curvature Pen path belongs to the document it was drawn on. A
+    /// new document, or switching to another tab, drops it: it isn't drawn on, edited in or
+    /// committed to the other document, and the next click there starts a path of its own.
+    #[test]
+    fn a_pen_path_in_progress_stays_with_its_document() {
+        for tool in [Tool::Pen, Tool::CurvaturePen] {
+            let mut app = app();
+            app.ui.tool = tool;
+            let first = app.session.active().map(|st| st.doc.id);
+            let click = |app: &mut PhotocraftApp, x: f64, y: f64| {
+                if tool == Tool::Pen {
+                    pen_down(app, x, y);
+                    pen_up(app);
+                } else {
+                    curvature_down(app, x, y);
+                    curvature_up(app);
+                }
+            };
+            click(&mut app, 20.0, 20.0);
+            click(&mut app, 80.0, 40.0);
+            assert_eq!(app.ui.pen.as_ref().map(|p| (p.knots.len(), p.doc)), Some((2, first)), "{tool:?}: drawing on the first document");
+
+            app.run("file.new", json!({"width": 50, "height": 30})).unwrap();
+            app.sync_views();
+            let second = app.session.active().map(|st| st.doc.id);
+            assert_ne!(second, first);
+            assert!(app.ui.pen.is_none(), "{tool:?}: the open path doesn't carry over into the new document");
+            click(&mut app, 10.0, 10.0);
+            assert_eq!(app.ui.pen.as_ref().map(|p| (p.knots.len(), p.doc)), Some((1, second)), "{tool:?}: a new path on the new document");
+
+            // Without a frame in between (a control batch): neither committing nor a click on
+            // the first document uses the second document's path.
+            assert!(app.session.set_active(0));
+            pen_commit(&mut app, false);
+            assert!(app.ui.pen.is_none() && app.session.documents().iter().all(|st| st.doc.work_path.is_none()), "{tool:?}: nothing committed");
+            assert!(app.session.set_active(1));
+            click(&mut app, 10.0, 10.0);
+            assert!(app.session.set_active(0));
+            click(&mut app, 30.0, 30.0);
+            assert_eq!(app.ui.pen.as_ref().map(|p| (p.knots.len(), p.doc)), Some((1, first)), "{tool:?}: the click starts afresh");
+            assert!(app.session.set_active(1));
+            click(&mut app, 10.0, 10.0);
+
+            // Back on the first document by its tab: the second document's path doesn't follow.
+            app.run("document.activate", json!({"document": 0})).unwrap();
+            app.sync_views();
+            assert!(app.ui.pen.is_none(), "{tool:?}: switching tabs drops it too");
+            for st in app.session.documents() {
+                assert!(st.doc.work_path.is_none() && st.doc.layers.len() == 1, "{tool:?}: nothing was committed anywhere");
+            }
+        }
     }
 
     #[test]
