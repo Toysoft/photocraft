@@ -635,30 +635,52 @@ pub fn confirm(app: &mut PhotocraftApp, id: u64) -> Result<Value, String> {
                 return Err("dialog has no command".into());
             };
             let (cmd, params) = crate::smart_ui::confirm_command(&d.fields, cmd, crate::filter_dialog::params_of(&d.fields));
-            let result = app.run(&cmd, params.clone());
-            // A filter that runs as a background job keeps its preview on screen until the job
-            // lands (`canvas::committed_filter_preview`) instead of flashing the unfiltered image.
-            let running = app
-                .session
-                .active()
-                .is_some_and(|st| app.filter_preview.as_ref().is_some_and(|p| p.key.doc == st.doc.id) && app.session.job_on(st.doc.id).is_some());
-            match app.filter_preview.as_mut() {
-                Some(p) if result.is_ok() && running => p.committing = true,
-                _ => app.filter_preview = None,
+            // Displace with no map chosen asks for the map file now, as Photoshop does after its
+            // dialog's OK (#5806); the map's path is what the filter (and a smart filter's
+            // recorded params) read on every render.
+            #[cfg(not(target_arch = "wasm32"))]
+            if crate::filter_dialog::displace_needs_map(&cmd, &params) {
+                let fields = d.fields.clone();
+                app.filter_preview = None;
+                return app.pick_existing_file(move |app, path| {
+                    let mut params = params.clone();
+                    if let Some(o) = params.as_object_mut() {
+                        o.insert("mapPath".into(), json!(path));
+                    }
+                    run_dialog_command(app, &cmd, params, &fields)
+                });
             }
-            if result.is_ok() && cmd == "view.newGuideLayout" {
-                app.ui.view.guide_layout = params;
-            }
-            if result.is_ok() {
-                crate::filter_dialog::remember(app, &cmd, &d.fields);
-                // A step dialog of a playing action: the action continues after it.
-                crate::actions::resume(app, &d.fields);
-            }
-            result
+            run_dialog_command(app, &cmd, params, &d.fields)
         }
         DialogKind::LayerStyle => crate::layer_style::confirm(app, &d.fields),
         DialogKind::About | DialogKind::Error => Ok(Value::Null),
     }
+}
+
+/// Run a confirmed command dialog's command and finish its bookkeeping: the preview handover to a
+/// running job, remembered values, and a playing action's next step. Also the tail of the dialogs
+/// whose file ask comes first (Displace's map, #5806).
+fn run_dialog_command(app: &mut PhotocraftApp, cmd: &str, params: Value, fields: &serde_json::Map<String, Value>) -> Result<Value, String> {
+    let result = app.run(cmd, params.clone());
+    // A filter that runs as a background job keeps its preview on screen until the job
+    // lands (`canvas::committed_filter_preview`) instead of flashing the unfiltered image.
+    let running = app
+        .session
+        .active()
+        .is_some_and(|st| app.filter_preview.as_ref().is_some_and(|p| p.key.doc == st.doc.id) && app.session.job_on(st.doc.id).is_some());
+    match app.filter_preview.as_mut() {
+        Some(p) if result.is_ok() && running => p.committing = true,
+        _ => app.filter_preview = None,
+    }
+    if result.is_ok() && cmd == "view.newGuideLayout" {
+        app.ui.view.guide_layout = params;
+    }
+    if result.is_ok() {
+        crate::filter_dialog::remember(app, cmd, fields);
+        // A step dialog of a playing action: the action continues after it.
+        crate::actions::resume(app, fields);
+    }
+    result
 }
 
 /// Cancel a dialog and its dependent Layer Style picker, without applying edits.

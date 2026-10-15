@@ -206,6 +206,21 @@ impl PhotocraftApp {
         })
     }
 
+    /// Ask for one existing file and hand over its path, for a command that reads the file by
+    /// name (`Displace`'s map, #5806). The web's file dialog answers with contents rather than
+    /// paths, so this exists only where the platform has paths.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn pick_existing_file(&mut self, then: impl FnOnce(&mut Self, String) -> Result<Value, String> + 'static) -> Result<Value, String> {
+        let initial_dir = last_used_dir(&self.ui.recent_files);
+        self.ask_file(FileDialogRequest::Open { multiple: false, initial_dir, extensions: None }, move |app, answer| match answer {
+            FileDialogAnswer::Paths(paths) => {
+                let path = paths.into_iter().next().ok_or(CANCELLED)?;
+                then(app, path)
+            }
+            _ => Err(UNEXPECTED.into()),
+        })
+    }
+
     /// File › Open: opens every chosen file, reporting each failure (see [`Self::open_paths`]).
     pub fn open_dialog_file(&mut self) -> Result<Value, String> {
         let initial_dir = last_used_dir(&self.ui.recent_files);

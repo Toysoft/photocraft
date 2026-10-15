@@ -860,6 +860,16 @@ pub fn params_of(f: &Map<String, Value>) -> Value {
     Value::Object(f.iter().filter(|(k, v)| !k.starts_with("__") && !unset(k, v)).map(|(k, v)| (k.clone(), v.clone())).collect())
 }
 
+/// Whether a confirmed Displace dialog still has no map to displace by: Photoshop asks for the
+/// map file after the dialog's OK, the step whose absence made the filter look broken (#5806).
+/// `params` are what OK would run; a smart filter's own edit (`layer.smartFilter.setParams`)
+/// keeps its recorded map and never asks.
+pub fn displace_needs_map(cmd: &str, params: &Value) -> bool {
+    cmd == "filter.distort.displace"
+        && params.get("mapPath").and_then(Value::as_str).is_none_or(|p| p.trim().is_empty())
+        && params.get("mapDocument").and_then(Value::as_i64).is_none_or(|d| d < 0)
+}
+
 /// Compute a preview document: run `command` with `params` on the proxy (scaled) copy of `doc`.
 pub fn preview_document(doc: &Document, active: Option<photocraft_doc::LayerId>, command: &str, params: &Value, k: u32) -> Option<Document> {
     preview_document_with(doc, active, command, params, k, None)
@@ -1159,6 +1169,37 @@ mod tests {
         assert_eq!(saved["radius"], json!(7.0));
         assert!(saved.get("mapPath").is_none());
         assert!(saved.get("document").is_none());
+    }
+
+    /// #5806: confirming Displace with no map chosen asks for the map file, as Photoshop's
+    /// Displace does after its dialog, and runs the filter with the chosen path.
+    #[test]
+    fn displace_asks_for_its_map_file_when_none_is_chosen() {
+        let dir = std::env::temp_dir().join(format!("pc-displace-map-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let map = dir.join("white.png");
+        let white = photocraft_doc::Document::with_background(
+            "map",
+            photocraft_geom::Size::new(8, 8),
+            photocraft_color::ColorMode::Rgb,
+            photocraft_color::SampleType::U8,
+            photocraft_color::Color::rgba(1.0, 1.0, 1.0, 1.0),
+        );
+        std::fs::write(&map, photocraft_io::export(&white, "png", &Default::default()).unwrap().bytes).unwrap();
+        let (show, asked) = crate::file_dialog::fake(vec![Some(crate::file_dialog::FileDialogAnswer::Paths(vec![map.to_string_lossy().into_owned()]))]);
+        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services { file_dialog: Some(show), ..Default::default() });
+        app.run("file.new", json!({"width": 8, "height": 8})).unwrap();
+        let id = open(&mut app, "filter.distort.displace").unwrap();
+        let ctx = egui::Context::default();
+        let before = app.session.active().unwrap().history.past_len();
+        let r = crate::dialogs::confirm(&mut app, id);
+        app.poll_file_dialog(&ctx, None);
+        assert_eq!(asked.borrow().len(), 1, "the map file is asked for (confirm answered {r:?})");
+        assert!(matches!(asked.borrow()[0], crate::file_dialog::FileDialogRequest::Open { multiple: false, .. }), "{:?}", asked.borrow()[0]);
+        // The chosen map is read as the filter's map: the command ran with its path.
+        assert!(!app.ui.status_error, "{}", app.ui.status);
+        assert_eq!(app.session.active().unwrap().history.past_len(), before + 1, "the filter ran once");
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]
