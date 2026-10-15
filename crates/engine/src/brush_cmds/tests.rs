@@ -443,6 +443,18 @@ fn define_brush_from_selection() {
 }
 
 #[test]
+fn define_brush_from_selection_survives_allocation_failure() {
+    // The sampled tip is one f32 buffer over the whole selection. An allocation failure must be a
+    // graceful error (the document and brush untouched), never a panic or an OOM abort.
+    let mut s = session(40, 40);
+    s.execute("select.rect", json!({"x": 5, "y": 5, "width": 20, "height": 20})).unwrap();
+    crate::allocation::fail_next_for_test();
+    let result = s.execute("brush.defineFromSelection", json!({"name": "Blob"}));
+    let _ = crate::allocation::capacity::<u8>(0, "reset failpoint");
+    assert!(result.is_err(), "an allocation failure must be reported, not panic");
+}
+
+#[test]
 fn works_on_cmyk_and_16_bit() {
     for (mode, depth) in [("cmyk", 8), ("rgb", 16), ("grayscale", 32)] {
         let mut s = Session::new();
