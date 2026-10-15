@@ -115,7 +115,8 @@ pub const HANDLE_PX: f64 = 12.0;
 
 /// [`HANDLE_PX`] in document pixels at the current zoom.
 pub fn handle_tolerance(app: &PhotocraftApp) -> f64 {
-    HANDLE_PX / app.point_zoom().max(0.01) as f64
+    let px = if app.services.touch_ui { 24.0 } else { HANDLE_PX };
+    px / app.point_zoom().max(0.01) as f64
 }
 
 /// The box as one undo step restores it.
@@ -2209,8 +2210,9 @@ pub fn draw_overlay(app: &PhotocraftApp, painter: &egui::Painter, xf: &ViewXform
     let pts: Vec<Pos2> = t.quad.iter().map(|q| scr(*q)).collect();
     painter.add(egui::Shape::closed_line(pts.clone(), Stroke::new(1.0, accent)));
     let mids: Vec<Pos2> = (0..4).map(|i| pts[i].lerp(pts[(i + 1) % 4], 0.5)).collect();
+    let handle_size = if app.services.touch_ui { vec2(14.0, 14.0) } else { vec2(7.0, 7.0) };
     for p in pts.iter().chain(mids.iter()) {
-        let r = egui::Rect::from_center_size(*p, vec2(7.0, 7.0));
+        let r = egui::Rect::from_center_size(*p, handle_size);
         painter.rect_filled(r, 0.0, Color32::WHITE);
         painter.rect_stroke(r, 0.0, Stroke::new(1.0, accent), egui::StrokeKind::Inside);
     }
@@ -2222,7 +2224,7 @@ pub fn draw_overlay(app: &PhotocraftApp, painter: &egui::Painter, xf: &ViewXform
     painter.line_segment([c - vec2(0.0, 8.0), c + vec2(0.0, 8.0)], Stroke::new(1.0, Color32::WHITE));
     if let Some(at) = painter.ctx().pointer_hover_pos().filter(|p| xf.rect.contains(*p)) {
         let p = xf.to_doc(at);
-        let tol = HANDLE_PX / f64::from(xf.zoom.max(0.01));
+        let tol = handle_tolerance(app);
         if let Some(k) = rotate_dir(t, Some(pv), p, tol) {
             // Through the view, so the arc bends round the corner as it shows under a turned or
             // flipped view.

@@ -126,9 +126,15 @@ pub fn toolbar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
             // doesn't hide them.)
             let tool_tips = ui.data(|d| d.get_temp::<(egui::Id, Rect)>(flyout_id)).is_none() && !ui.input(|i| i.pointer.primary_down());
             let ctx = ui.ctx().clone();
+            let touch_mod_h = if app.services.touch_ui {
+                8.0 + if double { (bx + 3.0) * 4.0 } else { (bx + 3.0) * 7.0 }
+            } else {
+                0.0
+            };
             let footer = (if t.pro { 8.0 } else { 14.0 })
                 + chips_height(t.pro, t.round_chips, t.round_chips && double)
                 + if t.pro { 8.0 + if double { bx } else { bx * 2.0 + 3.0 } } else { 0.0 }
+                + touch_mod_h
                 + 6.0;
             // As tall as the tools, so the colour chips sit right under them (Photoshop); a column
             // taller than the window scrolls and keeps the chips at the bottom.
@@ -362,7 +368,166 @@ pub fn toolbar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                     });
                 });
             }
+            if app.services.touch_ui {
+                touch_modifier_keys(app, ui, bx, double);
+            }
         });
+}
+
+pub fn touch_free_transform(app: &mut PhotocraftApp, ctx: &egui::Context) {
+    if app.ui.transform.is_some() {
+        crate::transform_tool::commit(app);
+    } else {
+        let _ = crate::menus::invoke(app, ctx, "edit.freeTransform", serde_json::json!({}));
+    }
+}
+
+pub fn touch_escape(app: &mut PhotocraftApp, ctx: &egui::Context) {
+    if app.ui.transform.is_some() {
+        crate::transform_tool::cancel(app);
+    }
+    if crate::cam_transform::active(app) {
+        crate::cam_transform::cancel(app);
+    }
+    if app.ui.text_edit.is_some() {
+        crate::type_tool::cancel(app);
+    }
+    if app.ui.crop_rect.is_some() || !app.ui.polygon.is_empty() {
+        app.ui.polygon.clear();
+        app.ui.polygon_mode.clear();
+        crate::crop_ui::cancel(app);
+    }
+    if crate::lasso_ui::active(app) {
+        app.drag = None;
+    }
+    crate::screen_picker::cancel(ctx);
+    if app.session.active().is_some_and(|st| st.doc.selection.is_some()) {
+        let _ = app.run("select.deselect", serde_json::json!({}));
+    }
+    ctx.input_mut(|i| {
+        i.events.push(egui::Event::Key {
+            key: egui::Key::Escape,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: Default::default(),
+        });
+    });
+}
+
+pub fn touch_delete(app: &mut PhotocraftApp, ctx: &egui::Context) {
+    ctx.input_mut(|i| {
+        i.events.push(egui::Event::Key {
+            key: egui::Key::Delete,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: Default::default(),
+        });
+    });
+    if !app.ui.polygon.is_empty() {
+        crate::canvas::polygon_retract(app);
+        return;
+    }
+    if crate::lasso_ui::waiting_for_vertex(app) {
+        crate::lasso_ui::undo_last_vertex(app);
+        return;
+    }
+    if crate::vector_ui::delete_key_deletes_work_path(app) {
+        let _ = app.run("path.delete", serde_json::json!({"name": "work"}));
+        return;
+    }
+    if app.session.active().is_some_and(|st| st.doc.selection.is_some()) {
+        let _ = crate::menus::invoke(app, ctx, "edit.clear", serde_json::json!({}));
+    } else {
+        let _ = app.run("layer.delete", serde_json::json!({"__trash": true}));
+    }
+}
+
+fn touch_modifier_keys(app: &mut PhotocraftApp, ui: &mut egui::Ui, bx: f32, double: bool) {
+    let t = Tokens::get(ui.ctx());
+    ui.add_space(4.0);
+    let sep_w = if double { bx * 2.0 + 2.0 } else { bx };
+    let (r, _) = ui.allocate_exact_size(vec2(sep_w, 1.0), Sense::hover());
+    ui.painter().line_segment([r.left_center() + vec2(4.0, 0.0), r.right_center() - vec2(4.0, 0.0)], Stroke::new(1.0, t.separator));
+    ui.add_space(3.0);
+
+    let mut s = app.ui.shell.clone();
+    let draw_btn = |ui: &mut egui::Ui, label: &str, selected: bool, tip: &str| -> egui::Response {
+        let (rect, resp) = ui.allocate_exact_size(vec2(bx, bx), Sense::click());
+        let ink = icons::button_chrome(ui, rect, selected, resp.hovered());
+        let font_size = if label.len() > 4 { 10.0 } else { 11.5 };
+        ui.painter().text(
+            rect.center(),
+            Align2::CENTER_CENTER,
+            label,
+            egui::FontId::proportional(font_size),
+            ink,
+        );
+        resp.on_hover_text(tip)
+    };
+
+    let transforming = app.ui.transform.is_some();
+    if double {
+        ui.horizontal(|ui| {
+            if draw_btn(ui, "Shift", s.sticky_shift, "Shift: constrain proportions, straight lines").clicked() {
+                s.sticky_shift = !s.sticky_shift;
+            }
+            if draw_btn(ui, "Alt", s.sticky_alt, "Alt: eyedropper, duplicate, subtract").clicked() {
+                s.sticky_alt = !s.sticky_alt;
+            }
+        });
+        ui.horizontal(|ui| {
+            if draw_btn(ui, "Ctrl", s.sticky_command, "Ctrl/Cmd: multi-select, direct select").clicked() {
+                s.sticky_command = !s.sticky_command;
+            }
+            if draw_btn(ui, "Trf", transforming, "Free Transform (Ctrl+T): scale and rotate").clicked() {
+                touch_free_transform(app, ui.ctx());
+            }
+        });
+        ui.horizontal(|ui| {
+            if draw_btn(ui, "Esc", false, "Escape: cancel transform, crop, deselect").clicked() {
+                touch_escape(app, ui.ctx());
+            }
+            if draw_btn(ui, "Del", false, "Delete: delete layer or selection").clicked() {
+                touch_delete(app, ui.ctx());
+            }
+        });
+        if s.sticky_shift || s.sticky_alt || s.sticky_command {
+            if icons::button_with_icon_size(ui, "x", bx * 2.0 + 2.0, 12.0, false, "Clear modifier keys").clicked() {
+                s.sticky_shift = false;
+                s.sticky_alt = false;
+                s.sticky_command = false;
+            }
+        }
+    } else {
+        if draw_btn(ui, "Shift", s.sticky_shift, "Shift: constrain proportions, straight lines").clicked() {
+            s.sticky_shift = !s.sticky_shift;
+        }
+        if draw_btn(ui, "Alt", s.sticky_alt, "Alt: eyedropper, duplicate, subtract").clicked() {
+            s.sticky_alt = !s.sticky_alt;
+        }
+        if draw_btn(ui, "Ctrl", s.sticky_command, "Ctrl/Cmd: multi-select, direct select").clicked() {
+            s.sticky_command = !s.sticky_command;
+        }
+        if draw_btn(ui, "Trf", transforming, "Free Transform (Ctrl+T): scale and rotate").clicked() {
+            touch_free_transform(app, ui.ctx());
+        }
+        if draw_btn(ui, "Esc", false, "Escape: cancel transform, crop, deselect").clicked() {
+            touch_escape(app, ui.ctx());
+        }
+        if draw_btn(ui, "Del", false, "Delete: delete layer or selection").clicked() {
+            touch_delete(app, ui.ctx());
+        }
+        if (s.sticky_shift || s.sticky_alt || s.sticky_command)
+            && icons::button_with_icon_size(ui, "x", bx, 12.0, false, "Clear modifier keys").clicked()
+        {
+            s.sticky_shift = false;
+            s.sticky_alt = false;
+            s.sticky_command = false;
+        }
+    }
+    app.ui.shell = s;
 }
 
 /// Glyph size of a toolbar tool button. Pro fills two thirds of the button, close to Photoshop's
@@ -656,14 +821,16 @@ pub fn title_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                     // (Preferences), then search (Edit › Search), and narrows the switcher
                     // (Window › Workspace) before anything runs over.
                     let room = ui.available_width();
-                    let icons_shown: u8 = if room >= WORKSPACE_MIN + 2.0 * ICON_SLOT {
+                    let exit_slot = if app.services.touch_ui { 8.0 * ICON_SLOT } else { 0.0 };
+                    let optional_room = (room - exit_slot).max(0.0);
+                    let icons_shown: u8 = if optional_room >= WORKSPACE_MIN + 2.0 * ICON_SLOT {
                         2
-                    } else if room >= WORKSPACE_MIN + ICON_SLOT {
+                    } else if optional_room >= WORKSPACE_MIN + ICON_SLOT {
                         1
                     } else {
                         0
                     };
-                    let ws_width = (room - f32::from(icons_shown) * ICON_SLOT - 6.0).clamp(WORKSPACE_MIN, 130.0);
+                    let ws_width = (optional_room - f32::from(icons_shown) * ICON_SLOT - 6.0).clamp(WORKSPACE_MIN, 130.0);
                     if room >= WORKSPACE_MIN && widgets::dropdown(ui, "workspace", &mut ws, &opts, ws_width) {
                         app.ui.workspace = ws;
                         crate::menus::apply_workspace(app);
@@ -685,6 +852,42 @@ pub fn title_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                             crate::prefs_ui::cycle_appearance(app, ui.ctx());
                         }
                         button.context_menu(|ui| crate::prefs_ui::appearance_context_menu(app, ui));
+                    }
+                    if app.services.touch_ui {
+                        let can_undo = app.session.active().is_some_and(|st| st.history.can_undo());
+                        if icons::button_with_icon_size(ui, "undo-2", 28.0, 16.0, false, &crate::shortcuts::tip_label(app, "Undo", "edit.undo")).clicked() && can_undo {
+                            let _ = app.run("edit.undo", serde_json::json!({}));
+                        }
+                        let can_redo = app.session.active().is_some_and(|st| st.history.can_redo());
+                        if icons::button_with_icon_size(ui, "redo-2", 28.0, 16.0, false, &crate::shortcuts::tip_label(app, "Redo", "edit.redo")).clicked() && can_redo {
+                            let _ = app.run("edit.redo", serde_json::json!({}));
+                        }
+                        if icons::button_with_icon_size(ui, "maximize-2", 28.0, 16.0, false, &crate::shortcuts::tip_label(app, "Fit on Screen", "view.fitOnScreen")).clicked() {
+                            let _ = crate::menus::invoke(app, ui.ctx(), "view.fitOnScreen", serde_json::json!({}));
+                        }
+                        let transforming = app.ui.transform.is_some();
+                        if icons::button_with_icon_size(ui, "scaling", 28.0, 16.0, transforming, tl!("Free Transform")).clicked() {
+                            touch_free_transform(app, ui.ctx());
+                        }
+                        let add_label = if app.session.active().is_some() { tl!("Place Embedded…") } else { tl!("Open…") };
+                        if icons::button_with_icon_size(ui, "image", 28.0, 16.0, false, add_label).clicked() {
+                            if app.session.active().is_some() {
+                                let _ = crate::menus::invoke(app, ui.ctx(), "file.placeEmbedded", serde_json::json!({}));
+                            } else {
+                                let _ = crate::menus::invoke(app, ui.ctx(), "file.open", serde_json::json!({}));
+                            }
+                        }
+                        let has_paste = app.session.clipboard.is_some() || app.services.clipboard_get_image.is_some();
+                        if icons::button_with_icon_size(ui, "file-plus", 28.0, 16.0, false, tl!("Paste")).clicked() && has_paste {
+                            let _ = crate::menus::invoke(app, ui.ctx(), "edit.paste", serde_json::json!({}));
+                        }
+                        let has_doc = app.session.active().is_some();
+                        if icons::button_with_icon_size(ui, "trash", 28.0, 16.0, false, tl!("Delete layer")).clicked() && has_doc {
+                            touch_delete(app, ui.ctx());
+                        }
+                        if icons::button(ui, "x", 28.0, false, tl!("Exit")).clicked() {
+                            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+                        }
                     }
                     if rtl { ui.min_rect().right() } else { ui.min_rect().left() }
                 };

@@ -347,10 +347,18 @@ pub fn windows(app: &mut PhotocraftApp, ctx: &egui::Context) {
         crate::analysis_ui::panel_window(app, ctx, "modifier-keys", tl!("Modifier Keys"), vec2(-420.0, 80.0), 150.0, |ui| {
             close = crate::analysis_ui::title_row(ui, tl!("Modifier Keys"));
             ui.horizontal(|ui| {
+                let btn_size = if app.services.touch_ui { vec2(48.0, 38.0) } else { vec2(40.0, 30.0) };
                 for (label, on) in [(&*shift, &mut s.sticky_shift), (&*cmd, &mut s.sticky_command), (&*alt, &mut s.sticky_alt)] {
-                    if ui.add(egui::Button::new(RichText::new(label).size(14.0)).selected(*on).min_size(vec2(40.0, 30.0))).clicked() {
+                    if ui.add(egui::Button::new(RichText::new(label).size(14.0)).selected(*on).min_size(btn_size)).clicked() {
                         *on = !*on;
                     }
+                }
+                if (s.sticky_shift || s.sticky_command || s.sticky_alt)
+                    && ui.add(egui::Button::new(RichText::new(tl!("Clear")).size(12.0)).min_size(vec2(36.0, btn_size.y))).clicked()
+                {
+                    s.sticky_shift = false;
+                    s.sticky_command = false;
+                    s.sticky_alt = false;
                 }
             });
         });

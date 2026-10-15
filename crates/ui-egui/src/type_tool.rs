@@ -777,6 +777,20 @@ pub fn handle_keys(app: &mut PhotocraftApp, ctx: &egui::Context) -> bool {
     if ctx.text_edit_focused() || ctx.egui_wants_keyboard_input() {
         return true;
     }
+    // Canvas text editing is active: notify host IME/virtual keyboard that input is wanted.
+    let ime_rect = if app.last_canvas_rect.is_positive() {
+        app.last_canvas_rect
+    } else {
+        egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(200.0, 100.0))
+    };
+    ctx.output_mut(|o| {
+        o.ime = Some(egui::output::IMEOutput {
+            purpose: egui::IMEPurpose::Normal,
+            rect: ime_rect,
+            cursor_rect: ime_rect,
+            should_interrupt_composition: false,
+        });
+    });
     let id = LayerId(ed.layer);
     let Some(text) = current_text(app, id) else {
         app.ui.text_edit = None;

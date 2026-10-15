@@ -382,11 +382,17 @@ fn presets_store(app: &mut PhotocraftApp) {
 
 /// Resolve an absolute pixels-per-point preference without multiplying the OS DPI twice.
 /// Monitor dimensions are physical pixels, independent of window size and UI zoom.
-fn display_scale(pref: prefs::UiScale, native: Option<f32>) -> f32 {
+/// Extra scale for the automatic tablet profile. PhotoCraft's compact desktop controls are 30 pt;
+/// this takes their effective hit area above 37 pt on a tablet while leaving an explicit user
+/// scale untouched.
+const TOUCH_AUTO_SCALE: f32 = 1.25;
+
+fn display_scale(pref: prefs::UiScale, native: Option<f32>, touch_ui: bool) -> f32 {
     let native = native.filter(|v| v.is_finite() && *v > 0.0).unwrap_or(1.0);
     match pref {
         // The system's scale, fractional ones included (125%, 150%, 175%: #1072), and 100% on a
         // large 4K display run unscaled (#1278); 200% there is a fixed choice.
+        prefs::UiScale::Auto if touch_ui => native * TOUCH_AUTO_SCALE,
         prefs::UiScale::Auto => native,
         fixed => fixed.name().parse::<f32>().map_or(1.0, |pct| pct / 100.0),
     }
@@ -395,7 +401,7 @@ fn display_scale(pref: prefs::UiScale, native: Option<f32>) -> f32 {
 fn sync_display_scale(app: &PhotocraftApp, ctx: &egui::Context) {
     let native = ctx.native_pixels_per_point();
     let native_scale = native.filter(|v| v.is_finite() && *v > 0.0).unwrap_or(1.0);
-    let scale = display_scale(app.session.prefs().interface.ui_scale, native);
+    let scale = display_scale(app.session.prefs().interface.ui_scale, native, app.services.touch_ui);
     ctx.set_zoom_factor(scale / native_scale);
 }
 
@@ -2864,6 +2870,9 @@ mod tests {
                     if sec == "interface" && k == "favoriteThemes" {
                         continue; // Rendered as star controls beside the theme choices.
                     }
+                    if sec == "tools" && k == "stylusButtonAction" {
+                        continue; // Android-specific stylus preference.
+                    }
                     let mut labels = vec![humanize(k)];
                     labels.extend(prefs::choices(&format!("{sec}.{k}")).into_iter().flatten().map(|c| choice_label(c)));
                     missing.extend(labels.into_iter().filter(|l| !crate::i18n::has(lang, l)));
@@ -3009,11 +3018,19 @@ mod tests {
         // Whatever the monitor, 4K included: an unscaled desktop stays at 100% (#1278), and a
         // fractional or below-100% system scale is the user's choice (#1072).
         for dpi in [0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0] {
-            assert_eq!(display_scale(Auto, Some(dpi)), dpi);
+            assert_eq!(display_scale(Auto, Some(dpi), false), dpi);
         }
-        assert_eq!(display_scale(Auto, None), 1.0);
-        assert_eq!(display_scale(Auto, Some(f32::NAN)), 1.0);
-        assert_eq!(display_scale(Auto, Some(-2.0)), 1.0);
+        assert_eq!(display_scale(Auto, None, false), 1.0);
+        assert_eq!(display_scale(Auto, Some(f32::NAN), false), 1.0);
+        assert_eq!(display_scale(Auto, Some(-2.0), false), 1.0);
+    }
+
+    #[test]
+    fn automatic_tablet_scale_enlarges_only_automatic_scale() {
+        use photocraft_engine::prefs::UiScale;
+
+        assert_eq!(display_scale(UiScale::Auto, Some(2.0), true), 2.5);
+        assert_eq!(display_scale(UiScale::P100, Some(2.0), true), 1.0);
     }
 
     #[test]

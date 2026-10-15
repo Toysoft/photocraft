@@ -38,6 +38,9 @@ pub fn paint(ui: &egui::Ui, rect: Rect, name: &str, size: f32, tint: Color32) {
 /// icon box) on `p`, white with a dark outline so it reads on any image. The caller hides the OS
 /// cursor (`CursorIcon::None`).
 pub fn cursor(ctx: &egui::Context, name: &str, p: egui::Pos2, hot: Vec2, size: f32) {
+    if ctx.data(|d| d.get_temp::<bool>(egui::Id::new("is_touch_ui"))).unwrap_or(false) {
+        return;
+    }
     let rect = Rect::from_min_size(p - hot * size, Vec2::splat(size));
     let area = egui::Area::new(egui::Id::new("pc-icon-cursor")).order(egui::Order::Tooltip).fixed_pos(rect.min).constrain(false).interactable(false);
     area.show(ctx, |ui| {
@@ -62,6 +65,9 @@ pub fn cursor_copy_badge(ctx: &egui::Context, p: egui::Pos2) {
 }
 
 fn badge(ctx: &egui::Context, name: &str, p: egui::Pos2, doubled: bool) {
+    if ctx.data(|d| d.get_temp::<bool>(egui::Id::new("is_touch_ui"))).unwrap_or(false) {
+        return;
+    }
     const SIZE: f32 = 12.0;
     let rect = Rect::from_center_size(p + egui::vec2(20.0, 19.0), Vec2::splat(SIZE));
     let area = egui::Area::new(egui::Id::new("pc-cursor-badge")).order(egui::Order::Tooltip).fixed_pos(rect.min).constrain(false).interactable(false);

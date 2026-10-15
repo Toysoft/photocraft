@@ -426,6 +426,9 @@ pub type CapsLockFn = Box<dyn FnMut() -> bool>;
 /// Keeps an undecorated window's OS frame from offsetting its content and pointer (#2246).
 /// Called once per frame; `None` when the window is decorated or the platform needs no fixing.
 pub type WindowFrameFn = Box<dyn FnMut()>;
+/// Adds platform-specific input before egui sees a frame. Used by tablet shells to translate
+/// operating-system gestures that winit cannot express directly.
+pub type RawInputFn = Box<dyn FnMut(&mut egui::RawInput, photocraft_engine::prefs::StylusButtonAction)>;
 /// The caption buttons' current style ([`Services::caption_style`]).
 pub type CaptionStyleFn = Box<dyn Fn(&egui::Context) -> CaptionStyle>;
 
@@ -475,11 +478,19 @@ pub struct Services {
     /// the web (see `prefs_ui`).
     pub load_prefs: Option<LoadTextFn>,
     pub save_prefs: Option<SaveTextFn>,
+    /// Platform gestures injected before PhotoCraft processes the frame's pointer events.
+    pub raw_input: Option<RawInputFn>,
+    /// Whether a platform pen's side button is held during a tip contact.
+    pub stylus_barrel_held: Option<Box<dyn Fn() -> bool>>,
     /// Photoshop's live keyboard shortcut set, imported once at first launch (`kys_import`).
     pub photoshop_shortcuts: Option<PhotoshopShortcutsFn>,
     pub system_theme: Option<SystemThemeFn>,
     /// The native window is connected directly to a Wayland compositor.
     pub is_wayland: bool,
+    /// Use touch-friendly spacing when the system scale preference is Automatic. Platform shells
+    /// set this for tablet-first devices; people can still choose an explicit interface scale in
+    /// Preferences.
+    pub touch_ui: bool,
     /// On Wayland, the shell command that starts this install under XWayland, where native file
     /// drops work (#386); `None` when there is no X server to run it on.
     pub xwayland_command: Option<String>,
@@ -941,6 +952,9 @@ impl PhotocraftApp {
         };
         // Saved preferences are in place before the first frame; recovery starts in upkeep.
         prefs_ui::load(&mut app);
+        if app.services.touch_ui {
+            app.ui.tool_options.move_show_transform = true;
+        }
         // After the saved preferences, which say whether the set was already offered.
         kys_import::offer_import(&mut app);
         notices::wayland_file_drop_guidance(&mut app);
@@ -1767,6 +1781,7 @@ impl eframe::App for PhotocraftApp {
     }
 
     fn logic(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        ctx.data_mut(|d| d.insert_temp(egui::Id::new("is_touch_ui"), self.services.touch_ui));
         i18n::set_current(i18n::Lang::from_pref(&self.session.prefs().interface.language));
         // Caps Lock state read from the OS once per frame (see `Services::caps_lock`): the canvas
         // cursor block needs it before the frame renders. `None` (Wayland/web) keeps `false`.
@@ -1854,6 +1869,9 @@ impl eframe::App for PhotocraftApp {
     }
 
     fn raw_input_hook(&mut self, ctx: &egui::Context, raw_input: &mut egui::RawInput) {
+        if let Some(platform_input) = self.services.raw_input.as_mut() {
+            platform_input(raw_input, self.session.prefs().tools.stylus_button_action);
+        }
         let frame_start = gpu_canvas::now_ms();
         // An undecorated window gets its caption back when the toolkit changes its flags
         // (maximize, restore, …): take it off again before the frame is laid out (#2246).
@@ -1929,6 +1947,50 @@ impl eframe::App for PhotocraftApp {
         // system title bar this is where the document name lives, as the in-app title is hidden.
         panels::sync_window_title(self, &ctx);
         let chrome = !self.ui.view.hides_chrome();
+        if self.services.touch_ui && !chrome {
+            let frame = egui::Frame::NONE
+                .fill(egui::Color32::from_black_alpha(190))
+                .stroke(egui::Stroke::new(1.0, egui::Color32::from_white_alpha(35)))
+                .corner_radius(20)
+                .inner_margin(egui::Margin::symmetric(8, 4));
+            egui::Area::new(egui::Id::new("tablet-fullscreen-exit"))
+                .anchor(egui::Align2::RIGHT_TOP, egui::vec2(-16.0, 16.0))
+                .order(egui::Order::Foreground)
+                .show(&ctx, |ui| {
+                    frame.show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            let can_undo = self.session.active().is_some_and(|st| st.history.can_undo());
+                            if ui
+                                .add_enabled_ui(can_undo, |ui| {
+                                    icons::button_with_icon_size(ui, "undo-2", 32.0, 16.0, false, &crate::shortcuts::tip_label(self, "Undo", "edit.undo"))
+                                })
+                                .inner
+                                .clicked()
+                                && can_undo
+                            {
+                                let _ = self.run("edit.undo", serde_json::json!({}));
+                            }
+                            let can_redo = self.session.active().is_some_and(|st| st.history.can_redo());
+                            if ui
+                                .add_enabled_ui(can_redo, |ui| {
+                                    icons::button_with_icon_size(ui, "redo-2", 32.0, 16.0, false, &crate::shortcuts::tip_label(self, "Redo", "edit.redo"))
+                                })
+                                .inner
+                                .clicked()
+                                && can_redo
+                            {
+                                let _ = self.run("edit.redo", serde_json::json!({}));
+                            }
+                            if icons::button_with_icon_size(ui, "maximize-2", 32.0, 16.0, false, &crate::shortcuts::tip_label(self, "Fit on Screen", "view.fitOnScreen")).clicked() {
+                                let _ = crate::menus::invoke(self, &ctx, "view.fitOnScreen", serde_json::json!({}));
+                            }
+                            if icons::button_with_icon_size(ui, "x", 32.0, 16.0, false, tl!("Exit Full Screen")).clicked() {
+                                let _ = crate::menus::invoke(self, &ctx, "view.screenMode.standard", serde_json::json!({}));
+                            }
+                        });
+                    });
+                });
+        }
         if chrome && self.ui.panels.menu_bar {
             panels::title_bar(self, ui);
         }
@@ -2020,6 +2082,14 @@ impl eframe::App for PhotocraftApp {
         jobs_ui::keep_polling(self, &ctx);
         // Menus and buttons in this frame may have asked for a file dialog.
         self.poll_file_dialog(&ctx, Some(frame));
+        if self.services.touch_ui {
+            ctx.set_cursor_icon(egui::CursorIcon::None);
+            ctx.set_cursor_image(None);
+            ctx.output_mut(|o| {
+                o.cursor_icon = egui::CursorIcon::None;
+                o.cursor_image = None;
+            });
+        }
     }
 }
 

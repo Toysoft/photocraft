@@ -1,0 +1,45 @@
+[package]
+name = "photocraft-android"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "PhotoCraft Android tablet application"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+# Android's NativeActivity and the Android document picker require exported entry points. They
+# are the narrow FFI boundary for this app crate; the rest of PhotoCraft retains the workspace's
+# safe-Rust rule.
+[lints.rust]
+unsafe_code = "allow"
+
+[lints.clippy]
+dbg_macro = "warn"
+todo = "warn"
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+unimplemented = "deny"
+unreachable = "deny"
+
+[dependencies]
+photocraft-codecs = { workspace = true }
+photocraft-doc = { workspace = true }
+photocraft-engine = { workspace = true }
+photocraft-format = { workspace = true }
+photocraft-io = { workspace = true }
+photocraft-raster = { workspace = true }
+photocraft-ui-egui = { workspace = true }
+eframe = { workspace = true, features = ["wgpu", "persistence", "android-native-activity"] }
+egui = { workspace = true }
+
+[target.'cfg(target_os = "android")'.dependencies]
+android-activity = { version = "0.6", features = ["native-activity"] }
+jni = "0.22"
+
+# The production target is NativeActivity only. Unit tests run on the development host, where
+# winit needs one desktop backend in order to compile the eframe dependency graph.
+[target.'cfg(not(target_os = "android"))'.dev-dependencies]
+eframe = { workspace = true, features = ["x11"] }

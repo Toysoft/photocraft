@@ -31,7 +31,9 @@ photocraft-format = { workspace = true }
 photocraft-codecs = { workspace = true }
 egui = { workspace = true }
 egui_extras = { version = "0.36", default-features = false, features = ["svg"] }
-eframe = { workspace = true, features = ["wgpu", "accesskit"] }
+# Accessibility backends are selected by each platform app: eframe's Android NativeActivity
+# backend cannot be built with accesskit, while desktop and web enable it in their app manifests.
+eframe = { workspace = true, features = ["wgpu"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 log = { workspace = true }

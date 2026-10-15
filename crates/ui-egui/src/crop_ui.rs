@@ -920,6 +920,9 @@ pub fn turn_cursor_dir(app: &PhotocraftApp, p: [f64; 2]) -> Option<[f64; 2]> {
 /// arc with an arrowhead at each end, curving round the frame corner that lies in screen direction
 /// `toward` (an original drawing, no proprietary cursor asset).
 pub fn draw_turn_cursor(ctx: &egui::Context, p: egui::Pos2, toward: egui::Vec2) {
+    if ctx.data(|d| d.get_temp::<bool>(egui::Id::new("is_touch_ui"))).unwrap_or(false) {
+        return;
+    }
     let len = toward.length();
     if !len.is_finite() || len < 1e-6 {
         return;

@@ -3251,6 +3251,38 @@ pub fn canvas_view(app: &mut PhotocraftApp, ui: &mut egui::Ui, idx: usize, rect:
         }
     }
 
+    // Touchscreen / tablet multi-touch gestures (two-finger pan, pinch zoom, rotation)
+    let multi_touch = ui.input(|i| i.multi_touch());
+    let multi_touch_active = multi_touch.as_ref().is_some_and(|t| t.num_touches >= 2);
+    if let Some(touch) = multi_touch
+        && touch.num_touches >= 2
+        && (rect.contains(touch.center_pos) || rect.contains(touch.start_pos) || response.hovered())
+    {
+        if touch.translation_delta.is_finite() && touch.translation_delta != egui::Vec2::ZERO {
+            let d = xf.unmap_vec(touch.translation_delta) / (view.zoom / ppp);
+            view.center[0] -= d.x;
+            view.center[1] -= d.y;
+            ctx.request_repaint();
+        }
+        if touch.zoom_delta.is_finite() && touch.zoom_delta > 0.0 && touch.zoom_delta != 1.0 {
+            let nz = crate::zoom_levels::clamp(view.zoom * touch.zoom_delta, view.doc_size);
+            if nz != view.zoom {
+                let at = wheel_anchor(&xf, touch.center_pos, view.doc_size);
+                zoom_about(&mut view, &xf, at, nz, false, ppp);
+                ctx.request_repaint();
+            }
+        }
+        let rotate_enabled = app.session.prefs().enhanced_controls.rotate_view_with_trackpad;
+        if rotate_enabled && touch.rotation_delta.abs() > 0.001 {
+            let delta_deg = touch.rotation_delta.to_degrees();
+            let next = view.rotation + crate::rotate_view::screen_delta(delta_deg, xf.flip);
+            if next.is_finite() {
+                view.rotation = crate::rotate_view::wrap_deg(next);
+                ctx.request_repaint();
+            }
+        }
+    }
+
     // Pen pressure/tilt for this frame's tool events (mouse = 1.0), unless Preferences › Tools ›
     // Use Tablet Pressure is off; the pen's eraser end selects the Eraser.
     app.stylus.use_pressure = app.session.prefs().tools.use_tablet_pressure;
@@ -3279,14 +3311,26 @@ pub fn canvas_view(app: &mut PhotocraftApp, ui: &mut egui::Ui, idx: usize, rect:
     let temporary = crate::hold_keys::for_frame(app, &ctx, drawing || crate::type_transform::active(app));
     let space_pan = temporary == Some(crate::hold_keys::Temporary::Hand);
     let middle = ui.input(|i| i.pointer.middle_down());
-    let tool = match temporary {
-        Some(t) => t.tool(),
-        None if middle => Tool::Hand,
-        None => app.ui.tool,
+    let stylus_tool = app
+        .services
+        .stylus_barrel_held
+        .as_ref()
+        .is_some_and(|held| held())
+        .then(|| match app.session.prefs().tools.stylus_button_action {
+            photocraft_engine::prefs::StylusButtonAction::Eraser => Some(Tool::Eraser),
+            photocraft_engine::prefs::StylusButtonAction::Lasso => Some(Tool::Lasso),
+            photocraft_engine::prefs::StylusButtonAction::ContextMenu => None,
+        })
+        .flatten();
+    let tool = match (stylus_tool, temporary) {
+        (Some(tool), _) => tool,
+        (None, Some(t)) => t.tool(),
+        (None, None) if middle => Tool::Hand,
+        (None, None) => app.ui.tool,
     };
     // ⌘ held: this frame's gestures go to the Move tool (`PhotocraftApp::active_tool`). The Hand
     // and Zoom never reach `tool_event`, so only the Move needs the state machine to know.
-    app.tool_override = (temporary == Some(crate::hold_keys::Temporary::Move)).then_some(Tool::Move);
+    app.tool_override = stylus_tool.or_else(|| (temporary == Some(crate::hold_keys::Temporary::Move)).then_some(Tool::Move));
     // `~` held: a Brush or Pencil stroke that starts now erases (`tool_event`'s `Down`).
     app.held_erase = crate::hold_keys::erase_held(app, &ctx);
     // Zoom direction: the temporary zoom key decides, else ⌥ (Zoom tool), held or latched in
@@ -3514,8 +3558,17 @@ pub fn canvas_view(app: &mut PhotocraftApp, ui: &mut egui::Ui, idx: usize, rect:
         }
         // The (temporary) Hand pans above; its gestures never reach the tool underneath. While a
         // Free Transform box is open the Hand does not pan, so the box gets these events (#2302).
-        if hand_pan {
-            (buttons.started, buttons.dragged, buttons.stopped) = (false, false, false);
+        if hand_pan || multi_touch_active {
+            (buttons.started, buttons.dragged, buttons.stopped, buttons.clicked) = (false, false, false, false);
+            if multi_touch_active {
+                if let Some(d) = app.drag.take() {
+                    if strokes_live(d.tool) {
+                        app.live_stroke = None;
+                        app.trail = None;
+                        app.press_stroke = false;
+                    }
+                }
+            }
         }
         // Rotate View: drag around the view centre. Compass clicks are not a rotate drag.
         let over_compass = crate::rotate_view::compass_visible(view.rotation)
@@ -3845,12 +3898,12 @@ pub fn canvas_view(app: &mut PhotocraftApp, ui: &mut egui::Ui, idx: usize, rect:
         } else if let Some((r, p, c)) = response
             .hover_pos()
             .filter(|_| !transform_controls_several(app))
-            .and_then(|p| transform_controls_rect(app, &xf).and_then(|r| transform_controls_cursor(r, p).map(|c| (r, p, c))))
+            .and_then(|p| transform_controls_rect(app, &xf).and_then(|r| transform_controls_cursor(r, p, app.services.touch_ui).map(|c| (r, p, c))))
         {
             // The Move tool draws handles without opening a Free Transform session.
             // Give them their resize/rotate cursors before the first pointer press (#2871).
             ui.ctx().set_cursor_icon(c);
-            if let Some(toward) = transform_controls_turn(r, p) {
+            if let Some(toward) = transform_controls_turn(r, p, app.services.touch_ui) {
                 crate::crop_ui::draw_turn_cursor(&ctx, p, toward);
             }
         } else if let Some(c) = response.hover_pos().filter(|_| tool.is_type()).and_then(|p| {
@@ -4720,9 +4773,9 @@ fn transform_controls_rect(app: &PhotocraftApp, xf: &ViewXform) -> Option<Rect> 
 /// The Move tool shows transform handles even before a Free Transform session exists.
 /// Use the same hit areas for pointer-down and hover, so a control never behaves like
 /// resize/rotate while showing the ordinary four-arrow Move cursor (#2871).
-fn transform_controls_cursor(r: Rect, p: Pos2) -> Option<egui::CursorIcon> {
+fn transform_controls_cursor(r: Rect, p: Pos2, is_touch: bool) -> Option<egui::CursorIcon> {
     let handles = [r.left_top(), r.center_top(), r.right_top(), r.right_center(), r.right_bottom(), r.center_bottom(), r.left_bottom(), r.left_center()];
-    let grab = crate::transform_tool::HANDLE_PX as f32;
+    let grab = if is_touch { 24.0 } else { crate::transform_tool::HANDLE_PX as f32 };
     for (i, handle) in handles.into_iter().enumerate() {
         if handle.distance(p) <= grab {
             return Some(match i {
@@ -4734,22 +4787,25 @@ fn transform_controls_cursor(r: Rect, p: Pos2) -> Option<egui::CursorIcon> {
         }
     }
     // The rotation band: the pointer gives way to the curved rotate arrow (`transform_controls_turn`).
-    in_rotation_band(r, p).then_some(egui::CursorIcon::None)
+    in_rotation_band(r, p, is_touch).then_some(egui::CursorIcon::None)
 }
 
-fn in_rotation_band(r: Rect, p: Pos2) -> bool {
-    r.expand(18.0).contains(p) && !r.expand(5.0).contains(p)
+fn in_rotation_band(r: Rect, p: Pos2, is_touch: bool) -> bool {
+    let outer = if is_touch { 32.0 } else { 18.0 };
+    let inner = if is_touch { 8.0 } else { 5.0 };
+    r.expand(outer).contains(p) && !r.expand(inner).contains(p)
 }
 
 /// In the rotation band just outside the Move tool's transform controls, the screen direction the
 /// curved rotate arrow bends round: into the box along the nearest corner's bisector, as Free
 /// Transform draws it (#4658). Before, the band showed a plain alias pointer, so nothing said a
 /// drag there rotates.
-fn transform_controls_turn(r: Rect, p: Pos2) -> Option<Vec2> {
-    if !in_rotation_band(r, p)
+fn transform_controls_turn(r: Rect, p: Pos2, is_touch: bool) -> Option<Vec2> {
+    let grab = if is_touch { 24.0 } else { crate::transform_tool::HANDLE_PX as f32 };
+    if !in_rotation_band(r, p, is_touch)
         || [r.left_top(), r.center_top(), r.right_top(), r.right_center(), r.right_bottom(), r.center_bottom(), r.left_bottom(), r.left_center()]
             .into_iter()
-            .any(|h| h.distance(p) <= crate::transform_tool::HANDLE_PX as f32)
+            .any(|h| h.distance(p) <= grab)
     {
         return None;
     }
@@ -4759,8 +4815,8 @@ fn transform_controls_turn(r: Rect, p: Pos2) -> Option<Vec2> {
 
 /// A visible handle starts scaling; the narrow band just outside the box starts rotation.
 /// The interior stays the normal Move-tool drag target.
-fn transform_controls_hit(r: Rect, p: Pos2) -> bool {
-    transform_controls_cursor(r, p).is_some()
+fn transform_controls_hit(r: Rect, p: Pos2, is_touch: bool) -> bool {
+    transform_controls_cursor(r, p, is_touch).is_some()
 }
 
 /// Enter the existing Free Transform session when a Move-tool transform control is pressed.
@@ -4769,7 +4825,7 @@ fn begin_transform_controls_at(app: &mut PhotocraftApp, ctx: &egui::Context, xf:
         return false;
     }
     let Some(r) = transform_controls_rect(app, xf) else { return false };
-    if !transform_controls_hit(r, p) {
+    if !transform_controls_hit(r, p, app.services.touch_ui) {
         return false;
     }
     match crate::transform_tool::begin(app, ctx) {
@@ -4796,8 +4852,9 @@ fn draw_transform_controls(app: &mut PhotocraftApp, painter: &egui::Painter, xf:
     if transform_controls_several(app) {
         return;
     }
+    let handle_size = if app.services.touch_ui { vec2(14.0, 14.0) } else { vec2(7.0, 7.0) };
     for p in [r.left_top(), r.center_top(), r.right_top(), r.right_center(), r.right_bottom(), r.center_bottom(), r.left_bottom(), r.left_center()] {
-        let h = Rect::from_center_size(p, vec2(7.0, 7.0));
+        let h = Rect::from_center_size(p, handle_size);
         painter.rect_filled(h, 0.0, Color32::WHITE);
         painter.rect_stroke(h, 0.0, Stroke::new(1.0, accent), egui::StrokeKind::Inside);
     }
@@ -5806,15 +5863,14 @@ pub(crate) fn finish_gesture(app: &mut PhotocraftApp, d: Drag) {
                 let _ = app.run("select.deselect", json!({}));
             }
         }
-        Tool::Gradient => {
-            if (end[0] - d.start[0]).abs() + (end[1] - d.start[1]).abs() >= 2.0 {
-                let o = app.ui.tool_options.clone();
-                let _ = app.run(
-                    "paint.gradient",
-                    json!({"from": [d.start[0], d.start[1]], "to": [end[0], end[1]], "style": o.gradient_style, "reverse": o.gradient_reverse, "dither": o.gradient_dither, "opacity": o.fill_opacity, "mode": o.gradient_blend_mode.label(), "target": paint_target(app)}),
-                );
-            }
+        Tool::Gradient if (end[0] - d.start[0]).abs() + (end[1] - d.start[1]).abs() >= 2.0 => {
+            let o = app.ui.tool_options.clone();
+            let _ = app.run(
+                "paint.gradient",
+                json!({"from": [d.start[0], d.start[1]], "to": [end[0], end[1]], "style": o.gradient_style, "reverse": o.gradient_reverse, "dither": o.gradient_dither, "opacity": o.fill_opacity, "mode": o.gradient_blend_mode.label(), "target": paint_target(app)}),
+            );
         }
+        Tool::Gradient => {}
         Tool::Move => {
             let (dx, dy) = ((end[0] - d.start[0]).round(), (end[1] - d.start[1]).round());
             crate::move_ui::finish(app, dx, dy);
@@ -8180,7 +8236,7 @@ mod transform_controls_tests {
         let xf =
             ViewXform { rect: Rect::from_min_size(Pos2::ZERO, vec2(200.0, 200.0)), zoom: 1.0, center: [100.0, 100.0], flip: false, rotation: 0.0, aspect: 1.0 };
         let r = transform_controls_rect(&app, &xf).expect("shape layers have transform bounds");
-        assert!(transform_controls_hit(r, r.right_bottom()));
+        assert!(transform_controls_hit(r, r.right_bottom(), false));
 
         let ctx = egui::Context::default();
         assert!(begin_transform_controls_at(&mut app, &ctx, &xf, r.right_bottom()));
@@ -8295,14 +8351,14 @@ mod transform_controls_tests {
             // where the curved rotate arrow replaces the pointer (#4658).
             (pos2(r.left() + r.width() * 0.25, r.top() - 12.0), egui::CursorIcon::None),
         ] {
-            assert_eq!(transform_controls_cursor(r, p), Some(expected), "hover at {p:?}");
-            assert!(transform_controls_hit(r, p), "same region must start a transform");
+            assert_eq!(transform_controls_cursor(r, p, false), Some(expected), "hover at {p:?}");
+            assert!(transform_controls_hit(r, p, false), "same region must start a transform");
         }
-        assert_eq!(transform_controls_cursor(r, r.center()), None, "interior stays Move");
-        assert_eq!(transform_controls_cursor(r, pos2(r.center().x, r.top() - 30.0)), None);
+        assert_eq!(transform_controls_cursor(r, r.center(), false), None, "interior stays Move");
+        assert_eq!(transform_controls_cursor(r, pos2(r.center().x, r.top() - 30.0), false), None);
         // The rotate arrow bends round the nearest corner, pointing into the box; handles and the
         // interior have none.
-        let into = |p: Pos2| transform_controls_turn(r, p).map(|v| (v.x.signum(), v.y.signum()));
+        let into = |p: Pos2| transform_controls_turn(r, p, false).map(|v| (v.x.signum(), v.y.signum()));
         assert_eq!(into(pos2(r.left() + r.width() * 0.25, r.top() - 12.0)), Some((1.0, 1.0)), "top left");
         assert_eq!(into(pos2(r.right() + 12.0, r.bottom() - r.height() * 0.25)), Some((-1.0, -1.0)), "bottom right");
         assert_eq!(into(pos2(r.left() - 12.0, r.bottom() + 12.0)), Some((1.0, -1.0)), "beyond the bottom-left corner");
@@ -8313,17 +8369,17 @@ mod transform_controls_tests {
         app.session.execute("shape.create", json!({"kind": "rect", "rect": [120, 100, 40, 50], "fill": "#00ff00"})).unwrap();
         let next = transform_controls_rect(&app, &xf).expect("new active shape controls");
         assert_ne!(r, next);
-        assert_eq!(transform_controls_cursor(next, next.right_bottom()), Some(egui::CursorIcon::ResizeNwSe));
-        assert_eq!(transform_controls_cursor(next, next.center()), None);
+        assert_eq!(transform_controls_cursor(next, next.right_bottom(), false), Some(egui::CursorIcon::ResizeNwSe));
+        assert_eq!(transform_controls_cursor(next, next.center(), false), None);
     }
 
     #[test]
     fn transform_control_hit_keeps_move_interior_free_and_has_rotation_band() {
         let r = Rect::from_min_max(pos2(20.0, 30.0), pos2(100.0, 70.0));
-        assert!(transform_controls_hit(r, r.left_top()));
-        assert!(transform_controls_hit(r, pos2(60.0, 18.0)));
-        assert!(!transform_controls_hit(r, r.center()));
-        assert!(!transform_controls_hit(r, pos2(60.0, 4.0)));
+        assert!(transform_controls_hit(r, r.left_top(), false));
+        assert!(transform_controls_hit(r, pos2(60.0, 18.0), false));
+        assert!(!transform_controls_hit(r, r.center(), false));
+        assert!(!transform_controls_hit(r, pos2(60.0, 4.0), false));
     }
 }
 
