@@ -3272,6 +3272,10 @@ pub fn canvas_view(app: &mut PhotocraftApp, ui: &mut egui::Ui, idx: usize, rect:
     crate::crop_ui::cancel_stale(app);
     crate::crop_ui::ensure_frame(app);
     let mut drawing = crate::crop_ui::active(app);
+    if let Some(pen) = app.ui.pen.as_mut().filter(|pen| pen.dragging && !pen.curvature) {
+        pen.reposition = reposition;
+        drawing = true;
+    }
     if let Some(d) = app.drag.as_mut().filter(|d| crate::hold_keys::repositions(d.tool)) {
         d.reposition = reposition;
         drawing = true;
@@ -4009,6 +4013,8 @@ pub fn canvas_view(app: &mut PhotocraftApp, ui: &mut egui::Ui, idx: usize, rect:
                         pen_cursor(ui.ctx(), tool, p)
                     }
                 }
+                // The native copy pointer signals Alt-drag duplication without app-specific artwork.
+                Tool::Move if crate::move_mods::copying(app, alt) => egui::CursorIcon::Copy,
                 // Preferences › Cursors › Other Cursors: Precise shows a crosshair for every tool.
                 Tool::Move | Tool::Type | Tool::VerticalType | Tool::HorizontalTypeMask | Tool::VerticalTypeMask
                     if app.session.prefs().cursors.other == photocraft_engine::prefs::OtherCursor::Precise =>
@@ -4993,9 +4999,12 @@ fn alt_eyedropper(app: &mut PhotocraftApp, ev: ToolEvent, mods: egui::Modifiers)
 }
 
 fn sample_eyedropper(app: &mut PhotocraftApp, x: f64, y: f64, mods: egui::Modifiers) {
-    if let Some([r, g, b]) = eyedropper_color(app, x, y) {
+    if let Some(mut rgb) = eyedropper_color(app, x, y) {
+        if paint_target(app) != json!("pixels") {
+            rgb = [photocraft_color::convert::rgb_to_gray(rgb); 3];
+        }
         let key = if mods.alt { "background" } else { "foreground" };
-        let _ = app.run("tools.setColors", json!({ key: [r, g, b, 1.0] }));
+        let _ = app.run("tools.setColors", json!({ key: [rgb[0], rgb[1], rgb[2], 1.0] }));
     }
 }
 

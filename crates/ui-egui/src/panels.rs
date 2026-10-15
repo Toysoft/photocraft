@@ -3835,18 +3835,28 @@ fn brush_tip(p: &egui::Painter, c: egui::Pos2, rad: f32, hardness: f32, color: C
     }
 }
 
-/// The Brush's or Pencil's Mode dropdown: the blend modes, with Photoshop's painting-only Clear
+/// The Brush's or Pencil's Mode dropdown: the blend modes, with the painting-only Behind and Clear
 /// after Dissolve (#3439). Clear erases with the brush (`clear`); it shows while chosen, or while
 /// `~` is held (`held`). The wheel over it steps the mode, as over the Layers panel's (#2061).
 fn paint_mode_dropdown(ui: &mut egui::Ui, id: &str, b: &mut photocraft_engine::BrushSettings, clear: &mut bool, held: bool) {
-    let mut opts: Vec<(Option<BlendMode>, &str)> = BlendMode::LAYER_MODES.iter().map(|m| (Some(*m), m.label())).collect();
-    let at = opts.iter().position(|o| o.0 == Some(BlendMode::Dissolve)).map_or(opts.len(), |i| i + 1);
-    opts.insert(at, (None, "Clear"));
-    let mut mode = if *clear || held { None } else { Some(b.mode) };
+    let mut opts: Vec<((Option<BlendMode>, bool), &str)> = BlendMode::LAYER_MODES.iter().map(|m| ((Some(*m), false), m.label())).collect();
+    let at = opts.iter().position(|o| o.0 == (Some(BlendMode::Dissolve), false)).map_or(opts.len(), |i| i + 1);
+    opts.insert(at, ((None, true), "Behind"));
+    opts.insert(at + 1, ((None, false), "Clear"));
+    let mut mode = if *clear || held {
+        (None, false)
+    } else if b.behind {
+        (None, true)
+    } else {
+        (Some(b.mode), false)
+    };
     if !widgets::dropdown_wheel_hovered(ui, id, &mut mode, &opts, 96.0).0.is_empty() {
-        *clear = mode.is_none();
-        if let Some(m) = mode {
+        *clear = mode == (None, false);
+        b.behind = mode.1;
+        if let Some(m) = mode.0 {
             b.mode = m;
+        } else {
+            b.mode = BlendMode::Normal;
         }
     }
 }

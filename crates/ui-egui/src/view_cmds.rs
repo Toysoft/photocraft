@@ -1065,8 +1065,23 @@ pub fn form_body(ui: &mut egui::Ui, f: &mut Map<String, Value>) {
     // Data-driven labels (a per-part checkbox shows the part's name, not a catalogue entry)
     // come from `__labels` verbatim; everything else goes through the catalogue.
     let labels = f.get("__labels").cloned().unwrap_or(Value::Null);
-    let label = |k: &str| labels.get(k).and_then(Value::as_str).map_or_else(|| label_of(k), str::to_string);
-    let keys: Vec<String> = f.keys().filter(|k| !k.starts_with("__")).cloned().collect();
+    let file_info = f.get("__command").and_then(Value::as_str) == Some("file.fileInfo");
+    let label = |k: &str| {
+        if file_info {
+            match k {
+                "title" => return tl!("Document Title").to_owned(),
+                "copyright" => return tl!("Copyright Notice").to_owned(),
+                "copyrightUrl" => return tl!("Copyright Info URL").to_owned(),
+                _ => {}
+            }
+        }
+        labels.get(k).and_then(Value::as_str).map_or_else(|| label_of(k), str::to_string)
+    };
+    let mut keys: Vec<String> = f.keys().filter(|k| !k.starts_with("__")).cloned().collect();
+    if file_info {
+        const ORDER: &[&str] = &["title", "author", "authorTitle", "description", "keywords", "copyrightStatus", "copyright", "copyrightUrl"];
+        keys.sort_by_key(|k| ORDER.iter().position(|field| *field == k).unwrap_or(ORDER.len()));
+    }
     egui::Grid::new("form-dialog").num_columns(2).spacing([12.0, 6.0]).show(ui, |ui| {
         for k in keys {
             let v = f.get(&k).cloned().unwrap_or(Value::Null);
@@ -1104,7 +1119,7 @@ pub fn form_body(ui: &mut egui::Ui, f: &mut Map<String, Value>) {
                     json!(b)
                 }
                 Value::String(s) => {
-                    ui.label(label(&k));
+                    let field_label = ui.label(label(&k));
                     let mut s = s.clone();
                     match choices.get(&k).and_then(Value::as_array) {
                         Some(opts) => {
@@ -1113,7 +1128,22 @@ pub fn form_body(ui: &mut egui::Ui, f: &mut Map<String, Value>) {
                             crate::widgets::dropdown(ui, &format!("form-{k}"), &mut s, &refs, 200.0);
                         }
                         None => {
-                            ui.add(egui::TextEdit::singleline(&mut s).desired_width(260.0));
+                            let multiline = f.get("__command").and_then(Value::as_str) == Some("file.fileInfo")
+                                && matches!(k.as_str(), "description" | "keywords" | "copyright");
+                            if multiline {
+                                egui::ScrollArea::vertical().id_salt(("form-text", &k)).max_height(80.0).show(ui, |ui| {
+                                    let response = ui.add(egui::TextEdit::multiline(&mut s).desired_rows(3).desired_width(260.0)).labelled_by(field_label.id);
+                                    // The dialog's default button must not consume a newline.
+                                    if response.has_focus() {
+                                        ui.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
+                                    }
+                                });
+                            } else {
+                                let response = ui.add(egui::TextEdit::singleline(&mut s).desired_width(260.0));
+                                if file_info {
+                                    response.labelled_by(field_label.id);
+                                }
+                            }
                         }
                     }
                     json!(s)

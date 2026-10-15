@@ -959,6 +959,41 @@ fn blend_mode_and_dissolve() {
 }
 
 #[test]
+fn behind_preserves_native_channels_and_respects_alpha_selection_and_locks() {
+    for mode in [ColorMode::Rgb, ColorMode::Grayscale, ColorMode::Cmyk, ColorMode::Lab] {
+        for sample in [SampleType::U8, SampleType::U16, SampleType::F32] {
+            let fmt = PixelFormat::new(mode, sample, true);
+            let b = BrushSettings { size: 12.0, behind: true, opacity: 0.5, color: [0.1, 0.3, 0.8, 1.0], ..brush() };
+            let mut s = Surface::new(fmt);
+            let native = photocraft_raster::from_rgba(&fmt, [0.8, 0.2, 0.1, 0.5]);
+            s.fill_rect(Rect::new(0, 0, 12, 12), &native);
+            let before = s.pixel(6, 6);
+            let mut selection = Surface::new(PixelFormat::new(ColorMode::Grayscale, SampleType::F32, false));
+            selection.fill_rect(Rect::new(0, 0, 8, 12), &[0.5]);
+            render_stroke(&mut s, &b, &[StrokePoint::new(6.0, 6.0, 1.0)], Some(&selection), false, 1.0);
+            let source = photocraft_raster::from_rgba(&fmt, b.color);
+            let a = fmt.channels() - 1;
+            let under = 0.25 * (1.0 - before[a]);
+            let alpha = before[a] + under;
+            let got = s.pixel(6, 6);
+            assert!((got[a] - alpha).abs() < 0.005, "{fmt:?}: {got:?}");
+            for c in 0..a {
+                let expected = (before[c] * before[a] + source[c] * under) / alpha;
+                assert!((got[c] - expected).abs() < 0.005, "{fmt:?} channel {c}: {got:?}, expected {expected}");
+            }
+            assert_eq!(s.pixel(9, 6), before, "outside selection");
+            let locked = s.clone();
+            render_stroke(&mut s, &b, &[StrokePoint::new(6.0, 6.0, 1.0)], None, true, 1.0);
+            assert_eq!(s.read_region(Rect::new(0, 0, 12, 12)), locked.read_region(Rect::new(0, 0, 12, 12)), "locked transparency");
+            s.fill_rect(Rect::new(0, 0, 12, 12), &photocraft_raster::from_rgba(&fmt, [0.8, 0.2, 0.1, 1.0]));
+            let opaque = s.pixel(6, 6);
+            render_stroke(&mut s, &b, &[StrokePoint::new(6.0, 6.0, 1.0)], None, false, 1.0);
+            assert_eq!(s.pixel(6, 6), opaque, "opaque pixels");
+        }
+    }
+}
+
+#[test]
 fn presets_render_and_round_trip() {
     let presets = crate::presets::builtin();
     assert!(presets.len() >= 12);
@@ -1033,6 +1068,7 @@ fn live_union_of_passes_matches_merging_the_finished_passes_after_every_chunk() 
     brushes.push(b);
     brushes.push(BrushSettings { wet_edges: true, ..base.clone() });
     brushes.push(BrushSettings { mode: BlendMode::Dissolve, ..base.clone() });
+    brushes.push(BrushSettings { behind: true, ..base.clone() });
     brushes.push(BrushSettings { erase: true, ..base.clone() });
     let mut b = base.clone();
     b.texture.enabled = true;

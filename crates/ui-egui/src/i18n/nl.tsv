@@ -3949,3 +3949,8 @@ curves	Smooth	Vloeiend maken
 	There are too many sets: delete one first.	Er zijn te veel sets: verwijder er eerst een.
 	set name	naam van de set
 	{set} (modified)	{set} (gewijzigd)
+
+# File Info metadata labels
+	Document Title	Documenttitel
+	Copyright Notice	Copyrightvermelding
+	Select Layer Under Cursor	Laag onder cursor selecteren

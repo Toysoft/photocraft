@@ -21,6 +21,7 @@ pub const TOP_MENUS: [&str; 10] = ["File", "Edit", "Image", "Layer", "Type", "Se
 
 /// UI-level commands (handled by the shell rather than the engine): id, label, menu, shortcut.
 pub const UI_COMMANDS: &[(&str, &str, &[&str], Option<&str>)] = &[
+    ("layer.selectUnderCursor", "Select Layer Under Cursor", &[], None),
     ("ui.symmetryTransform", "Transform Symmetry", &[], None),
     // Right-click the options bar's tool icon (#2825); `tool.resetAll` asks first.
     ("tool.reset", "Reset Tool", &[], None),
@@ -335,6 +336,7 @@ pub(crate) fn invoke_unguarded(app: &mut PhotocraftApp, ctx: &egui::Context, id:
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
             Ok(Value::Null)
         }
+        "layer.selectUnderCursor" => select_layer_under_cursor(app, ctx),
         "file.clearRecent" => {
             app.clear_recent();
             Ok(Value::Null)
@@ -722,6 +724,9 @@ fn open_path(app: &mut PhotocraftApp, path: &str) -> Result<Value, String> {
 }
 
 pub fn is_enabled(app: &PhotocraftApp, id: &str) -> bool {
+    if id == "layer.selectUnderCursor" {
+        return app.session.active().is_some() && app.drag.is_none() && app.brush_resize.is_none();
+    }
     if crate::tool_shortcuts::tool(id).is_some() {
         return true;
     }
@@ -2316,4 +2321,26 @@ mod window_documents_tests {
         assert_eq!(r["ok"], true, "{r}");
         assert_eq!(app.session.active_index(), Some(0));
     }
+}
+
+/// Pointer-dependent shell command; pixel picking and selection remain engine commands.
+fn select_layer_under_cursor(app: &mut PhotocraftApp, ctx: &egui::Context) -> Result<Value, String> {
+    if app.drag.is_some() || app.brush_resize.is_some() {
+        return Ok(json!({"layer": null}));
+    }
+    let Some(xf) = crate::canvas::ViewXform::active(app) else { return Ok(json!({"layer": null})) };
+    let Some(pointer) = ctx.pointer_hover_pos().filter(|p| xf.rect.contains(*p)) else { return Ok(json!({"layer": null})) };
+    let [x, y] = xf.to_doc(pointer);
+    let inside = app
+        .session
+        .active()
+        .is_some_and(|st| x.is_finite() && y.is_finite() && x >= 0.0 && y >= 0.0 && x < f64::from(st.doc.size.width) && y < f64::from(st.doc.size.height));
+    if !inside {
+        return Ok(json!({"layer": null}));
+    }
+    let picked = app.run("layer.pickAt", json!({"x": x, "y": y, "target": "layer", "select": false}))?;
+    if let Some(layer) = picked.get("layer").and_then(Value::as_u64) {
+        app.run("layer.select", json!({"layer": layer, "mode": "replace"}))?;
+    }
+    Ok(picked)
 }

@@ -3181,3 +3181,8 @@ curves	Smooth	Haluskan
 	set name	nama set
 	{set} (modified)	{set} (diubah)
 	Random	Acak
+
+# File Info metadata labels
+	Document Title	Judul Dokumen
+	Copyright Notice	Pemberitahuan Hak Cipta
+	Select Layer Under Cursor	Pilih Lapisan di Bawah Kursor

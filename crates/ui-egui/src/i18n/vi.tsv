@@ -3675,3 +3675,9 @@ curves	Smooth	Làm mượt
 	There are too many sets: delete one first.	Có quá nhiều bộ: hãy xóa một bộ trước.
 	set name	tên bộ
 	{set} (modified)	{set} (đã sửa đổi)
+
+# File Info metadata labels
+	Document Title	Tiêu đề tài liệu
+	Copyright Notice	Thông báo bản quyền
+	Copyright Info URL	URL thông tin bản quyền
+	Select Layer Under Cursor	Chọn lớp dưới con trỏ

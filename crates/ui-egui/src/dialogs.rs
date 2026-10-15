@@ -257,7 +257,7 @@ pub fn show(app: &mut PhotocraftApp, ctx: &egui::Context) {
                 ui.set_max_width(360.0);
             }
             if color_picker {
-                ui.set_width(crate::color_picker_ui::CONTENT_WIDTH);
+                ui.set_width(crate::color_picker_ui::content_width(ui));
             }
             let label = egui::Label::new(egui::RichText::new(&title).font(crate::theme::semibold(15.0))).selectable(false);
             let t = if crate::color_picker_ui::owns(&fields) { ui.add_sized(egui::vec2(ui.available_width(), 22.0), label).rect } else { ui.add(label).rect };
@@ -365,7 +365,14 @@ pub fn show(app: &mut PhotocraftApp, ctx: &egui::Context) {
                     }
                 }
                 DialogKind::Command if crate::new_guide_ui::owns(&fields) => crate::new_guide_ui::body(ui, &mut fields),
-                DialogKind::Command if fields.contains_key("__form") => crate::view_cmds::form_body(ui, &mut fields),
+                DialogKind::Command if fields.contains_key("__form") => {
+                    if fields.get("__command").and_then(Value::as_str) == Some("file.fileInfo") {
+                        let room = (ctx.content_rect().height() - DIALOG_CHROME).max(120.0);
+                        egui::ScrollArea::vertical().id_salt(id.with("body")).max_height(room).show(ui, |ui| crate::view_cmds::form_body(ui, &mut fields));
+                    } else {
+                        crate::view_cmds::form_body(ui, &mut fields);
+                    }
+                }
                 DialogKind::Command => {}
                 DialogKind::LayerStyle => crate::layer_style::body(app, ui, &mut fields),
                 DialogKind::Error => {
@@ -557,6 +564,11 @@ fn about_tab_body(app: &mut PhotocraftApp, ui: &mut egui::Ui, tab: &str) {
 
 /// The dialog title as shown: [`title`] in the UI language.
 fn display_title(d: &Dialog) -> String {
+    match d.fields.get("__colorPicker").and_then(Value::as_str) {
+        Some("foreground") => return crate::color_picker_ui::title_for(tl!("Foreground Color")),
+        Some("background") => return crate::color_picker_ui::title_for(tl!("Background Color")),
+        _ => {}
+    }
     match d.kind {
         DialogKind::Command => {
             let label = d.fields.get("__label").and_then(Value::as_str).unwrap_or("Command");
@@ -873,6 +885,28 @@ mod tests {
     }
 
     #[test]
+    fn german_color_picker_fits_its_actions_and_translates_the_title() {
+        use egui_kittest::{Harness, kittest::Queryable};
+        let lang = crate::i18n::Lang::from_pref("de");
+        let text = |key| crate::i18n::with_language(lang, || crate::i18n::t(key).to_owned());
+        let app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+        let mut h =
+            Harness::builder().with_size(egui::vec2(760.0, 480.0)).build_ui_state(move |ui, app| crate::i18n::with_language(lang, || show(app, ui.ctx())), app);
+        PhotocraftApp::setup_context(&h.ctx, Default::default());
+        crate::color_picker_ui::open(h.state_mut(), "foreground");
+        h.run_steps(4);
+        let title = h.get_by_label("Farbwähler (Vordergrundfarbe)").rect();
+        let swatch = h.get_by_label(&text("Click to restore the current colour")).rect();
+        let frame = rects(&h.ctx)[0];
+        for label in ["OK", "Cancel", "Add to Swatches"] {
+            let r = h.get_by_label(&text(label)).rect();
+            assert!(r.left() > swatch.right(), "{label} must stay beside the swatches: {r:?}, {swatch:?}");
+            assert!((r.right() - title.right()).abs() < 1.0, "{label} aligns with the title edge");
+        }
+        assert!(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(760.0, 480.0)).contains_rect(frame), "{frame:?}");
+    }
+
+    #[test]
     fn layer_style_title_gutters_can_start_drags() {
         use egui_kittest::{Harness, kittest::Queryable};
 
@@ -967,6 +1001,57 @@ mod tests {
         crate::filter_dialog::open(h.state_mut(), command).unwrap();
         h.run_steps(4);
         h
+    }
+
+    #[test]
+    fn file_info_multiline_fields_keep_enter_and_cancel_discards_edits() {
+        use egui_kittest::kittest::Queryable;
+
+        crate::i18n::with_language(crate::i18n::Lang::EN, || {
+            let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+            app.run("file.new", json!({"width": 64, "height": 64})).unwrap();
+            let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(900.0, 700.0)).build_ui_state(|ui, app| show(app, ui.ctx()), app);
+            PhotocraftApp::setup_context(&h.ctx, crate::theme::ThemeKind::ALL[0]);
+            let ctx = h.ctx.clone();
+            crate::menus::invoke(h.state_mut(), &ctx, "file.fileInfo", json!({})).unwrap();
+            h.run_steps(4);
+            let labels = ["Document Title", "Author", "Author title", "Description", "Keywords", "Copyright status", "Copyright Notice", "Copyright Info URL"];
+            for pair in labels.windows(2) {
+                assert!(h.get_by_label(pair[0]).rect().center().y < h.get_by_label(pair[1]).rect().center().y, "field order: {pair:?}");
+            }
+            for (label, key) in [("Description", "description"), ("Keywords", "keywords"), ("Copyright Notice", "copyright")] {
+                h.get_by_label(label).click();
+                h.run_steps(1);
+                h.event(egui::Event::Text("First".into()));
+                h.run_steps(1);
+                h.key_press(egui::Key::Enter);
+                h.run_steps(1);
+                h.event(egui::Event::Text("Second".into()));
+                h.run_steps(1);
+                let dialog = h.state().ui.dialogs.last().expect("Enter edits the field, not OK");
+                assert_eq!(dialog.fields[key], "First\nSecond", "{label}");
+            }
+            h.get_by_label("Cancel").click();
+            h.run_steps(2);
+            assert!(h.state().ui.dialogs.is_empty());
+            assert_eq!(h.state_mut().run("file.fileInfo", json!({})).unwrap()["description"], "");
+        });
+    }
+
+    #[test]
+    fn file_info_keeps_multiline_metadata_on_confirm_and_reopen() {
+        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+        app.run("file.new", json!({"width": 64, "height": 64})).unwrap();
+        let ctx = egui::Context::default();
+        let id = crate::menus::invoke(&mut app, &ctx, "file.fileInfo", json!({})).unwrap()["dialog"].as_u64().unwrap();
+        for key in ["description", "copyright"] {
+            app.ui.dialog_mut(id).unwrap().fields.insert(key.into(), json!("First line\nSecond line"));
+        }
+        confirm(&mut app, id).unwrap();
+        let id = crate::menus::invoke(&mut app, &ctx, "file.fileInfo", json!({})).unwrap()["dialog"].as_u64().unwrap();
+        for key in ["description", "copyright"] {
+            assert_eq!(app.ui.dialog_mut(id).unwrap().fields[key], "First line\nSecond line");
+        }
     }
 
     /// #3152: Motion Blur's angle is a dial, as in Photoshop. Clicking or dragging it points the

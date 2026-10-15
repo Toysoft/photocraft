@@ -3787,3 +3787,8 @@ curves	Smooth	Wygładź
 	There are too many sets: delete one first.	Zestawów jest za dużo: najpierw usuń jeden.
 	set name	nazwa zestawu
 	{set} (modified)	{set} (zmieniony)
+
+# File Info metadata labels
+	Document Title	Tytuł dokumentu
+	Copyright Notice	Informacja o prawach autorskich
+	Select Layer Under Cursor	Zaznacz warstwę pod kursorem

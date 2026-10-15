@@ -3979,3 +3979,8 @@ layerLabel	No Color	Sem cor
 	There are too many sets: delete one first.	Há conjuntos demais: exclua um primeiro.
 	set name	nome do conjunto
 	{set} (modified)	{set} (modificado)
+
+# File Info metadata labels
+	Document Title	Título do documento
+	Copyright Notice	Aviso de direitos autorais
+	Select Layer Under Cursor	Selecionar camada sob o cursor

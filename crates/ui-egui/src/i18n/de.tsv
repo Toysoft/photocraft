@@ -3191,3 +3191,9 @@ curves	Smooth	Glätten
 	There are too many sets: delete one first.	Zu viele Sätze: Löschen Sie zuerst einen.
 	set name	Name des Satzes
 	{set} (modified)	{set} (geändert)
+
+# File Info metadata labels
+	Document Title	Dokumenttitel
+	Copyright Notice	Urheberrechtsvermerk
+	Copyright Info URL	URL der Urheberrechtsinformationen
+	Select Layer Under Cursor	Ebene unter dem Cursor auswählen

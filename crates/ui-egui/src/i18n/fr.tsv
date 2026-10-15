@@ -3194,3 +3194,8 @@ curves	Smooth	Lisser
 	set name	nom du jeu
 	{set} (modified)	{set} (modifié)
 	Random	Aléatoire
+
+# File Info metadata labels
+	Document Title	Titre du document
+	Copyright Notice	Mention de copyright
+	Select Layer Under Cursor	Sélectionner le calque sous le curseur

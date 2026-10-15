@@ -3797,3 +3797,9 @@ navigator	Zoom	Zvětšení
 	There are too many sets: delete one first.	Sad je příliš mnoho: nejprve jednu smažte.
 	set name	název sady
 	{set} (modified)	{set} (změněno)
+
+# File Info metadata labels
+	Document Title	Název dokumentu
+	Copyright Notice	Oznámení o autorských právech
+	Copyright Info URL	URL informací o autorských právech
+	Select Layer Under Cursor	Vybrat vrstvu pod kurzorem
