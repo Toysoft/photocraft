@@ -3888,3 +3888,14 @@ curves	Smooth	Згладити
 	There are too many sets: delete one first.	Забагато наборів: спершу видаліть один.
 	set name	назва набору
 	{set} (modified)	{set} (змінено)
+
+# Image › Mode › Bitmap (#5559)
+	50% Threshold	Поріг 50%
+	Pattern Dither	Візерунковий дизеринг
+	Diffusion Dither	Дифузійний дизеринг
+	Halftone Screen	Півтоновий растр
+	Custom Pattern	Довільний візерунок
+	Frequency:	Лініатура:
+	Lines/Inch	Ліній/дюйм
+	Lines/Centimeter	Ліній/сантиметр
+	Ellipse	Еліпс

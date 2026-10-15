@@ -4151,3 +4151,14 @@ navigator	Zoom	Zoom
 	There are too many sets: delete one first.	Hay demasiados conjuntos: elimine uno primero.
 	set name	nombre del conjunto
 	{set} (modified)	{set} (modificado)
+
+# Image › Mode › Bitmap (#5559)
+	50% Threshold	Umbral 50%
+	Pattern Dither	Tramado de motivo
+	Diffusion Dither	Tramado de difusión
+	Halftone Screen	Trama de semitonos
+	Custom Pattern	Motivo personalizado
+	Frequency:	Frecuencia:
+	Lines/Inch	Líneas/pulgada
+	Lines/Centimeter	Líneas/centímetro
+	Ellipse	Elipse

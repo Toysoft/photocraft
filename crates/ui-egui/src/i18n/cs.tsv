@@ -3797,3 +3797,14 @@ navigator	Zoom	Zvětšení
 	There are too many sets: delete one first.	Sad je příliš mnoho: nejprve jednu smažte.
 	set name	název sady
 	{set} (modified)	{set} (změněno)
+
+# Image › Mode › Bitmap (#5559)
+	50% Threshold	50% práh
+	Pattern Dither	Rozptyl se vzorkem
+	Diffusion Dither	Difuzní rozptyl
+	Halftone Screen	Polotónový rastr
+	Custom Pattern	Vlastní vzorek
+	Frequency:	Frekvence:
+	Lines/Inch	Linky/palec
+	Lines/Centimeter	Linky/centimetr
+	Ellipse	Elipsa

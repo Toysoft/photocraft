@@ -3675,3 +3675,14 @@ curves	Smooth	Làm mượt
 	There are too many sets: delete one first.	Có quá nhiều bộ: hãy xóa một bộ trước.
 	set name	tên bộ
 	{set} (modified)	{set} (đã sửa đổi)
+
+# Image › Mode › Bitmap (#5559)
+	50% Threshold	Ngưỡng 50%
+	Pattern Dither	Hòa sắc họa tiết
+	Diffusion Dither	Hòa sắc khuếch tán
+	Halftone Screen	Màn bán sắc
+	Custom Pattern	Họa tiết tùy chỉnh
+	Frequency:	Tần số:
+	Lines/Inch	Đường/inch
+	Lines/Centimeter	Đường/centimet
+	Ellipse	Elip

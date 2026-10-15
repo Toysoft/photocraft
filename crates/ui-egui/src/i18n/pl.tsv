@@ -3787,3 +3787,14 @@ curves	Smooth	Wygładź
 	There are too many sets: delete one first.	Zestawów jest za dużo: najpierw usuń jeden.
 	set name	nazwa zestawu
 	{set} (modified)	{set} (zmieniony)
+
+# Image › Mode › Bitmap (#5559)
+	50% Threshold	Próg 50%
+	Pattern Dither	Rozpraszanie wzorkiem
+	Diffusion Dither	Rozpraszanie dyfuzyjne
+	Halftone Screen	Raster półtonowy
+	Custom Pattern	Własny wzór
+	Frequency:	Częstotliwość:
+	Lines/Inch	Linii/cal
+	Lines/Centimeter	Linii/centymetr
+	Ellipse	Elipsa

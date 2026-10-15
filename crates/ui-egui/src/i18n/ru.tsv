@@ -3159,3 +3159,16 @@ curves	Smooth	Сгладить
 	set name	имя набора
 	{set} (modified)	{set} (изменён)
 	Random	Случайно
+
+# Image › Mode › Bitmap (#5559)
+	50% Threshold	Порог 50%
+	Pattern Dither	Регулярный дизеринг
+	Diffusion Dither	Диффузионный дизеринг
+	Halftone Screen	Полутоновый растр
+	Custom Pattern	Свой узор
+	Frequency:	Линиатура:
+	Lines/Inch	Линий/дюйм
+	Lines/Centimeter	Линий/см
+	Ellipse	Эллипс
+	Diamond	Ромб
+	Cross	Крест

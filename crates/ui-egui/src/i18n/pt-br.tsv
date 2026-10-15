@@ -3979,3 +3979,14 @@ layerLabel	No Color	Sem cor
 	There are too many sets: delete one first.	Há conjuntos demais: exclua um primeiro.
 	set name	nome do conjunto
 	{set} (modified)	{set} (modificado)
+
+# Image › Mode › Bitmap (#5559)
+	50% Threshold	Limiar de 50%
+	Pattern Dither	Pontilhamento de padrão
+	Diffusion Dither	Pontilhamento de difusão
+	Halftone Screen	Retícula de meio-tom
+	Custom Pattern	Padrão personalizado
+	Frequency:	Frequência:
+	Lines/Inch	Linhas/polegada
+	Lines/Centimeter	Linhas/centímetro
+	Ellipse	Elipse

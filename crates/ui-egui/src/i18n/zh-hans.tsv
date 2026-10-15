@@ -2805,3 +2805,16 @@ curves	Smooth	平滑
 	set name	组名称
 	{set} (modified)	{set}（已修改）
 	Random	随机
+
+# Image › Mode › Bitmap (#5559)
+	50% Threshold	50% 阈值
+	Pattern Dither	图案仿色
+	Diffusion Dither	扩散仿色
+	Halftone Screen	半调网屏
+	Custom Pattern	自定图案
+	Frequency:	频率：
+	Lines/Inch	线/英寸
+	Lines/Centimeter	线/厘米
+	Ellipse	椭圆
+	Cross	十字
+	Method	方法

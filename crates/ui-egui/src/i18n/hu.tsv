@@ -4108,3 +4108,14 @@ cameraRaw	Yellow	Sárga
 	There are too many sets: delete one first.	Túl sok készlet van: előbb töröljön egyet.
 	set name	készlet neve
 	{set} (modified)	{set} (módosítva)
+
+# Image › Mode › Bitmap (#5559)
+	50% Threshold	50%-os küszöb
+	Pattern Dither	Mintázatos keverés
+	Diffusion Dither	Diffúziós keverés
+	Halftone Screen	Féltónusrács
+	Custom Pattern	Egyéni mintázat
+	Frequency:	Gyakoriság:
+	Lines/Inch	Vonal/hüvelyk
+	Lines/Centimeter	Vonal/centiméter
+	Ellipse	Ellipszis

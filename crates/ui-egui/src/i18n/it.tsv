@@ -4310,3 +4310,14 @@ shape	Appearance	Aspetto
 	There are too many sets: delete one first.	Ci sono troppi set: eliminane prima uno.
 	set name	nome del set
 	{set} (modified)	{set} (modificato)
+
+# Image › Mode › Bitmap (#5559)
+	50% Threshold	Soglia 50%
+	Pattern Dither	Dithering pattern
+	Diffusion Dither	Dithering diffusione
+	Halftone Screen	Retino mezzetinte
+	Custom Pattern	Pattern personalizzato
+	Frequency:	Frequenza:
+	Lines/Inch	Linee/Pollice
+	Lines/Centimeter	Linee/Centimetro
+	Ellipse	Ellisse

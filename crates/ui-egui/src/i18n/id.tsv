@@ -3181,3 +3181,15 @@ curves	Smooth	Haluskan
 	set name	nama set
 	{set} (modified)	{set} (diubah)
 	Random	Acak
+
+# Image › Mode › Bitmap (#5559)
+	50% Threshold	Threshold 50%
+	Pattern Dither	Dither Pola
+	Diffusion Dither	Dither Difusi
+	Halftone Screen	Layar Halftone
+	Custom Pattern	Pola Kustom
+	Frequency:	Frekuensi:
+	Lines/Inch	Garis/Inci
+	Lines/Centimeter	Garis/Sentimeter
+	Ellipse	Elips
+	Cross	Silang

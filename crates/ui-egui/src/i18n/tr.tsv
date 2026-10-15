@@ -3919,3 +3919,14 @@ cameraData	Lens	Lens
 	There are too many sets: delete one first.	Çok fazla küme var: önce birini silin.
 	set name	küme adı
 	{set} (modified)	{set} (değiştirildi)
+
+# Image › Mode › Bitmap (#5559)
+	50% Threshold	%50 Eşik
+	Pattern Dither	Desen Titreklik
+	Diffusion Dither	Difüzyon Titreklik
+	Halftone Screen	Yarım Ton Tarama
+	Custom Pattern	Özel Desen
+	Frequency:	Frekans:
+	Lines/Inch	Çizgi/İnç
+	Lines/Centimeter	Çizgi/Santimetre
+	Ellipse	Elips

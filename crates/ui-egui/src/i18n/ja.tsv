@@ -3865,3 +3865,14 @@ curves	Smooth	スムーズ
 	There are too many sets: delete one first.	セットが多すぎます。先に 1 つ削除してください。
 	set name	セット名
 	{set} (modified)	{set}（変更あり）
+
+# Image › Mode › Bitmap (#5559)
+	50% Threshold	50% しきい値
+	Pattern Dither	パターンディザ
+	Diffusion Dither	拡散ディザ
+	Halftone Screen	ハーフトーンスクリーン
+	Custom Pattern	カスタムパターン
+	Frequency:	線数:
+	Lines/Inch	線/インチ
+	Lines/Centimeter	線/センチメートル
+	Ellipse	楕円
