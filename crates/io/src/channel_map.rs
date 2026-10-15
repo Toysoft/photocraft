@@ -85,7 +85,7 @@ pub(crate) fn decode_known_color(space: u16, c: [u16; 4]) -> Option<Color> {
     Some(match space {
         SPACE_RGB => Color::rgb(n(c[0]), n(c[1]), n(c[2])),
         SPACE_HSB => {
-            let rgb = hsb_to_rgb(n(c[0]) * 360.0, n(c[1]), n(c[2]));
+            let rgb = photocraft_color::convert::hsb_to_rgb([n(c[0]) * 360.0, n(c[1]), n(c[2])]);
             Color::rgb(rgb[0], rgb[1], rgb[2])
         }
         // Photoshop colour structures store CMYK inverted (65535 = no ink).
@@ -108,22 +108,6 @@ pub(crate) fn decode_known_color(space: u16, c: [u16; 4]) -> Option<Color> {
         }
         _ => return None,
     })
-}
-
-/// HSB (hue in degrees, saturation and brightness 0..1) → RGB.
-fn hsb_to_rgb(h: f32, s: f32, v: f32) -> [f32; 3] {
-    let h = if h.is_finite() { h.rem_euclid(360.0) / 60.0 } else { 0.0 };
-    let (s, v) = (s.clamp(0.0, 1.0), v.clamp(0.0, 1.0));
-    let f = h - h.floor();
-    let (p, q, t) = (v * (1.0 - s), v * (1.0 - s * f), v * (1.0 - s * (1.0 - f)));
-    match h.floor() as u8 {
-        0 => [v, t, p],
-        1 => [q, v, p],
-        2 => [p, v, t],
-        3 => [p, q, v],
-        4 => [t, p, v],
-        _ => [v, p, q],
-    }
 }
 
 #[cfg(test)]

@@ -54,6 +54,7 @@ pub fn validate_curve(points: &[[f32; 2]]) -> Result<(), String> {
 }
 
 use crate::photo_util::{hash01, linear_to_srgb, par_rows, srgb_to_linear};
+use photocraft_color::convert::hsb_to_rgb;
 
 mod local_tone;
 mod whites_blacks;
@@ -73,14 +74,6 @@ impl Encoding {
     pub(crate) fn encode(self, v: f32) -> f32 {
         if self.0 > 0.0 { v.max(0.0).powf(1.0 / self.0) } else { linear_to_srgb(v) }
     }
-}
-
-fn srgb_encode(v: f32) -> f32 {
-    linear_to_srgb(v)
-}
-
-fn srgb_decode(v: f32) -> f32 {
-    srgb_to_linear(v)
 }
 
 fn luma_linear(c: [f32; 3]) -> f32 {
@@ -468,22 +461,6 @@ fn rgb_to_hsv(c: [f32; 3]) -> [f32; 3] {
     [h, if mx > 1e-9 { d / mx } else { 0.0 }, mx]
 }
 
-fn hsv_to_rgb(h: f32, s: f32, v: f32) -> [f32; 3] {
-    let h = h.rem_euclid(360.0) / 60.0;
-    let c = v * s;
-    let x = c * (1.0 - ((h % 2.0) - 1.0).abs());
-    let (r, g, b) = match h as u32 {
-        0 => (c, x, 0.0),
-        1 => (x, c, 0.0),
-        2 => (0.0, c, x),
-        3 => (0.0, x, c),
-        4 => (x, 0.0, c),
-        _ => (c, 0.0, x),
-    };
-    let m = v - c;
-    [r + m, g + m, b + m]
-}
-
 /// Weights of the eight HSL bands at hue `h` (hat functions between neighbouring centres).
 pub fn band_weights(h: f32) -> [f32; 8] {
     let mut w = [0.0f32; 8];
@@ -653,7 +630,7 @@ pub fn develop(px: &mut [[f32; 4]], w: usize, h: usize, p: &CameraRaw, float: bo
         let hsl = !p.hsl_neutral();
         let grade = !p.grade_neutral();
         let wheel_tint = |wh: &Wheel| -> [f32; 3] {
-            let c = hsv_to_rgb(wh.hue, 1.0, 1.0);
+            let c = hsb_to_rgb([wh.hue, 1.0, 1.0]);
             let l = luma(c);
             [c[0] - l, c[1] - l, c[2] - l].map(|v| v * wh.sat / 100.0 * 0.3)
         };
@@ -696,7 +673,7 @@ pub fn develop(px: &mut [[f32; 4]], w: usize, h: usize, p: &CameraRaw, float: bo
                         }
                         let nh = hh + dh / 100.0 * 30.0;
                         let ns = (s * (1.0 + ds / 100.0)).clamp(0.0, 1.0);
-                        let mut out = hsv_to_rgb(nh, ns, v);
+                        let mut out = hsb_to_rgb([nh, ns, v]);
                         // Keep the luminance, then apply the luminance shift weighted by saturation.
                         let (l0, l1) = (luma(c), luma(out));
                         if l1 > 1e-6 {

@@ -4,6 +4,7 @@
 //! Everything is incremental (feed points in any chunking, get the same dabs) and deterministic:
 //! jitter comes from [`crate::rng`] keyed by the stroke seed and the step/dab index.
 
+use photocraft_color::convert::{rgb_from_hue_sextant, rgb_to_hsb_sextant};
 use photocraft_geom::Point;
 
 use crate::brush::{BrushSettings, Control, Dynamic, Smoothing};
@@ -399,37 +400,6 @@ fn scalar(d: &Dynamic, s: &StepInput, r: f32) -> f32 {
     v.max(min)
 }
 
-fn rgb_to_hsv(c: [f32; 3]) -> [f32; 3] {
-    let mx = c[0].max(c[1]).max(c[2]);
-    let mn = c[0].min(c[1]).min(c[2]);
-    let d = mx - mn;
-    let h = if d <= 0.0 {
-        0.0
-    } else if mx == c[0] {
-        ((c[1] - c[2]) / d).rem_euclid(6.0)
-    } else if mx == c[1] {
-        (c[2] - c[0]) / d + 2.0
-    } else {
-        (c[0] - c[1]) / d + 4.0
-    } / 6.0;
-    [h, if mx > 0.0 { d / mx } else { 0.0 }, mx]
-}
-
-fn hsv_to_rgb(h: f32, s: f32, v: f32) -> [f32; 3] {
-    let h6 = h.rem_euclid(1.0) * 6.0;
-    let i = h6.floor();
-    let f = h6 - i;
-    let (p, q, t) = (v * (1.0 - s), v * (1.0 - s * f), v * (1.0 - s * (1.0 - f)));
-    match i as i32 {
-        0 => [v, t, p],
-        1 => [q, v, p],
-        2 => [p, v, t],
-        3 => [p, q, v],
-        4 => [t, p, v],
-        _ => [v, p, q],
-    }
-}
-
 /// Colour Dynamics for one dab (or once per stroke, with `index = 0`).
 pub fn dynamic_color(b: &BrushSettings, s: &StepInput, seed: u64, index: u64) -> [f32; 4] {
     let cd = &b.color_dynamics;
@@ -438,13 +408,14 @@ pub fn dynamic_color(b: &BrushSettings, s: &StepInput, seed: u64, index: u64) ->
     let base = if cd.fg_bg.control != Control::Off { 1.0 - dynamic_value(&cd.fg_bg, s) } else { 0.0 };
     let t = (base + (1.0 - base) * cd.fg_bg.jitter.clamp(0.0, 1.0) * r(stream::FG_BG)).clamp(0.0, 1.0);
     let rgb = [fg[0] + (bg[0] - fg[0]) * t, fg[1] + (bg[1] - fg[1]) * t, fg[2] + (bg[2] - fg[2]) * t];
-    let [mut h, mut sat, mut v] = rgb_to_hsv(rgb);
+    let [mut h, mut sat, mut v] = rgb_to_hsb_sextant(rgb);
+    h /= 6.0;
     h += rand_signed(seed, index, stream::HUE) * cd.hue_jitter.clamp(0.0, 1.0) * 0.5;
     sat = (sat + rand_signed(seed, index, stream::SAT) * cd.saturation_jitter.clamp(0.0, 1.0)).clamp(0.0, 1.0);
     let pu = cd.purity.clamp(-1.0, 1.0);
     sat = if pu >= 0.0 { sat + (1.0 - sat) * pu } else { sat * (1.0 + pu) };
     v = (v + rand_signed(seed, index, stream::BRIGHT) * cd.brightness_jitter.clamp(0.0, 1.0)).clamp(0.0, 1.0);
-    let o = hsv_to_rgb(h, sat, v);
+    let o = rgb_from_hue_sextant(h.rem_euclid(1.0) * 6.0, v * sat, v - v * sat);
     [o[0], o[1], o[2], fg[3] + (bg[3] - fg[3]) * t]
 }
 
