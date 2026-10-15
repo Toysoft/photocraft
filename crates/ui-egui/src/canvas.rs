@@ -5806,14 +5806,12 @@ pub(crate) fn finish_gesture(app: &mut PhotocraftApp, d: Drag) {
                 let _ = app.run("select.deselect", json!({}));
             }
         }
-        Tool::Gradient => {
-            if (end[0] - d.start[0]).abs() + (end[1] - d.start[1]).abs() >= 2.0 {
-                let o = app.ui.tool_options.clone();
-                let _ = app.run(
-                    "paint.gradient",
-                    json!({"from": [d.start[0], d.start[1]], "to": [end[0], end[1]], "style": o.gradient_style, "reverse": o.gradient_reverse, "dither": o.gradient_dither, "opacity": o.fill_opacity, "mode": o.gradient_blend_mode.label(), "target": paint_target(app)}),
-                );
-            }
+        Tool::Gradient if (end[0] - d.start[0]).abs() + (end[1] - d.start[1]).abs() >= 2.0 => {
+            let o = app.ui.tool_options.clone();
+            let _ = app.run(
+                "paint.gradient",
+                json!({"from": [d.start[0], d.start[1]], "to": [end[0], end[1]], "style": o.gradient_style, "reverse": o.gradient_reverse, "dither": o.gradient_dither, "opacity": o.fill_opacity, "mode": o.gradient_blend_mode.label(), "target": paint_target(app)}),
+            );
         }
         Tool::Move => {
             let (dx, dy) = ((end[0] - d.start[0]).round(), (end[1] - d.start[1]).round());
