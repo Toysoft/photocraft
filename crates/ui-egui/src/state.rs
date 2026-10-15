@@ -1073,6 +1073,9 @@ pub struct UiState {
     /// Inline type editing session, if any.
     #[serde(default)]
     pub text_edit: Option<TextEdit>,
+    /// Clock time in seconds when type cursor blink was last reset (e.g. on keypress/caret move).
+    #[serde(skip)]
+    pub caret_blink_time: f64,
     /// Tool to restore when an inline type edit session commits or cancels (e.g. Move tool, #1132).
     #[serde(skip)]
     pub text_edit_return_tool: Option<Tool>,
@@ -1307,6 +1310,7 @@ impl Default for UiState {
             spring: None,
             recent_files: Vec::new(),
             text_edit: None,
+            caret_blink_time: 0.0,
             text_edit_return_tool: None,
             type_transform: None,
             type_transform_pivot: None,
