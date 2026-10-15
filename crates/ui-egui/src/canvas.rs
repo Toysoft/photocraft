@@ -4844,6 +4844,7 @@ fn draw_drag_preview(app: &mut PhotocraftApp, painter: &egui::Painter, xf: &View
                 draw_smoothing_string(painter, xf, s);
             }
         }
+        t if matches!(t, Tool::Blur | Tool::Sharpen | Tool::Dodge | Tool::Burn | Tool::Sponge | Tool::Smudge) => {}
         t if t.is_brushlike() || t == Tool::QuickSelection => {
             // Retouching strokes preview as a translucent trail of the brush footprint: a mask,
             // not a brush-wide egui polyline (which zoomed in tessellates into wedges, #189).
