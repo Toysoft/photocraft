@@ -3166,3 +3166,6 @@ curves	Smooth	Сгладить
 	Take the shortcut from the other command and select it	Снять комбинацию с другой команды и выбрать её
 	Undo Changes	Отменить изменения
 	{shortcut} is reserved by the system and can't be assigned.	Комбинация {shortcut} зарезервирована системой и не может быть назначена.
+	Hue Curves	Кривые цветового тона
+	Hue Curves…	Кривые цветового тона…
+	Curve:	Кривая:

@@ -628,6 +628,11 @@ fn adjustments() -> Vec<Adjustment> {
         Adjustment::ColorBalance { shadows: [10.0, 0.0, 0.0], midtones: [0.0, 0.0, 0.0], highlights: [0.0, 0.0, 10.0], preserve_luminosity: false },
         Adjustment::SelectiveColor { relative: true, adjustments: selective() },
         Adjustment::SelectiveColor { relative: false, adjustments: selective() },
+        Adjustment::HueCurves {
+            hue: pts(&[(0.0, 30.0), (60.0, 0.0), (120.0, 0.0), (180.0, -20.0), (240.0, 0.0), (300.0, 0.0)]),
+            saturation: pts(&[(0.0, 1.0), (120.0, 0.4), (240.0, 1.6)]),
+            luminance: pts(&[(30.0, 25.0), (210.0, -40.0)]),
+        },
         lookup(17, false, false),
         lookup(5, true, false),
         lookup(33, false, true),

@@ -3198,3 +3198,6 @@ curves	Smooth	Glätten
 	Take the shortcut from the other command and select it	Den Kurzbefehl dem anderen Befehl entziehen und diesen auswählen
 	Undo Changes	Änderungen rückgängig machen
 	{shortcut} is reserved by the system and can't be assigned.	{shortcut} ist vom System reserviert und kann nicht zugewiesen werden.
+	Hue Curves	Farbtonkurven
+	Hue Curves…	Farbtonkurven…
+	Curve:	Kurve:

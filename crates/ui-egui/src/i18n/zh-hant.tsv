@@ -2797,3 +2797,6 @@ curves	Smooth	平滑
 	Take the shortcut from the other command and select it	從另一個指令移除該快速鍵並選取它
 	Undo Changes	還原變更
 	{shortcut} is reserved by the system and can't be assigned.	{shortcut} 由系統保留，無法指定。
+	Hue Curves	色相曲線
+	Hue Curves…	色相曲線…
+	Curve:	曲線：
