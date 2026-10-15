@@ -3949,3 +3949,7 @@ curves	Smooth	Vloeiend maken
 	There are too many sets: delete one first.	Er zijn te veel sets: verwijder er eerst een.
 	set name	naam van de set
 	{set} (modified)	{set} (gewijzigd)
+
+# DDS Options (#1327)
+	DDS Options	DDS-opties
+	Generate Mipmaps	Mipmaps genereren
