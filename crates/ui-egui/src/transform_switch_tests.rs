@@ -205,3 +205,19 @@ fn a_refused_transform_keeps_the_placed_layer_and_refuses_the_new_layer() {
     assert_eq!(h.state().session.active().unwrap().doc.layers.len(), 2, "the placed layer stays, no new layer");
     assert_eq!(history(&h), before);
 }
+
+/// New Layer with bad params, while a moved box is open, is refused before the transform is
+/// applied: the box, the layer and History stay as they were.
+#[test]
+fn new_layer_with_bad_params_leaves_the_box_open() {
+    for bad in [json!({"mode": "Bogus"}), json!({"fillNeutral": true}), json!({"position": "x"}), json!([1])] {
+        let mut h = app();
+        transform_and_move(&mut h);
+        let before = history(&h);
+        assert!(h.state_mut().run("layer.new.layer", bad.clone()).is_err(), "{bad}");
+        h.run_steps(2);
+        assert!(h.state().ui.transform.is_some(), "{bad}: the box stays open");
+        assert_eq!(history(&h), before, "{bad}: nothing applied");
+        assert_eq!(red_bounds(&h), photocraft_geom::Rect::new(100, 100, 200, 160), "{bad}");
+    }
+}

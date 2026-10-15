@@ -1049,9 +1049,8 @@ impl PhotocraftApp {
         // command that can run; a transform refused or still being applied keeps the box open and
         // the command doesn't run.
         if id.starts_with("layer.new.") && self.ui.transform.is_some() {
-            if let Some(reason) = self.session.disabled_reason_with(id, &params) {
-                return Err(reason);
-            }
+            // Bad params or a command that can't run leave the box as it is.
+            self.session.precheck(id, &params).map_err(|e| e.to_string())?;
             transform_tool::commit(self);
             if transform_tool::committing(self).is_some() {
                 return Err("the transform is still being applied; try again when it has finished".into());
