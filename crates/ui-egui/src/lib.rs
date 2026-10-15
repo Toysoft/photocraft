@@ -1012,6 +1012,18 @@ impl PhotocraftApp {
         if let Some(result) = mask_trash_prompt::intercept(self, id, &params) {
             return result;
         }
+        // A new layer while Free Transform is open applies the transform first, as Photoshop does
+        // (#5667): History reads the transform (or Place Embedded), then New Layer. A transform
+        // still being applied in the background has to finish first.
+        if id.starts_with("layer.new.") && self.ui.transform.is_some() {
+            transform_tool::commit(self);
+            if transform_tool::committing(self).is_some() {
+                return Err("the transform is still being applied; try again when it has finished".into());
+            }
+            if self.ui.transform.is_some() {
+                transform_tool::cancel(self);
+            }
+        }
         // Automation input also gates every step a command runs on its behalf (`actions.play`).
         let gate = if self.automation_input && self.session.authorize.is_none() { self.services.automation_authorize } else { None };
         if gate.is_some() {
@@ -2639,9 +2651,9 @@ mod pixel_aspect_tests;
 mod transform_fx_tests;
 
 #[cfg(test)]
-mod transform_undo_tests;
-#[cfg(test)]
 mod transform_switch_tests;
+#[cfg(test)]
+mod transform_undo_tests;
 
 #[cfg(test)]
 mod transform_type_tests;
