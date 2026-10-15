@@ -48,6 +48,8 @@ pub const UI_COMMANDS: &[(&str, &str, &[&str], Option<&str>)] = &[
     ("view.rulers", "Rulers", &["View"], Some("Cmd+R")),
     ("view.show.grid", "Grid", &["View", "Show"], Some("Cmd+'")),
     ("view.show.guides", "Guides", &["View", "Show"], Some("Cmd+;")),
+    ("view.show.safeAreas", "Safe Areas", &["View", "Show"], None),
+    ("view.show.responsiveWarnings", "Responsive Warnings", &["View", "Show"], None),
     ("view.snap", "Snap", &["View"], Some("Cmd+Shift+;")),
     ("view.lockGuides", "Lock Guides", &["View"], Some("Cmd+Alt+;")),
     ("view.extras", "Extras", &["View"], Some("Cmd+H")),
@@ -61,6 +63,7 @@ pub const UI_COMMANDS: &[(&str, &str, &[&str], Option<&str>)] = &[
     ("view.zoomIn", "Zoom In", &["View"], Some("Cmd+=")),
     ("view.zoomOut", "Zoom Out", &["View"], Some("Cmd+-")),
     ("view.fitOnScreen", "Fit on Screen", &["View"], Some("Cmd+0")),
+    ("view.artboardOverview", "Artboard Overview", &["View"], None),
     ("view.actualPixels", "100%", &["View"], Some("Cmd+1")),
     ("view.rotateView", "Rotate View", &[], None),
     ("view.resetView", "Reset View", &["View"], None),
@@ -171,6 +174,10 @@ pub(crate) fn invoke_unguarded(app: &mut PhotocraftApp, ctx: &egui::Context, id:
     if let Some(tool) = crate::tool_shortcuts::tool(id) {
         crate::tool_memory::select(app, tool);
         return Ok(json!({"tool": tool}));
+    }
+    if id == "view.artboardOverview" {
+        app.artboard_overview.open = true;
+        return Ok(Value::Null);
     }
     if id == "ui.symmetryTransform" {
         return crate::symmetry_ui::begin(app).map(|_| Value::Null);
@@ -584,12 +591,14 @@ pub(crate) fn invoke_unguarded(app: &mut PhotocraftApp, ctx: &egui::Context, id:
             };
             app.run("edit.paste", p)
         }
-        "view.rulers" | "view.show.grid" | "view.show.guides" | "view.snap" | "view.lockGuides" => {
+        "view.rulers" | "view.show.grid" | "view.show.guides" | "view.show.safeAreas" | "view.show.responsiveWarnings" | "view.snap" | "view.lockGuides" => {
             let e = &mut app.ui.extras;
             let slot = match id {
                 "view.rulers" => &mut e.rulers,
                 "view.show.grid" => &mut e.grid,
                 "view.show.guides" => &mut e.guides,
+                "view.show.safeAreas" => &mut e.safe_areas,
+                "view.show.responsiveWarnings" => &mut e.responsive_warnings,
                 "view.snap" => &mut e.snap,
                 _ => &mut e.lock_guides,
             };
@@ -786,7 +795,9 @@ pub fn is_enabled(app: &PhotocraftApp, id: &str) -> bool {
         i if proof_preset(i).is_some() => app.session.active().is_some(),
         // "Custom…" is the full Proof Setup dialog.
         "view.proofSetup.custom" => app.session.active().is_some(),
-        "view.rulers" | "view.show.grid" | "view.show.guides" | "view.snap" | "view.lockGuides" => true,
+        "view.rulers" | "view.show.grid" | "view.show.guides" | "view.show.safeAreas" | "view.show.responsiveWarnings" | "view.snap" | "view.lockGuides" => {
+            true
+        }
         "edit.cut" | "edit.copy" if app.ui.text_edit.is_some() => crate::type_tool::selected_range(app).is_some(),
         "edit.paste" | "select.all" if app.ui.text_edit.is_some() => true,
         // An image copied in another app can only be seen by reading the OS clipboard, which happens
@@ -890,6 +901,8 @@ fn checked(app: &PhotocraftApp, id: &str) -> Option<bool> {
         "view.rulers" => return Some(e.rulers),
         "view.show.grid" => return Some(e.grid),
         "view.show.guides" => return Some(e.guides),
+        "view.show.safeAreas" => return Some(e.safe_areas),
+        "view.show.responsiveWarnings" => return Some(e.responsive_warnings),
         "view.snap" => return Some(e.snap),
         "view.lockGuides" => return Some(e.lock_guides),
         _ => {}
