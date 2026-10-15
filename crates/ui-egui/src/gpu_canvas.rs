@@ -27,6 +27,7 @@
 
 use std::collections::HashMap;
 use std::num::NonZeroU64;
+use std::sync::atomic::Ordering;
 
 use eframe::egui_wgpu::{self, CallbackResources, CallbackTrait, RenderState, ScreenDescriptor};
 use eframe::wgpu;
@@ -110,6 +111,11 @@ pub struct GpuCanvas {
     tile: u32,
     high: HighPolicy,
     health: photocraft_gpu::DeviceHealth,
+    /// [`video_memory`] of the adapter, detected once.
+    vram: Option<u64>,
+    /// [`canvas_budget`], shared with the paint callback's resources: [`GpuCanvas::format_for`]
+    /// reads it while the renderer is locked.
+    canvas_budget: std::sync::Arc<std::sync::atomic::AtomicU64>,
 }
 
 /// Whether `regenerate_mips` builds each level in a scratch texture and copies it back: on
@@ -158,9 +164,16 @@ impl GpuCanvas {
         res.health = health.clone();
         let info = rs.adapter.get_info();
         res.separate_mip_targets = separate_mip_targets(info.backend, info.vendor, std::env::var("PHOTOCRAFT_SEPARATE_MIPS").ok().as_deref());
+        let vram = video_memory(&info);
+        res.canvas_budget.store(canvas_budget(physical_memory(), vram), Ordering::Relaxed);
+        let budget = res.canvas_budget.clone();
         rs.renderer.write().callback_resources.insert(res);
-        log::info!("gpu canvas: target {:?}, max texture {max}, tile {tile}, 16F canvas {high:?}", rs.target_format);
-        Self { rs: rs.clone(), tile, high, health }
+        log::info!(
+            "gpu canvas: target {:?}, max texture {max}, tile {tile}, 16F canvas {high:?}, video memory {}",
+            rs.target_format,
+            vram.map_or_else(|| "unknown".to_owned(), |b| format!("{} MB", b >> 20))
+        );
+        Self { rs: rs.clone(), tile, high, health, vram, canvas_budget: budget }
     }
 
     /// The device's health flag (shared with the wgpu compositor and the paint callback).
@@ -192,6 +205,12 @@ impl GpuCanvas {
         self.rs.adapter.get_info()
     }
 
+    /// The adapter's own memory where it has one and the platform reports it (see
+    /// [`video_memory`]); it caps [`memory_budget`] and [`canvas_budget`].
+    pub fn video_memory(&self) -> Option<u64> {
+        self.vram
+    }
+
     /// The canvas texture format for a document of `depth` and `size`: `Rgba16Float` for 16/32-bit
     /// documents when the adapter supports it and the document fits [`F16_BUDGET_PX`], else
     /// `Rgba8Unorm`.
@@ -204,7 +223,11 @@ impl GpuCanvas {
         let px = size[0] as u64 * size[1] as u64;
         let high = match self.high {
             HighPolicy::Off => false,
-            HighPolicy::Budget => px <= F16_BUDGET_PX,
+            // Within the canvas budget too: a 16-bit canvas a small card can't hold as floats
+            // stays on the GPU as `Rgba8Unorm` rather than falling back to the CPU canvas.
+            HighPolicy::Budget => {
+                px <= F16_BUDGET_PX && canvas_texture_bytes(size, self.tile, texel_bytes(FORMAT_HIGH)) <= self.canvas_budget.load(Ordering::Relaxed)
+            }
             HighPolicy::Always => true,
         };
         if high && depth != photocraft_doc::SampleType::U8 { FORMAT_HIGH } else { FORMAT }
@@ -240,10 +263,7 @@ impl GpuCanvas {
 
     /// Set the GPU bytes one document's display texture set may take (see [`canvas_budget`]).
     pub fn set_canvas_budget(&self, bytes: u64) {
-        let mut r = self.rs.renderer.write();
-        if let Some(res) = r.callback_resources.get_mut::<Resources>() {
-            res.canvas_budget = bytes;
-        }
+        self.canvas_budget.store(bytes, Ordering::Relaxed);
     }
 
     /// Whether `doc`'s display textures fit [`canvas_budget`]; when they don't, nothing is
@@ -252,7 +272,7 @@ impl GpuCanvas {
         let size = [doc.size.width, doc.size.height];
         let bytes = canvas_texture_bytes(size, self.tile, texel_bytes(self.format_for(doc.depth, size)));
         let r = self.rs.renderer.read();
-        r.callback_resources.get::<Resources>().is_some_and(|res| bytes <= res.canvas_budget)
+        r.callback_resources.get::<Resources>().is_some_and(|res| bytes <= res.canvas_budget.load(Ordering::Relaxed))
     }
 
     /// Cap lower-stack composite reuse; zero disables it for profiling the uncached path.
@@ -934,6 +954,9 @@ pub struct GpuInfo {
     pub device_type: String,
     /// Driver name and version as the driver reports them.
     pub driver: String,
+    /// The adapter's own memory in MB ([`video_memory`]): discrete GPUs where the platform
+    /// reports it. It caps the GPU memory budgets.
+    pub video_memory_mb: Option<u64>,
     /// `performance.gpuBackend` at launch.
     pub preference: String,
     /// The backend startup chose ("auto", "dx12", "cpu", …, or "env" for `WGPU_BACKEND`).
@@ -961,6 +984,7 @@ impl GpuInfo {
         }
         .to_string();
         self.driver = [info.driver.as_str(), info.driver_info.as_str()].iter().filter(|s| !s.is_empty()).copied().collect::<Vec<_>>().join(" ");
+        self.video_memory_mb = video_memory(info).map(|b| b >> 20);
     }
 
     /// Human-readable lines for Help › System Info.
@@ -1193,13 +1217,22 @@ pub const OVER_BUDGET: &str = "layers exceed the GPU memory budget; full refresh
 
 /// GPU memory the wgpu compositor may hold for layer pages and effect maps: what Memory Usage
 /// (`allowance`, Preferences › Performance) leaves after the document's pixels and History
-/// (`pixels`), at most a quarter of physical memory (`ram`; 16 GB assumed when unknown), and at
-/// least [`MIN_GPU_BUDGET`]. On unified-memory machines these textures share RAM with the
-/// document, so a huge document keeps its layers on the GPU only as far as memory allows; the
-/// rest is uploaded per refresh as the view needs it.
-pub fn memory_budget(allowance: u64, pixels: u64, ram: Option<u64>) -> u64 {
+/// (`pixels`), at most a quarter of physical memory (`ram`; 16 GB assumed when unknown) and
+/// [`vram_share`] of a discrete GPU's own memory (`vram`, from [`video_memory`]), and at least
+/// [`MIN_GPU_BUDGET`]. On unified-memory machines these textures share RAM with the document, so
+/// a huge document keeps its layers on the GPU only as far as memory allows; the rest is
+/// uploaded per refresh as the view needs it.
+pub fn memory_budget(allowance: u64, pixels: u64, ram: Option<u64>, vram: Option<u64>) -> u64 {
     let ram = ram.unwrap_or(16 << 30);
-    allowance.saturating_sub(pixels).min(ram / 4).max(MIN_GPU_BUDGET)
+    allowance.saturating_sub(pixels).min(ram / 4).min(vram.map_or(u64::MAX, vram_share)).max(MIN_GPU_BUDGET)
+}
+
+/// The share of a discrete GPU's memory each of [`memory_budget`] and [`canvas_budget`] may
+/// plan for: three eighths, so the two together leave a quarter of the card to the window's
+/// swapchain, egui and other applications instead of over-committing it and letting the driver
+/// page (#4536).
+pub fn vram_share(vram: u64) -> u64 {
+    vram / 8 * 3
 }
 
 /// Why a document whose display textures don't fit [`canvas_budget`] is drawn on the CPU canvas.
@@ -1217,11 +1250,12 @@ pub const REFRESH_DEFERRED: &str = "deferred";
 pub const DEFER_PX: u64 = 1 << 22;
 
 /// GPU bytes one document's display texture set (every tile and mip level) may take: a quarter
-/// of physical memory (`ram`; 16 GB assumed when unknown), at least [`MIN_GPU_BUDGET`]. The set
-/// covers the whole canvas at full resolution, so its size follows the declared canvas, not the
-/// layer pixels; a larger canvas is drawn on the (reduced) CPU canvas instead (#2934).
-pub fn canvas_budget(ram: Option<u64>) -> u64 {
-    (ram.unwrap_or(16 << 30) / 4).max(MIN_GPU_BUDGET)
+/// of physical memory (`ram`; 16 GB assumed when unknown) and at most [`vram_share`] of a
+/// discrete GPU's own memory (`vram`), at least [`MIN_GPU_BUDGET`]. The set covers the whole
+/// canvas at full resolution, so its size follows the declared canvas, not the layer pixels; a
+/// larger canvas is drawn on the (reduced) CPU canvas instead (#2934).
+pub fn canvas_budget(ram: Option<u64>, vram: Option<u64>) -> u64 {
+    (ram.unwrap_or(16 << 30) / 4).min(vram.map_or(u64::MAX, vram_share)).max(MIN_GPU_BUDGET)
 }
 
 /// GPU bytes of a display texture set for a `size` canvas in `tile`-sided tiles of `bpp` bytes
@@ -1285,6 +1319,49 @@ fn detect_physical_memory() -> Option<u64> {
     None
 }
 
+/// The memory of `adapter` itself, in bytes, when it is a discrete GPU and the platform reports
+/// it: DXGI's dedicated video memory on Windows, amdgpu's VRAM size on Linux. `None` for
+/// integrated and software adapters, whose textures live in system memory (the RAM-based
+/// budgets already cover them), and where nothing reports it. `PHOTOCRAFT_VRAM_MB` overrides it
+/// for any adapter (to simulate a smaller card).
+pub fn video_memory(adapter: &wgpu::AdapterInfo) -> Option<u64> {
+    if let Some(mb) = std::env::var("PHOTOCRAFT_VRAM_MB").ok().and_then(|v| v.trim().parse::<u64>().ok()) {
+        return mb.checked_mul(1 << 20).filter(|b| *b > 0);
+    }
+    if adapter.device_type != wgpu::DeviceType::DiscreteGpu {
+        return None;
+    }
+    detect_video_memory(adapter.vendor, adapter.device).filter(|b| *b > 0)
+}
+
+#[cfg(windows)]
+fn detect_video_memory(vendor: u32, device: u32) -> Option<u64> {
+    use winsafe::prelude::*;
+    let factory = winsafe::CreateDXGIFactory1().ok()?;
+    factory
+        .EnumAdapters1()
+        .filter_map(|a| a.ok()?.GetDesc1().ok())
+        .find(|d| d.VendorId == vendor && d.DeviceId == device)
+        .and_then(|d| u64::try_from(d.DedicatedVideoMemory).ok())
+}
+
+#[cfg(target_os = "linux")]
+fn detect_video_memory(vendor: u32, device: u32) -> Option<u64> {
+    let hex = |p: std::path::PathBuf| u32::from_str_radix(std::fs::read_to_string(p).ok()?.trim().trim_start_matches("0x"), 16).ok();
+    std::fs::read_dir("/sys/class/drm").ok()?.flatten().find_map(|card| {
+        let dev = card.path().join("device");
+        if hex(dev.join("vendor"))? != vendor || hex(dev.join("device"))? != device {
+            return None;
+        }
+        std::fs::read_to_string(dev.join("mem_info_vram_total")).ok()?.trim().parse().ok()
+    })
+}
+
+#[cfg(not(any(target_os = "linux", windows)))]
+fn detect_video_memory(_vendor: u32, _device: u32) -> Option<u64> {
+    None
+}
+
 struct Resources {
     view_bgl: wgpu::BindGroupLayout,
     tile_bgl: wgpu::BindGroupLayout,
@@ -1315,7 +1392,7 @@ struct Resources {
     compositor_cache_budget: Option<u64>,
     compositor_focus: Option<photocraft_geom::Rect>,
     /// GPU bytes one document's display texture set may take (see [`canvas_budget`]).
-    canvas_budget: u64,
+    canvas_budget: std::sync::Arc<std::sync::atomic::AtomicU64>,
     encode_bgl: wgpu::BindGroupLayout,
     encode_pipeline: wgpu::RenderPipeline,
     lut_bgl: wgpu::BindGroupLayout,
@@ -1581,7 +1658,7 @@ impl Resources {
             compositor_budget: None,
             compositor_cache_budget: None,
             compositor_focus: None,
-            canvas_budget: canvas_budget(physical_memory()),
+            canvas_budget: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(canvas_budget(physical_memory(), None))),
             encode_bgl,
             encode_pipeline,
         }
@@ -1620,7 +1697,7 @@ impl DocTextures {
     /// The texture set for a `size` canvas, or `None` (nothing created) when it doesn't fit
     /// the canvas budget.
     fn new(device: &wgpu::Device, res: &Resources, size: [u32; 2], tile: u32, format: wgpu::TextureFormat) -> Option<Self> {
-        if canvas_texture_bytes(size, tile, texel_bytes(format)) > res.canvas_budget {
+        if canvas_texture_bytes(size, tile, texel_bytes(format)) > res.canvas_budget.load(Ordering::Relaxed) {
             return None;
         }
         let mut tiles = Vec::new();
@@ -2238,13 +2315,43 @@ mod tests {
     fn gpu_budget_follows_memory_usage_and_ram() {
         const G: u64 = 1 << 30;
         // What Memory Usage leaves after the document, within a quarter of RAM.
-        assert_eq!(memory_budget(8 * G, 3 * G, Some(48 * G)), 5 * G);
-        assert_eq!(memory_budget(8 * G, 3 * G, Some(16 * G)), 4 * G);
-        assert_eq!(memory_budget(64 * G, 3 * G, Some(16 * G)), 4 * G);
+        assert_eq!(memory_budget(8 * G, 3 * G, Some(48 * G), None), 5 * G);
+        assert_eq!(memory_budget(8 * G, 3 * G, Some(16 * G), None), 4 * G);
+        assert_eq!(memory_budget(64 * G, 3 * G, Some(16 * G), None), 4 * G);
         // Never below the floor, even with nothing left; 16 GB assumed when RAM is unknown.
-        assert_eq!(memory_budget(8 * G, 10 * G, Some(48 * G)), MIN_GPU_BUDGET);
-        assert_eq!(memory_budget(64 * G, 0, None), 4 * G);
+        assert_eq!(memory_budget(8 * G, 10 * G, Some(48 * G), None), MIN_GPU_BUDGET);
+        assert_eq!(memory_budget(64 * G, 0, None, None), 4 * G);
         assert!(physical_memory().is_none_or(|b| b >= 256 << 20));
+    }
+
+    /// An 8 GB card in a 64 GB machine: both budgets used to plan for 16 GB, twice the card (#4536).
+    #[test]
+    fn gpu_budgets_fit_a_discrete_gpus_own_memory() {
+        const G: u64 = 1 << 30;
+        let (ram, vram) = (Some(64 * G), Some(8 * G));
+        assert_eq!(memory_budget(64 * G, 3 * G, ram, vram), 3 * G);
+        assert_eq!(canvas_budget(ram, vram), 3 * G);
+        assert!(memory_budget(64 * G, 0, ram, vram) + canvas_budget(ram, vram) <= 6 * G, "a quarter of the card stays free");
+        // A card larger than a quarter of RAM changes nothing; a tiny one keeps the floor.
+        assert_eq!(memory_budget(8 * G, 3 * G, Some(48 * G), Some(24 * G)), 5 * G);
+        assert_eq!(canvas_budget(Some(16 * G), Some(24 * G)), 4 * G);
+        assert_eq!(memory_budget(64 * G, 0, ram, Some(G)), MIN_GPU_BUDGET);
+        assert_eq!(canvas_budget(ram, Some(G)), MIN_GPU_BUDGET);
+    }
+
+    /// DXGI reports each adapter's dedicated memory, found by the vendor and device ids wgpu gives.
+    #[cfg(windows)]
+    #[test]
+    fn windows_reports_the_adapters_own_memory() {
+        use winsafe::prelude::*;
+        let descs: Vec<_> = winsafe::CreateDXGIFactory1().unwrap().EnumAdapters1().map(|a| a.unwrap().GetDesc1().unwrap()).collect();
+        assert!(!descs.is_empty(), "DXGI lists at least its software adapter");
+        for d in descs.iter().filter(|d| d.DedicatedVideoMemory > 0) {
+            // The first adapter with these ids is the one matched.
+            let first = descs.iter().find(|e| e.VendorId == d.VendorId && e.DeviceId == d.DeviceId).unwrap();
+            assert_eq!(detect_video_memory(d.VendorId, d.DeviceId), Some(first.DedicatedVideoMemory as u64));
+        }
+        assert_eq!(detect_video_memory(0xdead, 0xbeef), None, "no such adapter");
     }
 
     /// Windows used to report no RAM at all, so the budget assumed 16 GB on every machine.
@@ -2277,12 +2384,12 @@ mod tests {
         assert_eq!(canvas_texture_bytes([0, 500], 64, 4), 0);
         // A canvas declared in a few bytes of a file is priced without building (or looping over) it.
         let huge = canvas_texture_bytes([300_000, 300_000], 8192, 4);
-        assert!(huge > 300_000u64 * 300_000 * 4 && huge > canvas_budget(Some(1 << 40)));
+        assert!(huge > 300_000u64 * 300_000 * 4 && huge > canvas_budget(Some(1 << 40), None));
         assert_eq!(canvas_texture_bytes([u32::MAX, u32::MAX], 64, 8), u64::MAX, "saturates");
         // A quarter of RAM (16 GB assumed), never below the compositor's floor.
-        assert_eq!(canvas_budget(None), 4 << 30);
-        assert_eq!(canvas_budget(Some(1 << 30)), MIN_GPU_BUDGET);
-        assert!(canvas_texture_bytes([12_000, 8_000], DEFAULT_TILE, 8) < canvas_budget(None), "a 96 MP 16-bit canvas stays on the GPU");
+        assert_eq!(canvas_budget(None, None), 4 << 30);
+        assert_eq!(canvas_budget(Some(1 << 30), None), MIN_GPU_BUDGET);
+        assert!(canvas_texture_bytes([12_000, 8_000], DEFAULT_TILE, 8) < canvas_budget(None, None), "a 96 MP 16-bit canvas stays on the GPU");
     }
 
     #[test]
