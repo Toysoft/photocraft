@@ -491,7 +491,7 @@ pub fn native(automation: Option<photocraft_automation::AuthorizedWorkspace>) ->
             let mut f = std::fs::OpenOptions::new().create(true).append(true).open(path).map_err(|e| e.to_string())?;
             f.write_all(text.as_bytes()).map_err(|e| e.to_string())
         })),
-        // Set by main once the Apple-event handlers are connected (macOS).
+        // Set by main: Apple events on macOS, the single-instance listener on Windows and Linux.
         os_events: None,
         // Set by main, which starts loading the store before the window opens.
         preset_store: None,

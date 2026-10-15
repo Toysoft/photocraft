@@ -1,7 +1,7 @@
 //! Opening files from disk: File › Open, Open Recent, drag-and-drop onto the window (except onto
 //! a document's canvas, which places the file as a layer), command-line paths at launch
 //! and the OS's "open these documents" requests (macOS Finder double-click, Open With, drops on the
-//! Dock icon) all go through [`PhotocraftApp::open_file`], so each one names the document after the
+//! Dock icon; on Windows and Linux, a later launch of the app) all go through [`PhotocraftApp::open_file`], so each one names the document after the
 //! file, remembers its path (File › Save writes back to it) and adds it to Open Recent. Failures
 //! are shown as errors (status bar + notice); import warnings as a notice.
 
@@ -12,7 +12,9 @@ use photocraft_engine::file_cmds::{is_template, untitled_name};
 /// [`Services::os_events`](crate::Services::os_events).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum OsEvent {
-    /// Open these files (absolute paths), e.g. a Finder double-click.
+    /// Open these files (absolute paths), e.g. a Finder double-click or a file opened from
+    /// Explorer or a browser while PhotoCraft is already running. An empty list just brings the
+    /// running window forward.
     Open(Vec<String>),
     /// Quit (e.g. the Dock menu's Quit, log out): goes through the normal close path, which asks
     /// about unsaved changes.
@@ -262,7 +264,9 @@ impl PhotocraftApp {
             match e {
                 OsEvent::Open(paths) => {
                     self.open_paths(&paths);
-                    // Bring the window forward when another app (Finder, the Dock) asked us to open.
+                    // Bring the window forward when another app (Finder, Explorer, a browser) asked
+                    // us to open. Restore first: a minimized window would otherwise stay down.
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
                     ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
                     ctx.request_repaint();
                 }

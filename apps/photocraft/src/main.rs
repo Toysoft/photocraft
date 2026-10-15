@@ -14,6 +14,10 @@
 //! `--control <port>` (or `PHOTOCRAFT_CONTROL_PORT`) starts a localhost JSON-lines control server.
 //! The first line must authenticate; subsequent request lines get reply lines.
 //! `{"id":1,"ok":true,"result":…}`. See `photocraft_ui_egui::control` for the methods.
+//!
+//! On Windows and Linux a second launch hands its files to the PhotoCraft that is already
+//! running (tabs in that window) and exits. `PHOTOCRAFT_NEW_INSTANCE=1` opens a separate window
+//! instead. macOS does the same handoff through Apple events.
 
 // Release builds on Windows are GUI-subsystem apps, so launching from the Start Menu or Explorer
 // doesn't open a console window. (`--version` output then only shows when redirected.)
@@ -34,6 +38,8 @@ mod file_dialog_probe;
 mod gpu_startup;
 #[cfg(target_os = "linux")]
 mod icon_theme;
+#[cfg(any(not(target_os = "macos"), test))]
+mod instance;
 #[cfg(target_os = "macos")]
 mod mac_menu;
 #[cfg(target_os = "macos")]
@@ -171,8 +177,6 @@ fn main() -> eframe::Result {
     // First, so the panic hook and every start-up warning are recorded (`logging`).
     let logger = logging::install();
     crash_guard::install_hook();
-    // The system font scan can take seconds (minutes on some Macs): run it off the UI thread.
-    photocraft_ui_egui::type_tool::warm_fonts();
     let mut control_port: Option<u16> = None;
     let mut control_arg_errors: Vec<String> = Vec::new();
     if let Some(value) = std::env::var("PHOTOCRAFT_CONTROL_PORT").ok().filter(|v| !v.trim().is_empty()) {
@@ -232,6 +236,30 @@ fn main() -> eframe::Result {
         }
         std::process::exit(code);
     }
+
+    // Before the font scan and the window: a file opened from Explorer, a browser or a taskbar
+    // pin is a new process, and it should become a tab of the one already running.
+    #[cfg(not(target_os = "macos"))]
+    let (instance_hold, instance_events) = {
+        let separate = std::env::var_os("PHOTOCRAFT_NEW_INSTANCE").is_some_and(|v| !v.is_empty() && v != "0");
+        let mode = instance::mode(control_port.is_some(), safe_gpu, !unreadable_paths.is_empty(), separate);
+        match services::config_dir() {
+            Some(dir) => match instance::acquire(&dir, &files, mode) {
+                instance::Launch::Forwarded => {
+                    log::info!("handed the open to the running PhotoCraft");
+                    return Ok(());
+                }
+                instance::Launch::Primary(instance) => {
+                    let events = instance.events();
+                    (Some(instance), Some(events))
+                }
+                instance::Launch::Solo => (None, None),
+            },
+            None => (None, None),
+        }
+    };
+    // The system font scan can take seconds (minutes on some Macs): run it off the UI thread.
+    photocraft_ui_egui::type_tool::warm_fonts();
 
     // The log file lives under the settings directory; opened after the arguments, so `--version`
     // and usage errors leave no file behind. Records logged until now are written to it first.
@@ -473,6 +501,10 @@ fn main() -> eframe::Result {
                 let rx = control_server::start(port, token, cc.egui_ctx.clone());
                 app = app.with_control(rx);
             }
+            #[cfg(not(target_os = "macos"))]
+            if let Some(events) = instance_events {
+                app.services.os_events = Some(events.connect(&cc.egui_ctx));
+            }
             #[cfg(target_os = "macos")]
             {
                 app.services.os_events = Some(apple_events.connect(&cc.egui_ctx));
@@ -507,7 +539,8 @@ fn main() -> eframe::Result {
             }
             #[cfg(target_os = "linux")]
             tablet::spawn_x11(&app.stylus.feed, display);
-            // Paths on the command line (Linux/Windows file associations, `photocraft a.psd`).
+            // Paths on this process's command line. A later launch's paths arrive through
+            // `instance` and are opened the same way (tabs in this window).
             app.open_paths(&files);
             if !unreadable_paths.is_empty() {
                 use photocraft_ui_egui::i18n;
@@ -542,6 +575,10 @@ fn main() -> eframe::Result {
             s.finish();
         }
     }
+    // Release the single-instance record before a graphics restart, so the new process can
+    // take it instead of handing its files to this one as it exits.
+    #[cfg(not(target_os = "macos"))]
+    drop(instance_hold);
     // Retry in a fresh process: winit event loops cannot be recreated reliably in-process.
     // Only renderer initialization failures qualify; never restart after editing has begun.
     if retry_cpu && !app_created.load(std::sync::atomic::Ordering::Relaxed) && matches!(&result, Err(eframe::Error::Wgpu(_))) {
