@@ -87,6 +87,7 @@ pub mod pattern_fill_cmds;
 pub mod perspective_crop_cmds;
 pub mod photo_cmds;
 pub mod pick_cmds;
+pub mod pipeline_cmds;
 mod pixels;
 pub mod plugin_cmds;
 pub mod prefs;
