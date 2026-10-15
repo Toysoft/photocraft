@@ -1423,7 +1423,7 @@ fn gradient_map(ui: &mut egui::Ui, v: &mut Value, cx: &EditorCx) -> Edit {
                 });
                 ui.separator();
                 for g in &cx.gradients {
-                    ui.label(RichText::new(&g.name).color(t.text_faint));
+                    ui.label(RichText::new(crate::bidi::visual(&g.name).as_ref()).color(t.text_faint));
                     for p in &g.items {
                         ui.horizontal(|ui| {
                             // A map has no transparency: colour stops only, shown opaque.

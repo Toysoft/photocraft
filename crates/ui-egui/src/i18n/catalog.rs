@@ -99,6 +99,19 @@ impl Catalog {
         let forms = self.plurals.get(&format!("{one}|{other}"))?;
         forms.get(index.min(forms.len().saturating_sub(1))).map(String::as_str)
     }
+
+    /// Rewrite every translation with `f`, sources and keys unchanged: a right-to-left
+    /// language's catalog is stored in display order (see [`crate::bidi::display_rtl`]).
+    pub fn map_translations(&mut self, f: impl Fn(&str) -> String) {
+        for value in self.plain.values_mut().chain(self.contextual.values_mut()).chain(self.ids.values_mut()) {
+            *value = f(value);
+        }
+        for forms in self.plurals.values_mut() {
+            for form in forms.iter_mut() {
+                *form = f(form);
+            }
+        }
+    }
 }
 
 /// `{name}` placeholders of a template, in order of appearance.

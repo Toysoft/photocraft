@@ -927,9 +927,9 @@ pub(crate) fn reveal_label() -> &'static str {
 /// Translate the fixed command label and substitute the currently configured export format.
 /// Reuse the existing translated PNG sentence, so dynamic formats work in every UI language.
 fn translated_menu_label(lang: crate::i18n::Lang, item: &MenuItem) -> String {
-    // A document's name is shown as it is.
-    if item.id.starts_with(DOCUMENT_ITEM) {
-        return item.label.clone();
+    // A document's or a recent file's name is user text: shown as it is, in display order.
+    if item.id.starts_with(DOCUMENT_ITEM) || item.id.starts_with("file.openRecent.") {
+        return crate::bidi::visual(&item.label).into_owned();
     }
     if item.id == "file.export.quickExportAsPng"
         && let Some(fmt) = item.label.strip_prefix("Quick Export as ")

@@ -2126,7 +2126,7 @@ fn tabs(app: &mut PhotocraftApp, ui: &mut egui::Ui) -> TabStrip {
                 + STUDIO_TAB_PAD
         })
         .chain(opening.iter().map(|(_, name, frac)| {
-            ui.painter().layout_no_wrap(name.clone(), font.clone(), t.text).size().x
+            ui.painter().layout_no_wrap(crate::bidi::visual(name).into_owned(), font.clone(), t.text).size().x
                 + ui.painter().layout_no_wrap(format!("{:.0}%", frac * 100.0), meta_font.clone(), t.text_faint).size().x
                 + STUDIO_TAB_PAD
         }))
@@ -2206,7 +2206,13 @@ fn tabs(app: &mut PhotocraftApp, ui: &mut egui::Ui) -> TabStrip {
             let Some((job, name, frac)) = opening.get(i - tab_count) else { continue };
             let sel = app.jobs.focus == Some(*job);
             let meta_g = ui.painter().layout_no_wrap(format!("{:.0}%", frac * 100.0), meta_font.clone(), t.text_faint);
-            let name_g = crate::tab_strip::elided(ui, name, font.clone(), t.text, (r.width() - STUDIO_TAB_PAD + STUDIO_TAB_GAP - meta_g.size().x).max(1.0));
+            let name_g = crate::tab_strip::elided(
+                ui,
+                crate::bidi::visual(name).as_ref(),
+                font.clone(),
+                t.text,
+                (r.width() - STUDIO_TAB_PAD + STUDIO_TAB_GAP - meta_g.size().x).max(1.0),
+            );
             let resp = ui.interact(r, ui.id().with(("dtabjob", job.0)), Sense::click());
             if sel {
                 ui.painter().rect_filled(r, t.radius_sm, t.card);
@@ -2233,8 +2239,15 @@ fn tabs(app: &mut PhotocraftApp, ui: &mut egui::Ui) -> TabStrip {
         if !f.overflow.is_empty() {
             let left = x.min((row.right() - crate::tab_strip::CHEVRON_W).max(row.left()));
             let r = Rect::from_min_size(egui::pos2(left, row.top()), egui::vec2(crate::tab_strip::CHEVRON_W, row.height()));
-            let labels: Vec<&str> =
-                app.session.documents().iter().map(|st| st.doc.name.as_str()).chain(opening.iter().map(|(_, name, _)| name.as_str())).collect();
+            // Document and file names are user text: shown in display order (`bidi::visual`).
+            let shown: Vec<String> = app
+                .session
+                .documents()
+                .iter()
+                .map(|st| crate::bidi::visual(&st.doc.name).into_owned())
+                .chain(opening.iter().map(|(_, name, _)| crate::bidi::visual(name).into_owned()))
+                .collect();
+            let labels: Vec<&str> = shown.iter().map(String::as_str).collect();
             let mut picked = None;
             crate::tab_strip::overflow_button(ui, ui.id().with("dtab-overflow"), r, tl!("More documents"), &labels, &f.overflow, &mut picked);
             match picked {
@@ -2427,16 +2440,22 @@ fn pro_tab_title(app: &PhotocraftApp, i: usize) -> String {
     let active_layer = st.active_layer.and_then(|id| st.doc.layer(id)).filter(|l| !st.doc.is_background(l.id));
     let mask = app.session.active_index() == Some(i) && app.ui.mask_target && active_layer.is_some_and(|l| l.mask.is_some());
     let model = if mask { tl!("Layer Mask").to_string() } else { mode_label(&st.doc).to_string() };
-    let layer = active_layer.map(|l| format!("{}, ", l.name)).unwrap_or_default();
+    let layer = active_layer.map(|l| format!("{}, ", crate::bidi::visual(&l.name))).unwrap_or_default();
     // A save in progress: "name @ 100% (Layer 1, RGB/16) - Saving 45%", as Photoshop does (#3389).
     let saving = crate::jobs_ui::save_progress(app, st.doc.id).map(|s| format!(" - {s}")).unwrap_or_default();
-    format!("{} @ {}% ({layer}{model}/{}){}{saving}", st.doc.name, fmt_zoom(zoom), st.doc.depth.bits(), if st.is_dirty() { "*" } else { "" })
+    format!(
+        "{} @ {}% ({layer}{model}/{}){}{saving}",
+        crate::bidi::visual(&st.doc.name),
+        fmt_zoom(zoom),
+        st.doc.depth.bits(),
+        if st.is_dirty() { "*" } else { "" }
+    )
 }
 
 /// The Studio strip's tab name: "name *" when unsaved, "name * - Saving 45%" while it saves (#3389).
 fn studio_tab_name(app: &PhotocraftApp, st: &photocraft_engine::DocState) -> String {
     let saving = crate::jobs_ui::save_progress(app, st.doc.id).map(|s| format!(" - {s}")).unwrap_or_default();
-    format!("{}{}{saving}", st.doc.name, if st.is_dirty() { " *" } else { "" })
+    format!("{}{}{saving}", crate::bidi::visual(&st.doc.name), if st.is_dirty() { " *" } else { "" })
 }
 
 /// Photoshop document tabs: "name @ 33.3% (RGB/8)" on a dark strip; active tab matches panels.
@@ -2462,7 +2481,7 @@ fn pro_tabs(app: &mut PhotocraftApp, ui: &mut egui::Ui) -> TabStrip {
     // underline); they share the fit's index space, after the documents.
     let opening = crate::jobs_ui::open_tabs(app);
     let mut titles: Vec<String> = (0..tab_count).map(|i| pro_tab_title(app, i)).collect();
-    titles.extend(opening.iter().map(|(_, name, frac)| format!("{name} ({} {:.0}%)", tl!("Opening…"), frac * 100.0)));
+    titles.extend(opening.iter().map(|(_, name, frac)| format!("{} ({} {:.0}%)", crate::bidi::visual(name), tl!("Opening…"), frac * 100.0)));
     // Every tab's natural width, whether or not it stays on the strip.
     let natural: Vec<f32> = titles.iter().map(|title| ui.painter().layout_no_wrap(title.clone(), font.clone(), t.text).size().x + DOC_TAB_PAD).collect();
     let selected = app
@@ -2790,12 +2809,12 @@ fn home_recent(app: &mut PhotocraftApp, ui: &mut egui::Ui, recent: &[String]) {
         let icon = Rect::from_center_size(egui::pos2(row.left() + 16.0, row.center().y), egui::vec2(16.0, 16.0));
         crate::icons::paint(ui, icon, "file", 14.0, t.text_dim);
         let x = row.left() + 32.0;
-        let name_g = crate::tab_strip::elided(ui, &name, egui::FontId::proportional(12.5), t.text, 170.0);
+        let name_g = crate::tab_strip::elided(ui, crate::bidi::visual(&name).as_ref(), egui::FontId::proportional(12.5), t.text, 170.0);
         let name_w = name_g.size().x;
         ui.painter().galley(egui::pos2(x, row.center().y - name_g.size().y / 2.0), name_g, t.text);
         let folder_max = (right - (x + name_w + 14.0)).max(0.0);
         if folder_max > 20.0 && !folder.is_empty() {
-            let fg = crate::tab_strip::elided(ui, &folder, egui::FontId::proportional(11.5), t.text_faint, folder_max);
+            let fg = crate::tab_strip::elided(ui, crate::bidi::visual(&folder).as_ref(), egui::FontId::proportional(11.5), t.text_faint, folder_max);
             ui.painter().galley(egui::pos2(right - fg.size().x, row.center().y - fg.size().y / 2.0), fg, t.text_faint);
         }
         resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &name));

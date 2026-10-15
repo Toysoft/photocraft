@@ -136,7 +136,7 @@ pub fn panel(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                 name_x += 18.0;
             }
             let galley_w = (x - name_x).max(20.0);
-            let name = ui.painter().layout(c.name.clone(), egui::FontId::proportional(12.0), t.text, galley_w);
+            let name = ui.painter().layout(crate::bidi::visual(&c.name).into_owned(), egui::FontId::proportional(12.0), t.text, galley_w);
             ui.painter().galley(pos2(name_x, rect.center().y - name.size().y / 2.0), name, t.text);
             if !c.comment.is_empty() && resp.hovered() {
                 resp.clone().on_hover_text(&c.comment);

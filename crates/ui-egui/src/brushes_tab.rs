@@ -365,7 +365,15 @@ fn list_row(ui: &mut egui::Ui, p: &BrushPreset, current: bool, presets: &[BrushP
     let stroke = brush_preview::stroke_texture(ui.ctx(), &format!("brushes-stroke-{w}:{}", p.name), pb, w as u32, 36, t.text);
     let sr = egui::Rect::from_min_size(pos2(cell.right() + 8.0, r.top() + 4.0), vec2(w, 36.0));
     ui.painter().image(stroke.id(), sr, full_uv(), Color32::WHITE);
-    crate::layer_row_ui::label(ui.painter(), sr.right() + 12.0, r.center().y, r.right() - 4.0, &p.name, egui::FontId::proportional(12.0), t.text_dim);
+    crate::layer_row_ui::label(
+        ui.painter(),
+        sr.right() + 12.0,
+        r.center().y,
+        r.right() - 4.0,
+        crate::bidi::visual(&p.name).as_ref(),
+        egui::FontId::proportional(12.0),
+        t.text_dim,
+    );
     preset_interactions(ui, &resp, r, p, presets, false, acts);
 }
 
@@ -592,7 +600,7 @@ fn preset_card(
                 cell.left() + 8.0 * scale,
                 cell.center().y,
                 cell.right() - 6.0 * scale,
-                &p.name,
+                crate::bidi::visual(&p.name).as_ref(),
                 egui::FontId::proportional(CARD_NAME_FONT),
                 t.text_dim,
             );
@@ -606,7 +614,7 @@ fn preset_card(
             cell.left() + 6.0 * scale,
             cell.center().y,
             cell.right() - 6.0 * scale,
-            &p.name,
+            crate::bidi::visual(&p.name).as_ref(),
             egui::FontId::proportional(CARD_NAME_FONT),
             t.text_dim,
         );

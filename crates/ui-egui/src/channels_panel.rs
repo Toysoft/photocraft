@@ -179,10 +179,11 @@ pub fn show(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
             let italic = matches!(row, Row::QuickMask | Row::LayerMask) || matches!(row, Row::Alpha(i) if doc.channels[i].spot.is_some());
             let mut job = egui::text::LayoutJob::default();
             let font = if selected && !t.pro { theme::medium(12.5) } else { egui::FontId::proportional(12.0) };
-            // Built-in labels only: alpha/spot names and "{layer} Mask" stay verbatim.
+            // Built-in labels only: alpha/spot names and "{layer} Mask" stay verbatim,
+            // shown in display order.
             let label = match row {
                 Row::Composite | Row::Color(_) | Row::QuickMask => tl!(&name).to_owned(),
-                Row::Alpha(_) | Row::LayerMask => name.clone(),
+                Row::Alpha(_) | Row::LayerMask => crate::bidi::visual(&name).into_owned(),
             };
             job.append(&label, 0.0, egui::TextFormat { font_id: font, color: t.text, italics: italic, ..Default::default() });
             let galley = painter.layout_job(job);

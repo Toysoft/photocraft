@@ -97,6 +97,18 @@ fn plural_fr(n: u64) -> usize {
     usize::from(n > 1)
 }
 
+/// Arabic: 0 → zero, 1 → one, 2 → two, 3–10 (mod 100) → few, 11–99 (mod 100) → many, else other.
+fn plural_arabic(n: u64) -> usize {
+    match (n, n % 100) {
+        (0, _) => 0,
+        (1, _) => 1,
+        (2, _) => 2,
+        (_, 3..=10) => 3,
+        (_, 11..=99) => 4,
+        _ => 5,
+    }
+}
+
 /// Portuguese: 0 and 1 take the singular, everything else the plural.
 fn plural_pt(n: u64) -> usize {
     usize::from(n > 1)
@@ -187,7 +199,7 @@ fn expand(packed: &str, keys: &[&str]) -> Result<String, String> {
 }
 
 /// The registry. English first: it is the fallback and the source language.
-pub static LANGUAGES: [LangInfo; 21] = [
+pub static LANGUAGES: [LangInfo; 22] = [
     LangInfo { code: "en", name: "English", source: b"", plural: plural_one_other, complete_menus: false, catalog: OnceLock::new() },
     LangInfo { code: "ja", name: "日本語", source: catalog!("ja"), plural: plural_none, complete_menus: true, catalog: OnceLock::new() },
     LangInfo { code: "zh-hans", name: "简体中文", source: catalog!("zh-hans"), plural: plural_none, complete_menus: true, catalog: OnceLock::new() },
@@ -220,6 +232,11 @@ pub static LANGUAGES: [LangInfo; 21] = [
     LangInfo { code: "tr", name: "Türkçe", source: catalog!("tr"), plural: plural_none, complete_menus: true, catalog: OnceLock::new() },
     // Vietnamese; `vi-VN` resolves here.
     LangInfo { code: "vi", name: "Tiếng Việt", source: catalog!("vi"), plural: plural_none, complete_menus: true, catalog: OnceLock::new() },
+    // Arabic (Modern Standard, Western digits); every `ar-*` locale (`ar-MA`, `ar-EG`, `ar-SA` …)
+    // resolves here. Right to left: its translations are put into display order when the catalog
+    // loads (`bidi::display_rtl`), the chrome mirrors (`direction.rs`), and user names are drawn
+    // through `bidi::visual`.
+    LangInfo { code: "ar", name: "العربية", source: catalog!("ar"), plural: plural_arabic, complete_menus: false, catalog: OnceLock::new() },
 ];
 
 impl LangInfo {
@@ -232,7 +249,15 @@ impl LangInfo {
     }
 
     fn catalog(&self) -> &Catalog {
-        self.catalog.get_or_init(|| Catalog::parse(&self.text()))
+        self.catalog.get_or_init(|| {
+            let mut catalog = Catalog::parse(&self.text());
+            // egui shapes each script's run but lays the runs out left to right, so a
+            // right-to-left language's labels are stored in display order.
+            if dir_for_code(self.code) == Dir::Rtl {
+                catalog.map_translations(crate::bidi::display_rtl);
+            }
+            catalog
+        })
     }
 }
 
@@ -443,6 +468,54 @@ mod tests {
             assert_eq!(lang_from_tag(tag), Some(ID()), "{tag}");
         }
         assert_eq!(ID().name(), "Bahasa Indonesia");
+    }
+
+    /// Arabic is registered right to left, every `ar-*` locale resolves to the one Modern
+    /// Standard Arabic catalog, and the language shows by its own name.
+    #[test]
+    fn arabic_locales_resolve() {
+        let ar = || Lang::from_code("ar").expect("ar registered");
+        assert_eq!(ar().name(), "العربية");
+        assert_eq!(ar().dir(), Dir::Rtl);
+        assert_eq!(Lang::EN.dir(), Dir::Ltr);
+        assert!(!ar().complete_menus(), "Arabic is a growing catalog");
+        for tag in ["ar", "ar-SA", "ar_EG.UTF-8", "AR-eg", "ar-001", "ar-MA", "ar_DZ@x"] {
+            assert_eq!(lang_from_tag(tag), Some(ar()), "{tag}");
+        }
+        assert_eq!(Lang::from_pref("ar"), ar());
+        assert_eq!(Lang::from_pref("AR"), ar());
+        assert_eq!(Lang::from_pref("ar-kw"), ar());
+    }
+
+    /// Arabic counts take the six CLDR forms (zero, one, two, few, many, other).
+    #[test]
+    fn arabic_plural_rule_works() {
+        let ar = || Lang::from_code("ar").expect("ar registered");
+        for (n, want) in [(0, 0), (1, 1), (2, 2), (3, 3), (10, 3), (11, 4), (99, 4), (100, 5), (102, 5), (103, 3), (110, 3), (111, 4), (200, 5), (u64::MAX, 4)]
+        {
+            assert_eq!(plural_arabic(n), want, "{n}");
+        }
+        // A real row: the catalog's six forms, looked up by count (stored in display
+        // order, so the count ends up to the right of the noun).
+        assert_eq!(trn(ar(), 2, "{n} Layer", "{n} Layers"), "طبقتان 2");
+        assert_eq!(trn(ar(), 5, "{n} Layer", "{n} Layers"), "طبقات 5");
+        assert_eq!(trn(ar(), 21, "{n} Layer", "{n} Layers"), "طبقة 21");
+    }
+
+    /// Arabic lookups answer in display order: a label's first word is its last on screen, with
+    /// Latin words and digits inside it left to right. What stays logical: the catalog itself.
+    #[test]
+    fn arabic_labels_answer_in_display_order() {
+        let ar = || Lang::from_code("ar").expect("ar registered");
+        // Single words come back as stored; a phrase is word-reversed for the painter.
+        assert_eq!(tr(ar(), "Layers"), "الطبقات");
+        assert_eq!(tr(ar(), "Fill with Foreground Color"), "المقدمة بلون تعبئة");
+        assert_eq!(tr(ar(), "Zoom In"), "تكبير");
+        // Product names stay Latin, running left to right inside the right-to-left line.
+        assert_eq!(tr(ar(), "About PhotoCraft"), "PhotoCraft حول");
+        // Untranslated strings and English itself keep their logical order.
+        assert_eq!(tr(ar(), "a string with no translation"), "a string with no translation");
+        assert_eq!(tr(Lang::EN, "Fill with Foreground Color"), "Fill with Foreground Color");
     }
 
     #[test]

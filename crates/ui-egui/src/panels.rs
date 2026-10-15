@@ -602,7 +602,11 @@ pub fn title_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                 let max = ui.ctx().input(|i| i.viewport().maximized.unwrap_or(false));
                 ui.ctx().send_viewport_cmd(egui::ViewportCommand::Maximized(!max));
             }
-            let title = app.session.active().map(|d| format!("{}{}", d.doc.name, if d.is_dirty() { "  •" } else { "" })).unwrap_or_else(|| "PhotoCraft".into());
+            let title = app
+                .session
+                .active()
+                .map(|d| format!("{}{}", crate::bidi::visual(&d.doc.name), if d.is_dirty() { "  •" } else { "" }))
+                .unwrap_or_else(|| "PhotoCraft".into());
             // The menus and the far-end controls are laid out first; the title is centred in
             // whatever room is left between them (`free`, left to right: menus then controls, or
             // controls then menus in a right-to-left UI), shortened or dropped rather than drawn
@@ -2885,7 +2889,7 @@ fn layer_row(
     let italic = !t.pro && doc.is_background(l.id);
     // Photoshop rows show only the name; the kind sub-label is a Studio-theme addition.
     let is_pixel = t.pro || matches!(l.content, LayerContent::Raster(_));
-    let name_rect = crate::layer_row_ui::truncated(&painter, &l.name, font, name_color, italic, name_right - x).map(|galley| {
+    let name_rect = crate::layer_row_ui::truncated(&painter, crate::bidi::visual(&l.name).as_ref(), font, name_color, italic, name_right - x).map(|galley| {
         let text_pos = pos2(x, rect.center().y - galley.size().y / 2.0 - if is_pixel { 0.0 } else { 7.0 });
         let r = Rect::from_min_size(text_pos, galley.size());
         painter.galley(text_pos, galley, name_color);
@@ -3109,7 +3113,13 @@ fn history(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
             ui.painter().image(tex, thumb, Rect::from_min_max(egui::Pos2::ZERO, pos2(1.0, 1.0)), Color32::WHITE);
         }
         ui.painter().rect_stroke(thumb, 0.0, Stroke::new(1.0, t.separator), StrokeKind::Outside);
-        ui.painter().text(pos2(thumb.right() + 8.0, rect.center().y), Align2::LEFT_CENTER, &doc.name, egui::FontId::proportional(12.0), t.text);
+        ui.painter().text(
+            pos2(thumb.right() + 8.0, rect.center().y),
+            Align2::LEFT_CENTER,
+            crate::bidi::visual(&doc.name).as_ref(),
+            egui::FontId::proportional(12.0),
+            t.text,
+        );
         ui.painter().line_segment([rect.left_bottom(), rect.right_bottom()], Stroke::new(1.0, t.separator));
     }
     let mut snap_cmd = None;
@@ -3324,7 +3334,13 @@ fn snapshot_rows(app: &mut PhotocraftApp, ui: &mut egui::Ui, selected: Option<u6
                 }
             }
             None => {
-                ui.painter().text(pos2(thumb.right() + 8.0, rect.center().y), Align2::LEFT_CENTER, &snap.name, egui::FontId::proportional(12.0), t.text);
+                ui.painter().text(
+                    pos2(thumb.right() + 8.0, rect.center().y),
+                    Align2::LEFT_CENTER,
+                    crate::bidi::visual(&snap.name).as_ref(),
+                    egui::FontId::proportional(12.0),
+                    t.text,
+                );
             }
         }
         if resp.double_clicked() {
