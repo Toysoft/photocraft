@@ -1,0 +1,87 @@
+// Renovate configuration for PhotoCraft (Mend-hosted Renovate App).
+// Docs: https://docs.renovatebot.com/configuration-options/
+//
+// Policy (see book/src/development/dependencies.md):
+//   - weekly batch, Monday morning (UTC)
+//   - a release must be 7 days old before Renovate proposes it (minimumReleaseAge)
+//   - Cargo patch updates and GitHub Actions updates are grouped into one PR each
+//   - patch and digest updates auto-merge once required status checks pass; majors need dashboard approval
+//   - security advisories (GitHub + OSV) PR immediately, bypassing schedule and cooldown
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard",
+    "helpers:pinGitHubActionDigests",
+  ],
+
+  // Batched, low-noise schedule. Change the timezone if the maintainers are not on UTC.
+  "timezone": "UTC",
+  "schedule": ["before 6am on monday"],
+
+  // Supply-chain cooldown: wait a week before adopting a release; only open the branch
+  // once the release is old enough (strict) rather than opening a pending PR.
+  "minimumReleaseAge": "7 days",
+  "internalChecksFilter": "strict",
+
+  // Keep patch updates separate from minor updates, so a patch can still get its own
+  // automergeable PR when a newer minor also exists.
+  "separateMinorPatch": true,
+
+  // Security advisories are urgent: skip the schedule and the cooldown.
+  "osvVulnerabilityAlerts": true,
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "labels": ["dependencies", "security"],
+    "schedule": ["at any time"],
+  },
+
+  // Cargo: move the Cargo.toml requirement when an update warrants it, and keep Cargo.lock
+  // fresh even when no manifest change is due. Lockfile maintenance resolves through Cargo
+  // itself, so the release-age cooldown cannot be applied to it (see the book).
+  "rangeStrategy": "bump",
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 6am on monday"],
+  },
+
+  // Every PR carries one label.
+  "labels": ["dependencies"],
+
+  "packageRules": [
+    {
+      "description": "Group Cargo patch updates into a single PR",
+      "matchManagers": ["cargo"],
+      "matchUpdateTypes": ["patch", "pin", "digest"],
+      "groupName": "cargo patch",
+    },
+    {
+      "description": "Group Cargo minor updates into a single PR",
+      "matchManagers": ["cargo"],
+      "matchUpdateTypes": ["minor"],
+      "groupName": "cargo minor",
+    },
+    {
+      "description": "Group GitHub Actions updates into a single PR",
+      "matchManagers": ["github-actions"],
+      "groupName": "github-actions",
+    },
+    {
+      "description": "Major updates are listed on the Dependency Dashboard and only get a PR after approval",
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true,
+    },
+    {
+      "description": "Auto-merge patches and digest updates once required status checks pass",
+      "matchUpdateTypes": ["patch", "digest"],
+      "automerge": true,
+      "automergeType": "pr",
+      "platformAutomerge": true,
+    },
+    {
+      "description": "git-refs have no release timestamp, so the 7-day cooldown cannot apply to the pinned craft-libs revisions",
+      "matchDatasources": ["git-refs"],
+      "minimumReleaseAge": null,
+    },
+  ],
+}
