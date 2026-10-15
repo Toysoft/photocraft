@@ -1495,9 +1495,65 @@ pub fn default_alternates(id: &str) -> impl Iterator<Item = &'static str> + '_ {
     ALTERNATE_SHORTCUTS.iter().filter(move |(c, _)| *c == id).map(|(_, sc)| *sc)
 }
 
-/// Every bindable id with its default: commands, then the temporary tools.
+/// Keys the system takes before the app sees them (switching apps, closing the window, force
+/// quit): `edit.keyboardShortcuts` won't bind them, as Photoshop won't. `sc` is in our notation,
+/// where `Cmd` is Ctrl off the Mac.
+pub fn reserved_shortcut(sc: &str) -> bool {
+    let Some(n) = normalize_shortcut(sc) else { return false };
+    let reserved: &[&str] = if cfg!(target_os = "macos") {
+        &["Cmd+Tab", "Cmd+Shift+Tab", "Cmd+Alt+Escape", "Cmd+`"]
+    } else if cfg!(target_os = "windows") {
+        &["Alt+Tab", "Alt+Shift+Tab", "Alt+F4", "Cmd+Alt+Delete", "Cmd+Escape", "Cmd+Shift+Escape"]
+    } else {
+        // Linux and the BSDs: window switching and closing, and the virtual consoles.
+        &[
+            "Alt+Tab",
+            "Alt+Shift+Tab",
+            "Alt+F4",
+            "Cmd+Alt+Delete",
+            "Cmd+Alt+F1",
+            "Cmd+Alt+F2",
+            "Cmd+Alt+F3",
+            "Cmd+Alt+F4",
+            "Cmd+Alt+F5",
+            "Cmd+Alt+F6",
+            "Cmd+Alt+F7",
+            "Cmd+Alt+F8",
+            "Cmd+Alt+F9",
+            "Cmd+Alt+F10",
+            "Cmd+Alt+F11",
+            "Cmd+Alt+F12",
+        ]
+    };
+    reserved.iter().filter_map(|r| normalize_shortcut(r)).any(|r| r == n)
+}
+
+/// What a bindable id is: a command (the engine's or the shell's), a tool, or a held tool.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BindKind {
+    Command,
+    Tool,
+    Hold,
+}
+
+/// Every bindable id: (id, label, menu path, default key, kind). The engine's commands, the
+/// shell's ([`crate::shell_commands::SHELL_COMMANDS`]), the tools and the held temporary tools,
+/// so Edit › Keyboard Shortcuts works the same with or without the app's UI.
+pub fn bindable_items() -> impl Iterator<Item = (&'static str, &'static str, &'static [&'static str], Option<&'static str>, BindKind)> {
+    let engine = crate::command_specs().iter().map(|c| (c.id, c.label, c.menu, c.shortcut, BindKind::Command));
+    let shell = crate::shell_commands::SHELL_COMMANDS.iter().map(|c| (c.0, c.1, c.2, c.3, BindKind::Command));
+    let tools = crate::shell_commands::TOOLS.iter().map(|t| (t.0, t.1, &["Tools"][..], t.2, BindKind::Tool));
+    let hold = TEMPORARY_TOOLS.iter().map(|t| (t.0, t.1, &["Tools", "Temporary"][..], Some(t.2), BindKind::Hold));
+    engine.chain(shell).chain(tools).chain(hold)
+}
+
+/// Every bindable id with its default.
 fn bindable() -> impl Iterator<Item = (&'static str, Option<&'static str>)> {
-    crate::command_specs().iter().map(|c| (c.id, c.shortcut)).chain(TEMPORARY_TOOLS.iter().map(|t| (t.0, Some(t.2))))
+    bindable_items().map(|i| (i.0, i.3))
+}
+
+fn is_tool(id: &str) -> bool {
+    crate::shell_commands::tool_default(id).is_some()
 }
 
 /// Shortcuts bound to more than one command: (shortcut, ids). `bindings` are (id, shortcut).
@@ -1866,18 +1922,45 @@ fn keyboard_shortcuts(s: &mut Session, p: &Value) -> Result<Value> {
     let imported;
     let mut import = None;
     let p = match p.get("importKys") {
-        Some(xml) => {
-            let xml = xml.as_str().ok_or_else(|| bad(cmd, "`importKys` is the text of a .kys file"))?;
+        Some(v) => {
+            // The file's text, or {"path": …} to read it.
+            let read;
+            let xml = match v {
+                Value::String(s) => s.as_str(),
+                Value::Object(o) => {
+                    let path =
+                        o.get("path").and_then(Value::as_str).filter(|s| !s.trim().is_empty()).ok_or_else(|| bad(cmd, "`importKys.path` is a .kys file"))?;
+                    read = read_text_file(path, crate::kys::MAX_BYTES).map_err(|e| bad(cmd, format!("{path}: {e}")))?;
+                    read.as_str()
+                }
+                _ => return Err(bad(cmd, "`importKys` is the text of a .kys file, or {\"path\": …}")),
+            };
             let set = crate::kys::parse(xml).map_err(|e| bad(cmd, e))?;
             let plan = crate::kys::plan(crate::kys::command_candidates(), &set);
             let mut merged = serde_json::Map::new();
-            for (id, sc) in &plan.set {
+            // A key the system reserves is left out (reported as `reserved`), not a failed import.
+            let mut skipped: Vec<String> = Vec::new();
+            for (id, sc) in plan.set.iter().filter(|(id, sc)| {
+                let bad = reserved_shortcut(sc);
+                if bad {
+                    skipped.push(format!("{id}: {sc}"));
+                }
+                !bad
+            }) {
                 let default = crate::command_specs().iter().find(|c| c.id == id).and_then(|c| c.shortcut).and_then(normalize_shortcut);
                 merged.insert(id.clone(), if default.as_deref() == Some(sc.as_str()) { Value::Null } else { json!(sc) });
+            }
+            // Tool keys: a tool's own letter restores it (and its Shift cycling).
+            let tools = crate::shell_commands::TOOLS.iter().map(|t| (t.0, t.1));
+            let (tool_keys, unknown_tools) = crate::kys::plan_tools(tools, &set);
+            for (id, key) in &tool_keys {
+                let own = crate::shell_commands::tool_default(id).flatten().is_some_and(|d| d.eq_ignore_ascii_case(key));
+                merged.insert(id.clone(), if own { Value::Null } else { json!(key) });
             }
             merged.extend(p.get("set").and_then(Value::as_object).cloned().unwrap_or_default());
             let mut alternates = serde_json::Map::new();
             for (id, keys) in &plan.alternate_keys {
+                let keys: &Vec<String> = &keys.iter().filter(|k| !reserved_shortcut(k)).cloned().collect();
                 let main = plan.set.get(id).map(String::as_str);
                 let default = Preferences::default().alternates(id, main);
                 alternates.insert(id.clone(), if *keys == default { Value::Null } else { json!(keys) });
@@ -1892,6 +1975,9 @@ fn keyboard_shortcuts(s: &mut Session, p: &Value) -> Result<Value> {
                 "alternates": plan.alternates,
                 "alternateKeys": plan.alternate_keys,
                 "toolKeys": set.tool_keys,
+                "tools": tool_keys,
+                "unknownTools": unknown_tools,
+                "reserved": skipped,
                 "windows": set.windows,
             }));
             let mut with_import = p.clone();
@@ -1914,6 +2000,17 @@ fn keyboard_shortcuts(s: &mut Session, p: &Value) -> Result<Value> {
     if !set.is_empty() || !alts.is_empty() {
         let allow_unknown = p.get("allowUnknown").and_then(Value::as_bool).unwrap_or(false);
         changed = true;
+        // Reserved system keys can't be bound, by hand or from a file.
+        let reserved = |v: &Value| -> Option<String> {
+            let keys = match v {
+                Value::String(s) => vec![s.clone()],
+                other => alternate_keys(other).unwrap_or_default(),
+            };
+            keys.into_iter().find(|k| reserved_shortcut(k))
+        };
+        if let Some((id, k)) = set.iter().chain(alts.iter()).find_map(|(id, v)| reserved(v).map(|k| (id, k))) {
+            return Err(bad(cmd, format!("`{k}` (for `{id}`) is reserved by the system and can't be assigned")));
+        }
         for (id, v) in set {
             if !bindable().any(|(b, _)| b == id) && !allow_unknown {
                 return Err(bad(cmd, format!("unknown command `{id}`")));
@@ -1935,9 +2032,11 @@ fn keyboard_shortcuts(s: &mut Session, p: &Value) -> Result<Value> {
                 .chain(alts.iter().flat_map(|(id, v)| alternate_keys(v).unwrap_or_default().into_iter().map(move |k| (id.as_str(), k))))
                 .collect();
             for (id, sc) in assigned {
-                // Shell commands (View › Zoom In) have alternates but no engine default.
-                let shell = ALTERNATE_SHORTCUTS.iter().filter(|(c, _)| crate::commands::find(c).is_none()).map(|(c, _)| (*c, None));
-                for (c, def) in bindable().chain(shell) {
+                for (c, def) in bindable() {
+                    // Tools may share a key: they cycle with Shift, as Photoshop's groups do.
+                    if is_tool(id) && is_tool(c) {
+                        continue;
+                    }
                     // Never strip a command that this same call is assigning:
                     // two entries for one key are a clash inside the call, which
                     // the returned conflicts list reports (#719). Stripping
@@ -1959,16 +2058,11 @@ fn keyboard_shortcuts(s: &mut Session, p: &Value) -> Result<Value> {
     }
     // Then the sets are saved, deleted or switched, from the bindings as they now stand.
     changed |= crate::shortcut_sets::store(&mut next, p).map_err(|e| bad(cmd, e))?;
-    if changed {
-        s.edit_prefs(|p| *p = next);
-    }
-    let prefs = s.prefs();
+    // The reply and the exports read the bindings as they will be; they are committed only once
+    // the exports are written, so a bad export target changes nothing.
+    let prefs = &next;
     let filter = p.get("filter").and_then(Value::as_str).map(str::to_ascii_lowercase);
-    let temporary = TEMPORARY_TOOLS.iter().map(|t| (t.0, t.1, &["Tools", "Temporary"][..], Some(t.2), true));
-    let list: Vec<Value> = crate::command_specs()
-        .iter()
-        .map(|c| (c.id, c.label, c.menu, c.shortcut, false))
-        .chain(temporary)
+    let list: Vec<Value> = bindable_items()
         .filter(|c| filter.as_ref().is_none_or(|f| c.0.to_ascii_lowercase().contains(f) || c.1.to_ascii_lowercase().contains(f)))
         .filter(|c| {
             p.get("list").and_then(Value::as_bool).unwrap_or(false)
@@ -1976,15 +2070,17 @@ fn keyboard_shortcuts(s: &mut Session, p: &Value) -> Result<Value> {
                 || prefs.shortcuts.contains_key(c.0)
                 || prefs.alternate_shortcuts.contains_key(c.0)
         })
-        .map(|(id, label, menu, def, hold)| {
+        .map(|(id, label, menu, def, kind)| {
             let main = prefs.shortcut(id, def);
             let defaults: Vec<&str> = default_alternates(id).collect();
             let mut v = json!({"id": id, "label": label, "menu": menu, "default": def, "shortcut": main, "alternates": prefs.alternates(id, main)});
             if !defaults.is_empty() {
                 v["defaultAlternates"] = json!(defaults);
             }
-            if hold {
-                v["hold"] = json!(true);
+            match kind {
+                BindKind::Hold => v["hold"] = json!(true),
+                BindKind::Tool => v["tool"] = json!(true),
+                BindKind::Command => {}
             }
             v
         })
@@ -1995,35 +2091,161 @@ fn keyboard_shortcuts(s: &mut Session, p: &Value) -> Result<Value> {
         bindings.extend(main.map(|m| (id, m.to_string())));
         bindings.extend(prefs.alternates(id, main).into_iter().map(|k| (id, k)));
     }
-    let conflicts: Vec<Value> =
-        conflicts(bindings.iter().map(|(id, k)| (*id, k.as_str()))).into_iter().map(|(sc, ids)| json!({"shortcut": sc, "commands": ids})).collect();
+    // Tools sharing a key are a cycling group, not a conflict.
+    let conflicts: Vec<Value> = conflicts(bindings.iter().map(|(id, k)| (*id, k.as_str())))
+        .into_iter()
+        .filter(|(_, ids)| !ids.iter().all(|id| is_tool(id)))
+        .map(|(sc, ids)| json!({"shortcut": sc, "commands": ids}))
+        .collect();
     let mut out = json!({"overrides": prefs.shortcuts, "alternateOverrides": prefs.alternate_shortcuts, "commands": list, "conflicts": conflicts});
     if let (Some(o), Value::Object(sets)) = (out.as_object_mut(), crate::shortcut_sets::describe(prefs)) {
         o.extend(sets);
     }
-    // The bindings as a `.kys` file, or Photoshop's Summarize page (the engine's commands; the
-    // app's dialog writes both with the shell's commands and tools added).
+    // The bindings as a `.kys` file, or Photoshop's Summarize page: every bindable item (the
+    // engine's commands, the shell's commands and the tools).
     let set_name = if prefs.shortcut_set.is_empty() { crate::shortcut_sets::DEFAULTS_NAME } else { prefs.shortcut_set.as_str() };
-    if p.get("exportKys").and_then(Value::as_bool) == Some(true) {
+    // Both targets are resolved and their texts made before anything is written, and a path that
+    // can't be written is refused before either file is: a bad export changes nothing.
+    let kys_target = file_target(cmd, p.get("exportKys"))?;
+    let html_target = file_target(cmd, p.get("summarize"))?;
+    let mut files: Vec<(&str, String, String)> = Vec::new();
+    if let Some(target) = kys_target {
         let entries: Vec<crate::kys::Entry> =
-            crate::shortcut_sets::bound(prefs).into_iter().map(|(id, label, _, keys)| crate::kys::Entry { id, label, tool: false, keys }).collect();
-        out["kys"] = json!(crate::kys::write(set_name, &entries));
+            crate::shortcut_sets::bound(prefs).into_iter().map(|b| crate::kys::Entry { id: b.id, label: b.label, tool: b.tool, keys: b.keys }).collect();
+        let text = crate::kys::write(set_name, &entries);
+        match target {
+            Some(path) => files.push(("kysPath", path, text)),
+            None => out["kys"] = json!(text),
+        }
     }
-    if let Some(v) = p.get("summarize").filter(|v| !v.is_null() && *v != &json!(false)) {
+    if let Some(target) = html_target {
+        let v = p.get("summarize").cloned().unwrap_or(Value::Null);
         let mac = v.get("mac").and_then(Value::as_bool).unwrap_or(cfg!(target_os = "macos"));
         let mut sections: Vec<crate::shortcut_sets::Section> = Vec::new();
-        for (_, label, menu, keys) in crate::shortcut_sets::bound(prefs) {
+        for crate::shortcut_sets::Bound { label, menu, keys, .. } in crate::shortcut_sets::bound(prefs) {
             match sections.iter_mut().find(|(m, _)| *m == menu) {
                 Some((_, rows)) => rows.push((label, keys)),
                 None => sections.push((menu, vec![(label, keys)])),
             }
         }
-        out["html"] = json!(crate::shortcut_sets::summarize(set_name, &sections, mac));
+        let html = crate::shortcut_sets::summarize(set_name, &sections, mac);
+        match target {
+            Some(path) => files.push(("htmlPath", path, html)),
+            None => out["html"] = json!(html),
+        }
+    }
+    for (_, path, _) in &files {
+        writable(path).map_err(|e| bad(cmd, format!("{path}: {e}")))?;
+    }
+    // Each file is written next to its target first and moved into place only once every one
+    // is written, so a failure leaves the user's existing files as they were.
+    let mut staged: Vec<String> = Vec::new();
+    for (_, path, text) in &files {
+        let tmp = format!("{path}.photocraft-tmp");
+        if let Err(e) = write_text_file(&tmp, text) {
+            let _ = remove_file(&tmp);
+            for t in &staged {
+                let _ = remove_file(t);
+            }
+            return Err(bad(cmd, format!("{path}: {e}")));
+        }
+        staged.push(tmp);
+    }
+    for ((key, path, _), tmp) in files.iter().zip(&staged) {
+        if let Err(e) = rename_file(tmp, path) {
+            for t in &staged {
+                let _ = remove_file(t);
+            }
+            return Err(bad(cmd, format!("{path}: {e}")));
+        }
+        out[*key] = json!(path);
+    }
+    if changed {
+        s.edit_prefs(|p| *p = next);
     }
     if let Some(import) = import {
         out["import"] = import;
     }
     Ok(out)
+}
+
+/// An output parameter (`exportKys`, `summarize`): absent or false → `None`; true (or an object
+/// without `path`) → `Some(None)`, the text comes back in the reply; `{"path": …}` →
+/// `Some(Some(path))`, written there.
+fn file_target(cmd: &str, v: Option<&Value>) -> Result<Option<Option<String>>> {
+    match v {
+        None | Some(Value::Null) | Some(Value::Bool(false)) => Ok(None),
+        Some(Value::Bool(true)) => Ok(Some(None)),
+        Some(Value::Object(o)) => match o.get("path") {
+            None | Some(Value::Null) => Ok(Some(None)),
+            Some(Value::String(s)) if !s.trim().is_empty() => Ok(Some(Some(s.clone()))),
+            Some(_) => Err(bad(cmd, "`path` must be a non-empty string")),
+        },
+        Some(_) => Err(bad(cmd, "expected true or {\"path\": …}")),
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn read_text_file(path: &str, max: usize) -> std::result::Result<String, String> {
+    let meta = std::fs::metadata(path).map_err(|e| e.to_string())?;
+    if !meta.is_file() || meta.len() > max as u64 {
+        return Err(format!("not a file of at most {} KiB", max / 1024));
+    }
+    std::fs::read_to_string(path).map_err(|e| e.to_string())
+}
+
+#[cfg(target_arch = "wasm32")]
+fn read_text_file(_: &str, _: usize) -> std::result::Result<String, String> {
+    Err("paths can't be read on the web; pass the file's text instead".into())
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn write_text_file(path: &str, text: &str) -> std::result::Result<(), String> {
+    std::fs::write(path, text).map_err(|e| e.to_string())
+}
+
+/// Whether `path` can be written: not a folder, in a folder that exists.
+#[cfg(not(target_arch = "wasm32"))]
+fn writable(path: &str) -> std::result::Result<(), String> {
+    let p = std::path::Path::new(path);
+    if p.is_dir() {
+        return Err("is a folder".into());
+    }
+    match p.parent().filter(|d| !d.as_os_str().is_empty()) {
+        Some(d) if !d.is_dir() => Err("its folder doesn't exist".into()),
+        _ => Ok(()),
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn writable(_: &str) -> std::result::Result<(), String> {
+    Err("paths can't be written on the web; omit `path` to get the text back".into())
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn remove_file(path: &str) -> std::io::Result<()> {
+    std::fs::remove_file(path)
+}
+
+#[cfg(target_arch = "wasm32")]
+fn remove_file(_: &str) -> std::io::Result<()> {
+    Ok(())
+}
+
+/// Move a staged file over its target (replacing it).
+#[cfg(not(target_arch = "wasm32"))]
+fn rename_file(from: &str, to: &str) -> std::result::Result<(), String> {
+    std::fs::rename(from, to).map_err(|e| e.to_string())
+}
+
+#[cfg(target_arch = "wasm32")]
+fn rename_file(_: &str, _: &str) -> std::result::Result<(), String> {
+    Err("paths can't be written on the web; omit `path` to get the text back".into())
+}
+
+#[cfg(target_arch = "wasm32")]
+fn write_text_file(_: &str, _: &str) -> std::result::Result<(), String> {
+    Err("paths can't be written on the web; omit `path` to get the text back".into())
 }
 
 /// Edit › Menus: hide/show items and give them colours.
@@ -2151,7 +2373,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Keyboard Shortcuts…",
             ["Edit"],
             Some("Cmd+Alt+Shift+K"),
-            r##"{"set":{"<command id>|tools.temporary.hand|zoomIn|zoomOut":"Cmd+Shift+X"|""(remove)|null(default)}?,"alternates":{"<command id>":["F3",…]|[](none)|null(default)}?,"reset":true|["<id>",…]?,"removeConflicts":bool=true,"filter":str?,"list":bool=false,"importKys":"<.kys XML>"?,"useSet":"<name>"|""(defaults)?,"saveSet":"<name>"?,"deleteSet":"<name>"?,"sets":{"<name>":{"shortcuts":{…},"alternateShortcuts":{…}}}?,"activeSet":"<name>"|""?,"exportKys":bool?,"summarize":bool|{"mac":bool}?}"##,
+            r##"{"set":{"<command id>|tools.temporary.hand|zoomIn|zoomOut":"Cmd+Shift+X"|""(remove)|null(default)}?,"alternates":{"<command id>":["F3",…]|[](none)|null(default)}?,"reset":true|["<id>",…]?,"removeConflicts":bool=true,"filter":str?,"list":bool=false,"importKys":"<.kys XML>"|{"path":".kys"}?,"useSet":"<name>"|""(defaults)?,"saveSet":"<name>"?,"deleteSet":"<name>"?,"sets":{"<name>":{"shortcuts":{…},"alternateShortcuts":{…}}}?,"activeSet":"<name>"|""?,"exportKys":true|{"path":".kys"}?,"summarize":true|{"mac":bool,"path":".html"}?} (with a path the file is written and the reply has kysPath/htmlPath instead of kys/html)"##,
             keyboard_shortcuts,
             true
         ),
