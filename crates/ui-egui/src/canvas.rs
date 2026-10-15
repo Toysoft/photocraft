@@ -5192,11 +5192,8 @@ pub fn tool_event(app: &mut PhotocraftApp, ev: ToolEvent, mods: egui::Modifiers)
                     })
                 });
                 if locked_hit || (probe.as_ref().is_ok_and(|v| v["layer"].is_null()) && crate::move_box::empty_at(app, [x, y])) {
-                    if locked_hit {
-                        // A click still selects the locked layer, as in Photoshop; a drag's
-                        // marquee then replaces that selection on release.
-                        let _ = app.run("layer.pickAt", json!({"x": x, "y": y, "target": target, "mode": mode}));
-                    }
+                    // A locked layer is never picked: like an empty spot, a click there deselects
+                    // every layer and a drag draws the layer marquee (move_box.rs).
                     crate::move_box::begin(app, [x, y], mods.shift);
                     return;
                 }
