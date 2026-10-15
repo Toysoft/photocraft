@@ -3159,3 +3159,22 @@ curves	Smooth	Сгладить
 	set name	имя набора
 	{set} (modified)	{set} (изменён)
 	Random	Случайно
+
+# Software Updates (#2316)
+	Open Release Page on GitHub	Открыть страницу релиза на GitHub
+	View Downloads	Показать загрузки
+	Web builds are always running the latest version.	Веб-сборки всегда используют последнюю версию.
+	What's new in this release:	Что нового в этом выпуске:
+	You're up to date	У вас последняя версия
+	Check for Updates	Проверить обновления
+	Check for Updates…	Проверить обновления…
+	Checking for updates…	Проверка обновлений…
+	Download Update	Скачать обновление
+	Software Updates	Обновления программы
+	Automatically Check for Updates at Startup	Автоматически проверять обновления при запуске
+	Automatic checks run at most once a day. Available updates appear after you close other dialogs.	Автоматическая проверка выполняется не чаще одного раза в день. Доступные обновления появятся после закрытия других диалогов.
+	Download the update and save your work before installing the new version.	Скачайте обновление и сохраните работу перед установкой новой версии.
+	For package-managed installations, update PhotoCraft through your package manager. Other downloads are on the release page.	Если программа установлена через менеджер пакетов, обновите PhotoCraft с его помощью. Другие загрузки доступны на странице выпуска.
+	Install Update	Установить обновление
+	PhotoCraft downloads the update in the background and installs it when you quit, so your session is not interrupted. Save your work first.	PhotoCraft загружает обновление в фоновом режиме и устанавливает его при выходе, не прерывая работу. Сначала сохраните работу.
+	PhotoCraft will install the update when you quit.	PhotoCraft установит обновление при выходе.

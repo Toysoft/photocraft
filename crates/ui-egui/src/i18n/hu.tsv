@@ -3712,6 +3712,11 @@ cameraRaw	Yellow	Sárga
 	Changes have not been saved.	A módosítások nincsenek mentve.
 	Changes Saved	Módosítások mentve
 	Check for Updates	Frissítések keresése
+	Open Release Page on GitHub	Kiadási oldal megnyitása a GitHubon
+	View Downloads	Letöltések megtekintése
+	Web builds are always running the latest version.	A webes buildek mindig a legújabb verziót futtatják.
+	What's new in this release:	Újdonságok ebben a kiadásban:
+	You're up to date	Naprakész
 	Choose Folder	Mappa kiválasztása
 	Choose…	Kiválasztás…
 	CIE RGB	CIE RGB
@@ -4108,3 +4113,15 @@ cameraRaw	Yellow	Sárga
 	There are too many sets: delete one first.	Túl sok készlet van: előbb töröljön egyet.
 	set name	készlet neve
 	{set} (modified)	{set} (módosítva)
+# Software Updates (#2316)
+	Check for Updates…	Frissítések keresése…
+	Checking for updates…	Frissítések ellenőrzése…
+	Download Update	Frissítés letöltése
+	Software Updates	Szoftverfrissítések
+	Automatically Check for Updates at Startup	Indításkor automatikusan ellenőrizze a frissítéseket
+	Automatic checks run at most once a day. Available updates appear after you close other dialogs.	Az automatikus ellenőrzés naponta legfeljebb egyszer fut. Az elérhető frissítések a többi párbeszédpanel bezárása után jelennek meg.
+	Download the update and save your work before installing the new version.	Töltse le a frissítést, és mentse a munkáját az új verzió telepítése előtt.
+	For package-managed installations, update PhotoCraft through your package manager. Other downloads are on the release page.	Csomagkezelővel telepített változatnál a PhotoCraftot a csomagkezelővel frissítse. További letöltések a kiadási oldalon találhatók.
+	Install Update	Frissítés telepítése
+	PhotoCraft downloads the update in the background and installs it when you quit, so your session is not interrupted. Save your work first.	A PhotoCraft a háttérben tölti le a frissítést, és kilépéskor telepíti, hogy a munkamenet ne szakadjon meg. Először mentse a munkáját.
+	PhotoCraft will install the update when you quit.	A PhotoCraft kilépéskor telepíti a frissítést.

@@ -2805,3 +2805,22 @@ curves	Smooth	平滑
 	set name	组名称
 	{set} (modified)	{set}（已修改）
 	Random	随机
+
+# Software Updates (#2316)
+	Open Release Page on GitHub	在 GitHub 上打开发布页面
+	View Downloads	查看下载
+	Web builds are always running the latest version.	Web 版始终运行为最新版本。
+	What's new in this release:	此版本的新功能：
+	You're up to date	已是最新版本
+	Check for Updates	检查更新
+	Check for Updates…	检查更新…
+	Checking for updates…	正在检查更新…
+	Download Update	下载更新
+	Software Updates	软件更新
+	Automatically Check for Updates at Startup	启动时自动检查更新
+	Automatic checks run at most once a day. Available updates appear after you close other dialogs.	自动检查每天最多执行一次。关闭其他对话框后，将显示可用更新。
+	Download the update and save your work before installing the new version.	下载更新，并在安装新版本之前保存工作。
+	For package-managed installations, update PhotoCraft through your package manager. Other downloads are on the release page.	对于通过软件包管理器安装的版本，请使用软件包管理器更新PhotoCraft。其他下载位于发布页面。
+	Install Update	安装更新
+	PhotoCraft downloads the update in the background and installs it when you quit, so your session is not interrupted. Save your work first.	PhotoCraft 会在后台下载更新，并在退出时安装，不会打断您的工作。请先保存工作。
+	PhotoCraft will install the update when you quit.	PhotoCraft 将在退出时安装更新。

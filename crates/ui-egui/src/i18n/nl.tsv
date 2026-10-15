@@ -3949,3 +3949,21 @@ curves	Smooth	Vloeiend maken
 	There are too many sets: delete one first.	Er zijn te veel sets: verwijder er eerst een.
 	set name	naam van de set
 	{set} (modified)	{set} (gewijzigd)
+
+# Software Updates (#2316)
+	Open Release Page on GitHub	Pagina van de release op GitHub openen
+	View Downloads	Downloads weergeven
+	Web builds are always running the latest version.	Webbuilds gebruiken altijd de nieuwste versie.
+	What's new in this release:	Wat is er nieuw in deze release:
+	You're up to date	U heeft de nieuwste versie
+	Check for Updates…	Controleren op updates…
+	Checking for updates…	Controleren op updates…
+	Download Update	Update downloaden
+	Software Updates	Software-updates
+	Automatically Check for Updates at Startup	Bij het opstarten automatisch op updates controleren
+	Automatic checks run at most once a day. Available updates appear after you close other dialogs.	Automatische controles vinden maximaal eenmaal per dag plaats. Beschikbare updates verschijnen nadat u andere dialoogvensters sluit.
+	Download the update and save your work before installing the new version.	Download de update en sla uw werk op voordat u de nieuwe versie installeert.
+	For package-managed installations, update PhotoCraft through your package manager. Other downloads are on the release page.	Werk PhotoCraft bij via uw pakketbeheerder als u het daarmee hebt geïnstalleerd. Andere downloads staan op de releasepagina.
+	Install Update	Update installeren
+	PhotoCraft downloads the update in the background and installs it when you quit, so your session is not interrupted. Save your work first.	PhotoCraft download de update op de achtergrond en installeert hem bij het afsluiten, zodat uw werk niet wordt onderbroken. Sla uw werk eerst op.
+	PhotoCraft will install the update when you quit.	PhotoCraft installeert de update bij het afsluiten.

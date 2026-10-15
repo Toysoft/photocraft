@@ -121,6 +121,7 @@ pub mod type_extra_cmds;
 pub mod type_mask_cmds;
 pub mod type_spell_cmds;
 pub mod type_styles_cmds;
+pub mod update;
 mod variables_cmds;
 pub use variables_cmds::{export_data_sets_with, import_data_sets_text};
 pub mod vector_cmds;

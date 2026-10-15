@@ -2516,6 +2516,11 @@ cameraRaw	Color	Renk
 	Reset Preferences	Tercihleri Sıfırla
 	Documentation	Dokümantasyon
 	Check for Updates	Güncellemeleri Kontrol Et
+	Open Release Page on GitHub	Yayın sayfasını GitHub'da aç
+	View Downloads	İndirmeleri görüntüle
+	Web builds are always running the latest version.	Web derlemeleri her zaman en son sürümü çalıştırır.
+	What's new in this release:	Bu sürümdeki yenilikler:
+	You're up to date	Güncelsiniz
 	Loading…	Yükleniyor…
 	Processing…	İşleniyor…
 	Saving…	Kaydediliyor…
@@ -3919,3 +3924,15 @@ cameraData	Lens	Lens
 	There are too many sets: delete one first.	Çok fazla küme var: önce birini silin.
 	set name	küme adı
 	{set} (modified)	{set} (değiştirildi)
+# Software Updates (#2316)
+	Check for Updates…	Güncelleştirmeleri Denetle…
+	Checking for updates…	Güncelleştirmeler denetleniyor…
+	Download Update	Güncelleştirmeyi İndir
+	Software Updates	Yazılım Güncelleştirmeleri
+	Automatically Check for Updates at Startup	Başlangıçta Güncelleştirmeleri Otomatik Denetle
+	Automatic checks run at most once a day. Available updates appear after you close other dialogs.	Otomatik denetimler günde en fazla bir kez çalışır. Kullanılabilir güncelleştirmeler diğer iletişim kutularını kapattıktan sonra görünür.
+	Download the update and save your work before installing the new version.	Güncelleştirmeyi indirin ve yeni sürümü kurmadan önce çalışmanızı kaydedin.
+	For package-managed installations, update PhotoCraft through your package manager. Other downloads are on the release page.	Paket yöneticisiyle kurulan sürümlerde PhotoCraft’ı paket yöneticinizle güncelleyin. Diğer indirmeler yayın sayfasındadır.
+	Install Update	Güncelleştirmeyi Kur
+	PhotoCraft downloads the update in the background and installs it when you quit, so your session is not interrupted. Save your work first.	PhotoCraft güncelleştirmeyi arka planda indirir ve oturum bölünmesin diye kapatırken kurar. Önce çalışmanızı kaydedin.
+	PhotoCraft will install the update when you quit.	PhotoCraft güncelleştirmeyi çıkışta kuracak.

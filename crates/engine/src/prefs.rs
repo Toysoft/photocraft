@@ -221,6 +221,8 @@ pub struct General {
     pub zoom_resizes_windows: bool,
     pub use_legacy_free_transform: bool,
     pub auto_show_home_screen: bool,
+    /// Periodic background check for application updates.
+    pub check_for_updates: bool,
 }
 
 impl Default for General {
@@ -237,6 +239,7 @@ impl Default for General {
             zoom_resizes_windows: false,
             use_legacy_free_transform: false,
             auto_show_home_screen: true,
+            check_for_updates: true,
         }
     }
 }

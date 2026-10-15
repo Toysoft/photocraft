@@ -3979,3 +3979,21 @@ layerLabel	No Color	Sem cor
 	There are too many sets: delete one first.	Há conjuntos demais: exclua um primeiro.
 	set name	nome do conjunto
 	{set} (modified)	{set} (modificado)
+
+# Software Updates (#2316)
+	Open Release Page on GitHub	Abrir a página de lançamento no GitHub
+	View Downloads	Ver downloads
+	Web builds are always running the latest version.	As compilações web sempre executam a versão mais recente.
+	What's new in this release:	O que há de novo nesta versão:
+	Check for Updates…	Verificar atualizações…
+	Checking for updates…	Verificando atualizações…
+	Download Update	Baixar atualização
+	Software Updates	Atualizações de software
+	Automatically Check for Updates at Startup	Verificar atualizações automaticamente ao iniciar
+	You're up to date	Você está atualizado
+	Automatic checks run at most once a day. Available updates appear after you close other dialogs.	As verificações automáticas ocorrem no máximo uma vez por dia. As atualizações disponíveis aparecem após fechar as outras caixas de diálogo.
+	Download the update and save your work before installing the new version.	Baixe a atualização e salve seu trabalho antes de instalar a nova versão.
+	For package-managed installations, update PhotoCraft through your package manager. Other downloads are on the release page.	Para instalações gerenciadas por pacotes, atualize o PhotoCraft pelo gerenciador de pacotes. Outros downloads estão na página da versão.
+	Install Update	Instalar atualização
+	PhotoCraft downloads the update in the background and installs it when you quit, so your session is not interrupted. Save your work first.	O PhotoCraft baixa a atualização em segundo plano e a instala ao encerrar, sem interromper seu trabalho. Salve seu trabalho primeiro.
+	PhotoCraft will install the update when you quit.	O PhotoCraft instalará a atualização ao encerrar.

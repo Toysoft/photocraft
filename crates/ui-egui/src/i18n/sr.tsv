@@ -3191,6 +3191,13 @@ layerLabel	No Color	Bez boje
 	Reset Preferences	Resetuj podešavanja
 	Documentation	Dokumentacija
 	Check for Updates	Proveri ažuriranja
+	Open Release Page on GitHub	Otvori stranicu izdanja na GitHub-u
+	View Downloads	Pogledaj preuzimanja
+	Web builds are always running the latest version.	Veb izdanja uvek koriste najnoviju verziju.
+	What's new in this release:	Šta je novo u ovom izdanju:
+	You're up to date	Ažurni ste
+	Check for Updates…	Proverite ažuriranja…
+	Automatically Check for Updates at Startup	Automatski proveravaj ažuriranja pri pokretanju
 	Loading…	Učitavanje…
 	Processing…	Obrađivanje…
 	Saving…	Čuvanje…
@@ -4262,3 +4269,13 @@ shape	Appearance	Izgled
 	There are too many sets: delete one first.	Previše skupova: prvo obrišite jedan.
 	set name	ime skupa
 	{set} (modified)	{set} (izmenjen)
+# Software Updates (#2316)
+	Checking for updates…	Proveravanje ažuriranja…
+	Download Update	Preuzmi ažuriranje
+	Software Updates	Ažuriranja softvera
+	Automatic checks run at most once a day. Available updates appear after you close other dialogs.	Automatske provere se pokreću najviše jednom dnevno. Dostupna ažuriranja se prikazuju kada zatvorite druge dijaloge.
+	Download the update and save your work before installing the new version.	Preuzmite ažuriranje i sačuvajte rad pre instalacije nove verzije.
+	For package-managed installations, update PhotoCraft through your package manager. Other downloads are on the release page.	Za instalacije upravljane paket-menadžerom ažurirajte PhotoCraft kroz paket-menadžer. Ostala preuzimanja su na stranici izdanja.
+	Install Update	Instaliraj ažuriranje
+	PhotoCraft downloads the update in the background and installs it when you quit, so your session is not interrupted. Save your work first.	PhotoCraft preuzima ažuriranje u pozadini i instalira ga pri izlazu, pa vaša sesija ne prekida. Prvo sačuvajte rad.
+	PhotoCraft will install the update when you quit.	PhotoCraft će instalirati ažuriranje kada izađete.

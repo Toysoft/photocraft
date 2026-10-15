@@ -3675,3 +3675,21 @@ curves	Smooth	Làm mượt
 	There are too many sets: delete one first.	Có quá nhiều bộ: hãy xóa một bộ trước.
 	set name	tên bộ
 	{set} (modified)	{set} (đã sửa đổi)
+# Software Updates (#2316)
+	Check for Updates	Kiểm tra Cập nhật
+	Check for Updates…	Kiểm tra Cập nhật…
+	Checking for updates…	Đang kiểm tra bản cập nhật…
+	Download Update	Tải Bản cập nhật
+	Software Updates	Cập nhật Phần mềm
+	Automatically Check for Updates at Startup	Tự động Kiểm tra Cập nhật khi Khởi động
+	Automatic checks run at most once a day. Available updates appear after you close other dialogs.	Việc kiểm tra tự động chạy tối đa một lần mỗi ngày. Các bản cập nhật khả dụng sẽ xuất hiện sau khi bạn đóng các hộp thoại khác.
+	Download the update and save your work before installing the new version.	Hãy tải bản cập nhật và lưu công việc trước khi cài đặt phiên bản mới.
+	For package-managed installations, update PhotoCraft through your package manager. Other downloads are on the release page.	Với bản cài đặt qua trình quản lý gói, hãy cập nhật PhotoCraft bằng trình quản lý gói. Các bản tải khác nằm trên trang phát hành.
+	Install Update	Cài đặt Bản cập nhật
+	PhotoCraft downloads the update in the background and installs it when you quit, so your session is not interrupted. Save your work first.	PhotoCraft tải bản cập nhật trong nền và cài đặt khi bạn thoát để phiên làm việc không bị gián đoạn. Hãy lưu công việc trước.
+	PhotoCraft will install the update when you quit.	PhotoCraft sẽ cài đặt bản cập nhật khi bạn thoát.
+	Open Release Page on GitHub	Mở Trang Phát hành trên GitHub
+	View Downloads	Xem Tải xuống
+	Web builds are always running the latest version.	Bản dựng web luôn chạy phiên bản mới nhất.
+	What's new in this release:	Có gì mới trong phiên bản này:
+	You're up to date	Bạn đã cập nhật

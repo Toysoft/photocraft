@@ -234,7 +234,11 @@ pub fn show(app: &mut PhotocraftApp, ctx: &egui::Context) {
                 800.0
             } else if about_tabs {
                 700.0
-            } else if d.kind == DialogKind::LayerStyle || d.fields.contains_key("__export") || crate::color_picker_ui::owns(&d.fields) {
+            } else if d.kind == DialogKind::LayerStyle
+                || d.fields.contains_key("__export")
+                || crate::color_picker_ui::owns(&d.fields)
+                || d.kind == DialogKind::Update
+            {
                 600.0
             } else if compact {
                 260.0
@@ -282,6 +286,7 @@ pub fn show(app: &mut PhotocraftApp, ctx: &egui::Context) {
                         outcome = Some(true);
                     }
                 }
+                DialogKind::Update => crate::update_check::body(app, ui, &mut fields),
                 DialogKind::About if fields.get("systemInfo").and_then(Value::as_bool) == Some(true) => {
                     let lines = crate::gpu_status::system_info_ui(app);
                     for l in &lines {
@@ -401,6 +406,14 @@ pub fn show(app: &mut PhotocraftApp, ctx: &egui::Context) {
                             tl!("Create")
                         } else if crate::delete_layer_prompt::owns(&d.fields) {
                             tl!("Delete")
+                        } else if d.kind == DialogKind::Update {
+                            if fields.get("nativeUpdater").and_then(Value::as_bool) == Some(true) {
+                                tl!("Install Update")
+                            } else if fields.get("downloadUrl").and_then(Value::as_str).is_some() {
+                                tl!("Download Update")
+                            } else {
+                                tl!("View Downloads")
+                            }
                         } else if d.fields.contains_key("__export") {
                             tl!("Export")
                         } else {
@@ -408,13 +421,13 @@ pub fn show(app: &mut PhotocraftApp, ctx: &egui::Context) {
                         };
                         // Dialogs that need an input first (a preset name, a selection) grey OK out.
                         let can_ok = crate::crop_presets::can_confirm(app, &fields) && crate::stack_dialog::can_confirm(&fields);
-                        let ok = DialogButton::new(ButtonRole::Default, ok_label, 84.0).enabled(can_ok);
+                        let ok = DialogButton::new(ButtonRole::Default, ok_label, if d.kind == DialogKind::Update { 120.0 } else { 84.0 }).enabled(can_ok);
                         // Photoshop: holding Alt turns Cancel into Reset (the dialog stays open).
                         // Dialogs opt in via `dialog_alt_reset::supported` (per marker).
                         let reset = ui.input(|i| i.modifiers.alt) && crate::dialog_alt_reset::supported(&fields);
                         let cancel_label = if reset {
                             tl!("Reset")
-                        } else if d.kind == DialogKind::NewDocument {
+                        } else if d.kind == DialogKind::NewDocument || d.kind == DialogKind::Update {
                             tl!("Close")
                         } else {
                             tl!("Cancel")
@@ -575,6 +588,7 @@ pub fn title(d: &Dialog) -> String {
         DialogKind::About if d.fields.get("systemInfo").and_then(Value::as_bool) == Some(true) => "System Info".into(),
         DialogKind::About => "About PhotoCraft".into(),
         DialogKind::LayerStyle => "Layer Style".into(),
+        DialogKind::Update => "Software Updates".into(),
         DialogKind::Command => d.fields.get("__label").and_then(Value::as_str).unwrap_or("Command").trim_end_matches('…').to_string(),
         DialogKind::Error => "Error".into(),
     }
@@ -658,6 +672,7 @@ pub fn confirm(app: &mut PhotocraftApp, id: u64) -> Result<Value, String> {
         }
         DialogKind::LayerStyle => crate::layer_style::confirm(app, &d.fields),
         DialogKind::About | DialogKind::Error => Ok(Value::Null),
+        DialogKind::Update => crate::update_check::install(app, &d.fields),
     }
 }
 

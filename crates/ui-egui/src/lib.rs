@@ -224,6 +224,7 @@ mod type_font_preview;
 pub mod type_panels_ui;
 pub mod type_tool;
 mod type_transform;
+pub mod update_check;
 mod variables_ui;
 pub mod vector_ui;
 pub mod view_cmds;
@@ -374,6 +375,10 @@ pub type AutomationOpenPcraftFn = Box<dyn FnMut(&str) -> Result<Option<(String, 
 pub type AutomationCommandFn = Box<dyn Fn(&str, &Value) -> Result<(), String>>;
 /// Open a URL in the system browser (native) — reliable cross-platform, unlike `ctx.open_url`.
 pub type OpenUrlFn = Box<dyn Fn(&str) -> Result<(), String>>;
+/// Check for an application update, when the host platform supplies an updater.
+pub type CheckForUpdatesFn = Box<dyn FnMut() -> Result<(), String>>;
+/// Hand an update to the host application's native updater, which fetches and installs it.
+pub type InstallUpdateFn = Box<dyn FnMut() -> Result<(), String>>;
 pub type EncodePngFn = Box<dyn Fn(u32, u32, &[u8]) -> Result<Vec<u8>, String>>;
 /// Put an RGBA8 image (width, height, pixels) on the OS clipboard.
 pub type ClipboardSetFn = Box<dyn FnMut(u32, u32, &[u8]) -> Result<(), String>>;
@@ -466,6 +471,11 @@ pub struct Services {
     /// Preferences ▸ General ▸ Beep When Done: the platform's default beep, played when a
     /// background job finishes successfully. `None` in the web build (and in tests).
     pub beep: Option<fn()>,
+    /// Check for an application update, when the host platform supplies an updater.
+    pub check_for_updates: Option<CheckForUpdatesFn>,
+    /// Install an application update with the host's native updater (macOS: Sparkle), where the
+    /// build supplies one. Update discovery stays in `update_check`; this is the installer.
+    pub install_update: Option<InstallUpdateFn>,
     /// Files delivered asynchronously (web drag-and-drop): drained every frame.
     pub inbox: Option<Inbox>,
     /// OS clipboard images: copies go out, screenshots and images from other apps come in.
@@ -616,6 +626,7 @@ pub struct PhotocraftApp {
     /// The first digit of a two-digit opacity typed on the number keys (`opacity_keys`, #352).
     pub(crate) opacity_keys: opacity_keys::Pending,
     control_rx: Option<Receiver<ControlRequest>>,
+    pub(crate) update_rx: Option<Receiver<(bool, update_check::UpdateCheckOutcome)>>,
     pending_screenshots: Vec<(u64, Option<String>, Sender<ControlResponse>)>,
     /// Screenshots not yet requested from the viewport: (token, earliest time in ms, frames seen).
     queued_screenshots: Vec<(u64, f64, u32)>,
@@ -923,6 +934,7 @@ impl PhotocraftApp {
             hist_job: None,
             gpu: None,
             started: None,
+            update_rx: None,
             perf: Default::default(),
             stroke_trace: stroke_trace::StrokeTrace::from_env(),
             prefs_rt: Default::default(),
@@ -1807,6 +1819,7 @@ impl eframe::App for PhotocraftApp {
         self.issue_screenshots(ctx);
         prefs_ui::tick(self, ctx);
         monitor_status::poll_frame(self, ctx, frame);
+        update_check::poll(self, ctx);
         // Control requests and persisted preferences can change the language in this frame.
         i18n::sync_context(ctx, &self.session.prefs().interface.language);
         type_tool::sync_font_names(ctx, self.session.prefs().type_.show_font_names_in_english);
