@@ -255,6 +255,11 @@ pub fn import_raw_with(name: &str, bytes: &[u8], opts: &DevelopOptions) -> Resul
             let summary = format!("{DEVELOPED_NOTE} ({} demosaic, as-shot white balance)", opts.demosaic.id());
             developed_document(name, format, dev, &summary)
         }
+        Err(RawError::Unsupported(reason)) if photocraft_raw::identify(bytes) == Some(photocraft_raw::RawFormat::Cr3) => {
+            let mut result = crate::cr3::import(name, bytes, &opts.limits)?;
+            result.warnings.push(format!("CR3 sensor data unsupported: {reason}"));
+            Ok(result)
+        }
         Err(RawError::Unsupported(reason)) => match photocraft_raw::embedded_preview(bytes) {
             Some(p) => {
                 let img = upright_preview(bytes, p.jpeg)?;

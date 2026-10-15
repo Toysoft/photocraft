@@ -46,7 +46,7 @@
 mod cameras;
 mod color;
 mod cr2;
-mod cr3;
+pub mod cr3;
 mod demosaic;
 mod develop;
 mod dng;
