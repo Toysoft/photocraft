@@ -975,16 +975,22 @@ pub fn draw_overlay(app: &PhotocraftApp, painter: &egui::Painter, xf: &ViewXform
             crate::anchor_tools::draw_hover(app, painter, &to_scr, accent, painter.ctx().input(|i| i.modifiers));
         }
     } else if paths {
-        // Paths remain visible as outlines with any tool. Path Selection adds anchor squares; Direct
-        // Selection has its own overlay above.
-        if let Some(wp) = &doc.work_path {
-            draw_path(wp, tool == Tool::PathSelection);
-        }
-        let st = app.session.active();
-        if let Some(l) = st.and_then(|s| s.active_layer.and_then(|id| s.doc.layer(id)))
-            && let LayerContent::Shape(sh) = &l.content
-        {
-            draw_path(&sh.path, tool == Tool::PathSelection);
+        if tool == Tool::Type && app.ui.text_edit.is_none() {
+            for (path, _) in crate::type_tool::type_paths(app) {
+                draw_path(&path, false);
+            }
+        } else {
+            // Paths remain visible as outlines with any tool. Path Selection adds anchor squares; Direct
+            // Selection has its own overlay above.
+            if let Some(wp) = &doc.work_path {
+                draw_path(wp, tool == Tool::PathSelection);
+            }
+            let st = app.session.active();
+            if let Some(l) = st.and_then(|s| s.active_layer.and_then(|id| s.doc.layer(id)))
+                && let LayerContent::Shape(sh) = &l.content
+            {
+                draw_path(&sh.path, tool == Tool::PathSelection);
+            }
         }
         // A targeted vector mask shows its path with any tool (#196).
         if let Some((_, p)) = targeted_vector_mask(app) {
@@ -2019,7 +2025,7 @@ mod tests {
         assert!(app.session.active().unwrap().doc.work_path.is_some());
         finish_shape(&mut app, Tool::Rectangle, [100.0, 100.0], [160.0, 150.0], egui::Modifiers::NONE);
         let toggle = |app: &mut PhotocraftApp, id: &str| crate::menus::invoke(app, &ctx, id, Value::Null).unwrap();
-        for tool in [Tool::Pen, Tool::PathSelection, Tool::DirectSelection, Tool::Rectangle] {
+        for tool in [Tool::Pen, Tool::PathSelection, Tool::DirectSelection, Tool::Rectangle, Tool::Type] {
             app.ui.tool = tool;
             assert!(app.ui.view.show.target_path && app.ui.view.extras);
             assert!(overlay_shapes(&app, &ctx) > 0, "{tool:?}: the paths are drawn by default");

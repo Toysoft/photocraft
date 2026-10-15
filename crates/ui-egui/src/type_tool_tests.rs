@@ -549,6 +549,90 @@ fn vertical_type_tool_creates_point_and_paragraph_text_with_one_undo() {
     }
 }
 
+/// #5189: switching from Ellipse to Type preserves the path, and a real canvas click creates
+/// editable curved text at that point, including a flipped, rotated and HiDPI view.
+#[test]
+fn circular_type_canvas_click_edit_and_undo() {
+    for ppp in [1.0, 2.0] {
+        for zoom in [0.5, 2.0] {
+            let mut app = new_app();
+            app.ui.tool_options.type_size = 24.0;
+            let shape = app.run("shape.create", json!({"kind": "ellipse", "rect": [160, 160, 280, 280]})).unwrap()["layer"].as_u64().unwrap();
+            let before = app.session.active().unwrap().history.past_len();
+            let mut h = harness(ppp, app);
+            let v = &mut h.state_mut().ui.views[0];
+            (v.zoom, v.center, v.fit_pending, v.rotation) = (zoom, [300.0, 180.0], false, 0.2);
+            h.state_mut().ui.view.flip_horizontal = true;
+            h.run_steps(2);
+            let point = xf(h.state()).to_screen(300.0, 160.0);
+            click(&mut h, point);
+            let app = h.state_mut();
+            let id = LayerId(app.ui.text_edit.as_ref().expect("the path click starts editing").layer);
+            let st = app.session.active().unwrap();
+            let text = text_layer(&st.doc, id).unwrap();
+            assert!(matches!(&text.shape, photocraft_doc::text::TextShape::Path { path, .. } if path.closed));
+            let warp = super::path_warp(app, id).unwrap();
+            let (x, y) = warp.apply(0.0, 0.0);
+            assert!((x - 300.0).hypot(y - 160.0) < 1.0);
+            super::insert(app, "Circular text");
+            assert_eq!(super::current_text(app, id).as_deref(), Some("Circular text"));
+            super::commit(app);
+            assert_eq!(app.session.active().unwrap().history.past_len(), before + 1);
+            app.run("edit.undo", json!({})).unwrap();
+            assert!(app.session.active().unwrap().doc.layer(id).is_none());
+            assert!(app.session.active().unwrap().doc.layer(LayerId(shape)).is_some());
+            app.run("edit.redo", json!({})).unwrap();
+            assert_eq!(super::current_text(app, id).as_deref(), Some("Circular text"));
+        }
+    }
+}
+
+#[test]
+fn path_type_caret_and_drag_selection_follow_the_curve() {
+    let mut app = new_app();
+    let shape = app.run("shape.create", json!({"kind": "ellipse", "rect": [160, 160, 480, 480]})).unwrap()["layer"].as_u64().unwrap();
+    let id =
+        LayerId(app.run("type.create", json!({"text": "HOHOHOHOHO", "size": 36, "path": {"shape": shape, "start": 400}})).unwrap()["layer"].as_u64().unwrap());
+    let mut h = harness(1.0, app);
+    let point = |h: &mut Harness<'static, PhotocraftApp>, i: usize, fraction: f32| {
+        let app = h.state_mut();
+        let (l, aff, _) = layout(app, id).unwrap();
+        let c = &l.clusters[i];
+        let line = &l.lines[c.line];
+        let (x, y) = super::path_warp(app, id).unwrap().apply(f64::from(c.x + c.advance * fraction), f64::from(line.baseline - line.ascent * 0.35));
+        let p = aff.apply(Point::new(x, y));
+        xf(app).to_screen(p.x as f32, p.y as f32)
+    };
+    let first = point(&mut h, 1, 0.2);
+    click(&mut h, first);
+    assert_eq!(selection(&h), (1, 1));
+    let end = point(&mut h, 6, 0.8);
+    drag(&mut h, first, end);
+    assert_eq!(selection(&h), (1, 7));
+    let app = h.state_mut();
+    let (l, _, text) = layout(app, id).unwrap();
+    let (x, top, _) = l.caret(super::byte_of(&text, 7));
+    let (px, py) = super::path_warp(app, id).unwrap().apply(f64::from(x), f64::from(top));
+    assert_eq!(super::offset_at(app, id, px, py), 7);
+}
+
+#[test]
+fn type_path_hit_uses_outline_and_selected_saved_path() {
+    let mut app = new_app();
+    let id = app.run("shape.create", json!({"kind": "ellipse", "rect": [160, 160, 280, 280]})).unwrap()["layer"].as_u64().unwrap();
+    assert!(super::hit_path(&app, 300.0, 160.0).is_some());
+    assert!(super::hit_path(&app, 300.0, 300.0).is_none(), "the interior creates point text");
+    app.run("layer.setProps", json!({"layer": id, "visible": false})).unwrap();
+    assert!(super::hit_path(&app, 300.0, 160.0).is_none());
+    app.run("path.set", json!({"name": "Curve", "path": {"subpaths": [{"closed": false, "knots": [[20, 40], [200, 40]]}]}})).unwrap();
+    app.ui.selected_path = Some("Curve".into());
+    let hit = super::hit_path(&app, 80.0, 40.0).unwrap();
+    assert_eq!(hit["name"], "Curve");
+    assert!((hit["start"].as_f64().unwrap() - 60.0).abs() < 0.01);
+    app.ui.tool = crate::state::Tool::HorizontalTypeMask;
+    assert!(super::hit_path(&app, 80.0, 40.0).is_none());
+}
+
 /// #668: ⌘/Ctrl+T while typing shows or hides the Character panel, as in Photoshop, instead of
 /// starting Free Transform on the layer being typed into.
 #[test]

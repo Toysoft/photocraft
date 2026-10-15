@@ -7,7 +7,7 @@ static site in `photocraft-web-<version>/`:
 |---|---|
 | `index.html` | The page. It loads everything through relative URLs. |
 | `photocraft-web-<hash>.js` | wasm-bindgen glue (generated, ES module) |
-| `photocraft-web-<hash>_bg.wasm` | The app: about 23 MiB raw, 10.5 MiB with gzip (see [Sizes](#sizes)) |
+| `photocraft-web-<hash>_bg.wasm` | The app: about 24 MiB raw, 10.6 MiB with gzip (see [Sizes](#sizes)) |
 | `_headers`, `.htaccess` | Sample header rules for Netlify/Cloudflare Pages and Apache |
 | `fonts/` (optional) | Fonts loaded on demand, listed in `fonts/manifest.txt` (see [Fonts](#fonts)) |
 
@@ -74,11 +74,12 @@ To verify the browser deployment, open the page, open an image and save/export i
 
 ## Sizes
 
-Measured on 2026-10-12 (0.8.0, `packaging/web/package.sh`; gzip `-9`):
+Measured on 2026-10-14 (0.9.0, Windows, Rust 1.99.0, Trunk 0.21.14 / wasm-opt 123;
+`trunk build --release`, the 24 MiB and relative-URL checks; gzip `-9`):
 
 | File | Raw | gzip |
 |---|---|---|
-| `photocraft-web-<hash>_bg.wasm` | 24,167,186 bytes (23.0 MiB) | 10,998,053 (10.5 MiB) |
+| `photocraft-web-<hash>_bg.wasm` | 25,150,307 bytes (23.99 MiB) | 11,158,100 (10.6 MiB) |
 | `photocraft-web-<hash>.js` | about 170 KB | about 26 KB |
 
 Per-file upload limits: Cloudflare Pages and Workers static assets reject any file over
@@ -86,8 +87,12 @@ Per-file upload limits: Cloudflare Pages and Workers static assets reject any fi
 it ever grows past 24 MiB, so a release can't ship a file a common host refuses. (Releases up to
 0.2.0 shipped a 25.8 MiB wasm, which Cloudflare rejected; issue #198.) The size comes from the
 `wasm-release` Cargo profile (fat LTO, size-optimized code with the pixel and file-decoding
-crates kept at speed) plus `wasm-opt -Oz`, and from storing the bundled fonts (PhotoCraft's and
-egui's) and the translation catalogs compressed, unpacked on first use.
+crates kept at speed) plus `wasm-opt -Oz --converge --reorder-functions`, and from storing the
+bundled fonts (PhotoCraft's and egui's) and the translation catalogs compressed, unpacked on
+first use. The browser profile also size-optimizes the plug-in VM, instruction encoder and
+module validator (`wasmi`, `wasmi_ir`, `wasmparser`). Function reordering reduces
+encoded function-index sizes. These settings reduced this local build from 25,420,501 to
+25,150,307 bytes; native release settings and pixel-processing optimization levels are unchanged.
 
 ## Any path works
 

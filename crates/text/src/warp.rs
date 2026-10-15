@@ -108,6 +108,23 @@ impl Warp {
             Kind::Path(p) => p.frame(cx).map_or(Placement::Hidden, Placement::Frame),
         }
     }
+
+    /// Nearest path position and signed distance from its baseline, in unwarped text space.
+    /// Shared by the Type tool's path hit test and caret placement.
+    pub fn project(&self, x: f64, y: f64) -> Option<(f64, f64)> {
+        match &self.0 {
+            Kind::Path(p) => p.project(x, y),
+            Kind::Style(_) => None,
+        }
+    }
+
+    /// Closed paths repeat their coordinates at this length; open paths do not repeat.
+    pub fn closed_length(&self) -> Option<f64> {
+        match &self.0 {
+            Kind::Path(p) if p.closed => Some(p.length()),
+            _ => None,
+        }
+    }
 }
 
 /// Most cubic segments of a type path that are followed (a hostile file cannot make this large).
@@ -121,6 +138,7 @@ struct PathFrame {
     /// Arc length at each point.
     cum: Vec<f64>,
     start: f64,
+    closed: bool,
 }
 
 impl PathFrame {
@@ -156,7 +174,7 @@ impl PathFrame {
             }
             cum.push(acc);
         }
-        (pts.len() >= 2 && acc.is_finite() && acc > 1e-6 && start.is_finite()).then(|| PathFrame { pts, cum, start: f64::from(start) })
+        (pts.len() >= 2 && acc.is_finite() && acc > 1e-6 && start.is_finite()).then(|| PathFrame { pts, cum, start: f64::from(start), closed: path.closed })
     }
 
     fn length(&self) -> f64 {
@@ -165,6 +183,7 @@ impl PathFrame {
 
     /// Point and unit tangent at arc length `s`; past either end the end tangent continues straight.
     fn at(&self, s: f64) -> ((f64, f64), (f64, f64)) {
+        let s = if self.closed { s.rem_euclid(self.length()) } else { s };
         let last = self.pts.len() - 1;
         let i = self.cum.partition_point(|&c| c < s).clamp(1, last);
         let (a, b) = (self.pts[i - 1], self.pts[i]);
@@ -182,17 +201,70 @@ impl PathFrame {
     /// The rigid map for a glyph centred at text-space `cx`; `None` outside the path.
     fn frame(&self, cx: f64) -> Option<[f64; 6]> {
         let s = self.start + cx;
-        if !(0.0..=self.length()).contains(&s) {
+        let along = if self.closed { cx } else { s };
+        if !(0.0..=self.length()).contains(&if self.closed { along.abs() } else { along }) {
             return None;
         }
         let (p, t) = self.at(s);
         Some([t.0, t.1, -t.1, t.0, p.0 - t.0 * cx, p.1 - t.1 * cx])
+    }
+
+    fn project(&self, x: f64, y: f64) -> Option<(f64, f64)> {
+        if !x.is_finite() || !y.is_finite() {
+            return None;
+        }
+        let mut best: Option<(f64, f64, f64)> = None;
+        for (i, pair) in self.pts.windows(2).enumerate() {
+            let [a, b] = pair else { continue };
+            let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+            let len = dx.hypot(dy);
+            if len <= 1e-12 {
+                continue;
+            }
+            let (tx, ty) = (dx / len, dy / len);
+            let along = ((x - a.0) * tx + (y - a.1) * ty).clamp(0.0, len);
+            let (qx, qy) = (a.0 + tx * along, a.1 + ty * along);
+            let distance = (x - qx).hypot(y - qy);
+            if best.is_none_or(|v| distance < v.0) {
+                let s = self.cum.get(i).copied()? + along - self.start;
+                let s = if self.closed { s.rem_euclid(self.length()) } else { s };
+                best = Some((distance, s, -(x - qx) * ty + (y - qy) * tx));
+            }
+        }
+        best.map(|(_, s, cross)| (s, cross))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn path_projection_matches_caret_coordinates_and_flip() {
+        for flip in [false, true] {
+            let shape = TextShape::Path { path: Subpath::polyline(&[(10.0, 20.0), (10.0, 220.0)]), start: 30.0, flip };
+            let warp = Warp::on_path(&shape).unwrap();
+            for (x, y) in [(0.0, -20.0), (40.0, 5.0), (100.0, -10.0)] {
+                let (px, py) = warp.apply(x, y);
+                let (rx, ry) = warp.project(px, py).unwrap();
+                assert!((rx - x).abs() < 1e-6 && (ry - y).abs() < 1e-6);
+            }
+            assert!(warp.project(f64::NAN, 0.0).is_none());
+        }
+    }
+
+    #[test]
+    fn closed_path_continues_past_the_original_seam_for_one_lap() {
+        let mut path = Subpath::polyline(&[(0.0, 0.0), (100.0, 0.0), (100.0, 100.0), (0.0, 100.0)]);
+        path.closed = true;
+        let warp = Warp::on_path(&TextShape::Path { path, start: 390.0, flip: false }).unwrap();
+        assert!(matches!(warp.place_glyph(20.0), Placement::Frame(_)));
+        assert!(matches!(warp.place_glyph(401.0), Placement::Hidden));
+        let (x, y) = warp.apply(40.0, -10.0);
+        let projected = warp.project(x, y).unwrap();
+        assert!((projected.0 - 40.0).abs() < 1e-6);
+        assert!((projected.1 + 10.0).abs() < 1e-6);
+    }
 
     fn warp(style: &str, value: f32) -> Warp {
         let w = TextWarp { style: psd_style(style).unwrap().into(), value, horizontal_distortion: 0.0, vertical_distortion: 0.0, horizontal: true };

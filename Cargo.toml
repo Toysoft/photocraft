@@ -127,6 +127,14 @@ opt-level = "z"
 [profile.wasm-release.package.naga]
 opt-level = "z"
 
+# Size-optimize the plug-in VM, instruction encoder and module validator for browser builds.
+[profile.wasm-release.package.wasmi]
+opt-level = "z"
+[profile.wasm-release.package.wasmi_ir]
+opt-level = "z"
+[profile.wasm-release.package.wasmparser]
+opt-level = "z"
+
 # Pixel processing keeps its speed-oriented optimization level.
 [profile.wasm-release.package.photocraft-raster]
 opt-level = 3

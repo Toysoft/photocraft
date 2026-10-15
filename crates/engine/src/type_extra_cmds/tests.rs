@@ -315,6 +315,39 @@ fn type_attaches_to_a_path_and_releases_it() {
 }
 
 #[test]
+fn creating_path_text_is_atomic_and_undoable() {
+    for depth in [8, 16, 32] {
+        let mut s = session(depth);
+        let shape = s.execute("shape.create", json!({"kind": "ellipse", "rect": [20, 20, 160, 160]})).unwrap()["layer"].as_u64().unwrap();
+        let before = s.active().unwrap().history.past_len();
+        let count = s.active().unwrap().doc.walk().len();
+        for path in [json!("bad"), json!({"shape": 999999}), json!({"shape": shape, "start": 1e100}), json!({"shape": shape, "subpath": 5})] {
+            assert!(s.execute("type.create", json!({"text": "circle", "path": path})).is_err());
+            assert_eq!(s.active().unwrap().history.past_len(), before);
+            assert_eq!(s.active().unwrap().doc.walk().len(), count);
+        }
+        let result = s.execute("type.create", json!({"text": "Circle", "path": {"shape": shape, "start": 30}, "size": 20})).unwrap();
+        let id = LayerId(result["layer"].as_u64().unwrap());
+        assert!(matches!(&text(&s, id).shape, TextShape::Path { path, start, .. } if path.closed && *start == 30.0));
+        assert!(!ink(&s, id).is_empty());
+        assert_eq!(s.active().unwrap().history.past_len(), before + 1);
+        assert!(s.undo());
+        assert!(s.active().unwrap().doc.layer(id).is_none());
+        assert!(s.redo());
+        assert!(matches!(text(&s, id).shape, TextShape::Path { .. }));
+    }
+}
+
+#[test]
+fn creating_type_on_a_saved_path_uses_its_geometry() {
+    let mut s = session(8);
+    s.execute("path.set", json!({"name": "Curve", "path": {"subpaths": [{"closed": false, "knots": [[20, 40], [200, 40]]}]}})).unwrap();
+    let result = s.execute("type.create", json!({"text": "Saved", "path": {"name": "Curve"}})).unwrap();
+    let id = LayerId(result["layer"].as_u64().unwrap());
+    assert!(matches!(text(&s, id).shape, TextShape::Path { .. }));
+}
+
+#[test]
 fn all_locked_layer_rejects_paste_lorem_ipsum_without_history() {
     // #4188: Lock All stopped type.edit (#3132) but not Paste Lorem Ipsum into the layer.
     let mut s = session(8);

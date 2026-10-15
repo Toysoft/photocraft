@@ -99,6 +99,7 @@ Triangle and Curvature Pen (minus legacy Rounded Rectangle and Targeted Adjustme
 | ⌘-drag temporary Move shows the box and snaps | partial | #2681 |
 | ⌘-right-click layer list under the pointer | done | `layer_pick_ui.rs` |
 | Double-click type to edit it (caret at the pointer, Type tool) | done | #1132, `type_tool::edit_at` |
+| Horizontal Type tool clicks an ellipse/shape, work path or selected saved path; path stays visible and caret/selection follow it | partial | #1082, 2026-10-13, `type_tool.rs`: click offset, closed-circle seam and atomic create/undo; start/end/flip handles and vertical path text UI remain missing. Native saves preserve it; PSD saves as point text |
 | Moving a selection on a mask moves the mask, not the pixels | partial | #2468 |
 
 ## Selection modifiers
@@ -253,3 +254,5 @@ Paragraph; the rest open as in-app floating windows.
 | 2026-10-11 | minor | Pen ⇧ 45° done: ⇧-click puts the next anchor on the nearest 45° ray, ⇧-drag turns its handles in 45° steps (TOOL-214-10 done, #3751) |
 | 2026-10-14 | minor | Last selected tool restored across launches; temporary overrides excluded, explicit Eraser choices retained, and final selection flushed on normal exit |
 | 2026-10-13 | minor | Free Transform with a selection: the box is the selection's rectangle, and the marching ants follow it while it is transformed (#5297) |
+| 2026-10-13 | minor | Horizontal Type tool clicks shape/work/saved paths with curved caret and selection (#1082); PSD path text and start/end/flip handles remain open; estimates unchanged |
+| 2026-10-14 | minor | Reconciled upstream progress headers and linked horizontal Type path text to #1082; text inside shapes and PSD path text remain open |

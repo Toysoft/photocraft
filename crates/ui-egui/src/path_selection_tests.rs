@@ -254,13 +254,23 @@ fn clicking_shape_with_path_selection_selects_its_layer() {
 /// confirms the path's outline pixels are painted in the accent colour, proving the path is drawn.
 #[test]
 fn path_overlay_drawn_for_non_vector_tools() {
+    assert_path_overlay_drawn(Tool::Brush, "work");
+}
+
+#[test]
+fn type_path_overlay_drawn_for_work_and_selected_saved_paths() {
+    assert_path_overlay_drawn(Tool::Type, "work");
+    assert_path_overlay_drawn(Tool::Type, "Saved");
+}
+
+fn assert_path_overlay_drawn(tool: Tool, path_name: &str) {
     let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
     app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
     app.sync_views();
     // Place a work path whose top edge runs exactly along y=10 in document space.
-    app.run("path.set", json!({"name": "work", "path": rect_path(50.0, 10.0, 100.0, 80.0)})).unwrap();
-    // Switch to a non-vector tool — before the fix this hid the path outline.
-    app.ui.tool = Tool::Brush;
+    app.run("path.set", json!({"name": path_name, "path": rect_path(50.0, 10.0, 100.0, 80.0)})).unwrap();
+    app.ui.selected_path = Some(path_name.into());
+    app.ui.tool = tool;
 
     let mut h = Harness::builder().with_size(vec2(900.0, 700.0)).build_ui_state(
         |ui, app: &mut PhotocraftApp| {
@@ -325,7 +335,7 @@ fn path_overlay_drawn_for_non_vector_tools() {
     let hits = (70..=130).step_by(5).filter(|x| has_accent_near(xf.to_screen(*x as f32, 10.0))).count();
     assert!(
         hits >= 10,
-        "expected the work path outline to be visible with Brush tool active, \
+        "expected the {path_name} path outline to be visible with {tool:?} active, \
          but found accent-coloured pixels at only {hits} sample point(s) along the transformed top edge \
          (accent = #{accent_r:02x}{accent_g:02x}{accent_b:02x}); \
          the path must be drawn regardless of the active tool",

@@ -1920,7 +1920,10 @@ mod tests {
         assert_eq!(sm.smart_filters.len(), 1, "the preview adds the Curves smart filter");
         assert_eq!(shown.size, crate::proxy::proxy_document(&doc, k).size);
         // The 16 px square at (16, 16) is a 4 px square at (4, 4) on the proxy, not 16 px at (16, 16).
-        for (x, y) in [(4, 4), (5, 6), (7, 7)] {
+        assert_eq!(sm.cache.as_ref().unwrap().content_bounds(), photocraft_geom::Rect::new(4, 4, 8, 8));
+        // Shrinking the placed source antialiases its perimeter. Only strict interior pixels
+        // are fully opaque; the exact bounds above also guard the edge's position and size.
+        for (x, y) in [(5, 5), (5, 6), (6, 6)] {
             assert!(alpha(&shown, x, y) > 0.99, "({x}, {y}) is inside the reduced square");
         }
         for (x, y) in [(2, 2), (9, 9), (12, 12), (15, 15)] {

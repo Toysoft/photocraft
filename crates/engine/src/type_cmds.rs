@@ -782,6 +782,12 @@ pub(crate) fn new_text_layer(s: &Session, p: &Value, cmd: &str) -> Result<TextLa
         ..Default::default()
     };
     t.sync_summary();
+    if let Some(path) = p.get("path") {
+        if p.get("box").is_some() {
+            return Err(bad(cmd, "path text cannot also have a paragraph box"));
+        }
+        crate::type_extra_cmds::set_text_path(&mut t, &s.active().ok_or(EngineError::NoDocument)?.doc, path)?;
+    }
     Ok(t)
 }
 
@@ -794,7 +800,7 @@ pub fn specs() -> Vec<CommandSpec> {
             label: "New Type Layer",
             menu: &["Layer", "New"],
             shortcut: None,
-            params: r##"{"x":px,"y":px (baseline anchor of point text),"text":str,"box":[x,y,w,h]? (paragraph text),"name":str?,"align":"left|center|right|justify…"?,"orientation":"horizontal|vertical"="horizontal", …character keys: "font","size":pt=12,"color",…}"##,
+            params: r##"{"x":px,"y":px (baseline anchor of point text),"text":str,"box":[x,y,w,h]? (paragraph text),"path":{"shape":layerId? (default work path),"name":str? (saved path),"subpath":index=0,"start":px=0,"flip":bool=false}?,"name":str?,"align":"left|center|right|justify…"?,"orientation":"horizontal|vertical"="horizontal", …character keys: "font","size":pt=12,"color",…}"##,
             enabled: has_doc,
             journal: true,
             run: |s, p| {

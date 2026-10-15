@@ -833,6 +833,28 @@ mod tests {
         assert!(unclassified.is_empty(), "filesystem path parameters in the command registry need an automation policy: {unclassified:?}");
     }
 
+    #[test]
+    fn type_creation_uses_document_path_geometry_without_filesystem_authority() {
+        let mut headless = crate::Headless::new();
+        headless.command_run("file.new", serde_json::json!({"width": 128, "height": 128})).unwrap();
+        let shape = headless.command_run("shape.create", serde_json::json!({"kind": "ellipse", "rect": [16, 16, 96, 96]})).unwrap()["layer"].clone();
+        let result = headless.command_run("type.create", serde_json::json!({"text": "Curve", "path": {"shape": shape}})).unwrap();
+        let id = photocraft_doc::LayerId(result["layer"].as_u64().unwrap());
+        let st = headless.session.active().unwrap();
+        let photocraft_doc::LayerContent::Text(text) = &st.doc.layer(id).unwrap().content else { panic!("expected path text") };
+        assert!(matches!(text.shape, photocraft_doc::text::TextShape::Path { .. }));
+        let before = st.history.past_len();
+        let layers = st.doc.walk().len();
+        // A host filename cannot masquerade as the geometric source object. Rejection happens
+        // before creating a layer and does not grant filesystem access to this untrusted session.
+        for path in [serde_json::json!("/outside/curve.psd"), serde_json::json!({"shape": "/outside/curve.psd"})] {
+            assert!(headless.command_run("type.create", serde_json::json!({"text": "Bad", "path": path})).is_err());
+            let st = headless.session.active().unwrap();
+            assert_eq!(st.history.past_len(), before);
+            assert_eq!(st.doc.walk().len(), layers);
+        }
+    }
+
     fn documents_filesystem_path_params(id: &str, params: &str) -> bool {
         if matches!(id, "prefs.get" | "prefs.reset") {
             return false;
@@ -860,6 +882,7 @@ mod tests {
                 | "path.clippingPath.set"
                 | "path.rename"
                 | "path.stroke"
+                | "type.create"
                 | "type.attachToPath"
                 | "type.detachFromPath"
                 | "select.toWorkPath"
