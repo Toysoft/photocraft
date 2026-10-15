@@ -178,6 +178,73 @@ fn fallback_modes_import_flattened() {
 }
 
 #[test]
+fn palette_and_duotone_modes_are_written_in_their_own_mode() {
+    // Indexed Color and Bitmap are written flat in their own mode (palette / 1 bit); a Duotone
+    // keeps the ink data it was imported with over its grey plate. Same image, same mode data.
+    for mode in [ColorMode::Indexed, ColorMode::Bitmap, ColorMode::Duotone] {
+        let depth = testgen::mode_depths(mode)[0];
+        let f = testgen::merged_only(Version::Psd, mode, depth, Compression::Rle, 9, 5);
+        let (d, _) = psd_to_document(&f);
+        let out = export(&d, "x.psd", &ExportOptions::default()).unwrap();
+        assert!(out.warnings.iter().all(|w| !w.contains("written as")), "{mode:?}: {:?}", out.warnings);
+        let back = PsdFile::from_bytes(&out.bytes).unwrap();
+        assert_eq!((back.header.color_mode, back.header.depth, back.header.channels), (mode, f.header.depth, 1), "{mode:?}");
+        assert_eq!(back.composite_rgba8().unwrap(), f.composite_rgba8().unwrap(), "{mode:?}");
+        if mode != ColorMode::Bitmap {
+            assert_eq!(back.color_mode_data, f.color_mode_data, "{mode:?}");
+        }
+    }
+}
+
+#[test]
+fn a_duotone_made_in_photocraft_is_written_with_its_inks() {
+    use photocraft_doc::{Duotone, DuotoneInk};
+    let mut d = photocraft_doc::Document::with_background(
+        "d",
+        photocraft_doc::Size::new(4, 2),
+        photocraft_color::ColorMode::Grayscale,
+        photocraft_color::SampleType::U8,
+        photocraft_color::Color::rgba(0.5, 0.5, 0.5, 1.0),
+    );
+    d.mode = photocraft_color::ColorMode::Duotone;
+    d.duotone = Some(Duotone { inks: vec![DuotoneInk::new("Black", [0.0; 3]), DuotoneInk::new("Orange", [1.0, 0.5, 0.0])], psd_raw: None });
+    let out = export(&d, "x.psd", &ExportOptions::default()).unwrap();
+    assert!(out.warnings.iter().all(|w| !w.contains("written as")), "{:?}", out.warnings);
+    let f = PsdFile::from_bytes(&out.bytes).unwrap();
+    assert_eq!((f.header.color_mode, f.color_mode_data.len()), (ColorMode::Duotone, 524));
+    let (back, w) = psd_to_document(&f);
+    assert!(w.iter().all(|w| !w.contains("duotone")), "{w:?}");
+    let inks = &back.duotone.as_ref().unwrap().inks;
+    assert_eq!(inks.iter().map(|i| i.name.as_str()).collect::<Vec<_>>(), ["Black", "Orange"]);
+    assert!((inks[1].color[1] - 0.5).abs() < 1e-4, "{:?}", inks[1].color);
+    // Re-exported unedited, the block is the one read.
+    let again = PsdFile::from_bytes(&export(&back, "x.psd", &ExportOptions::default()).unwrap().bytes).unwrap();
+    assert_eq!(again.color_mode_data, f.color_mode_data);
+}
+
+#[test]
+fn indexed_psd_keeps_the_table_length_and_transparent_entry() {
+    use photocraft_doc::ColorTable;
+    let mut d = photocraft_doc::Document::with_background(
+        "i",
+        photocraft_doc::Size::new(4, 2),
+        photocraft_color::ColorMode::Rgb,
+        photocraft_color::SampleType::U8,
+        photocraft_color::Color::rgba(1.0, 0.0, 0.0, 1.0),
+    );
+    d.mode = photocraft_color::ColorMode::Indexed;
+    d.color_table = Some(ColorTable { colors: vec![[0, 0, 0], [255, 0, 0], [0, 0, 255]], transparent: Some(2) });
+    let out = export(&d, "x.psd", &ExportOptions::default()).unwrap();
+    let f = PsdFile::from_bytes(&out.bytes).unwrap();
+    assert_eq!(f.header.color_mode, ColorMode::Indexed);
+    assert_eq!(f.resource(1046).map(|r| r.data.clone()), Some(vec![0, 3]));
+    assert_eq!(f.resource(1047).map(|r| r.data.clone()), Some(vec![0, 2]));
+    assert_eq!(f.decode_merged().unwrap(), vec![1; 8], "every pixel is entry 1 (red)");
+    let (back, _) = psd_to_document(&f);
+    assert_eq!(back.color_table, d.color_table);
+}
+
+#[test]
 fn multichannel_imports_ink_channels() {
     for depth in testgen::mode_depths(ColorMode::Multichannel) {
         let f = testgen::merged_only(Version::Psd, ColorMode::Multichannel, *depth, Compression::Rle, 9, 5);

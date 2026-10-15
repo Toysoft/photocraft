@@ -204,6 +204,16 @@ pub(crate) fn export_layered(doc: &Document, opts: &ExportOptions, ctl: &photocr
     // keeps straight alpha) and uncompressed (its planes are interleaved below).
     let psd_opts =
         PsdExportOptions { force_psb: opts.force_psb || big, merged_matte: false, merged_compression: Compression::Raw, maximize_compatibility: true };
+    // TIFF has no palette, bitmap or duotone layout: the PSD model of an Indexed Color, Bitmap
+    // or Duotone document is made in its pixel format (RGB or Grayscale), which the PSD exporter
+    // otherwise writes in the document's own mode.
+    let plain;
+    let doc = if matches!(doc.mode, ColorMode::Indexed | ColorMode::Bitmap | ColorMode::Duotone) {
+        plain = Document { mode: doc.pixel_format().mode, ..doc.clone() };
+        &plain
+    } else {
+        doc
+    };
     let (file, w) = crate::with_span(ctl, 0.0, TIFF_MODEL_DONE, |ctl| crate::psd_export::document_to_psd_interruptible(doc, &psd_opts, ctl));
     // A cancelled conversion stops early with an incomplete model: never encode it.
     ctl.check().map_err(|_| IoError::Cancelled)?;
