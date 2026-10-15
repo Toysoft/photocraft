@@ -6,9 +6,7 @@
 //! - **Windows**: winit turns `WM_POINTER` pen and touch input into `WindowEvent::Touch` with a
 //!   normalised force (`POINTER_PEN_INFO::pressure / 1024`); egui-winit forwards it as
 //!   `egui::Event::Touch { force }` alongside the emulated pointer. [`Stylus::update`] reads it.
-//!   winit drops the pen's tilt and rotation, so those stay 0, and reports pressure 0 (a tap
-//!   lighter than the pen's first pressure level) as no force, which [`Stylus::update`] reads as
-//!   pressure 0 once it knows a pen is in use.
+//!   winit drops the pen's tilt and rotation, so those stay 0.
 //! - **Web**: eframe forwards touch force but not pen pointer events, so the web runner listens
 //!   to `pointerdown`/`pointermove` itself and writes `pressure`, `tiltX`, `tiltY`, `twist` and
 //!   the eraser button of `pointerType == "pen"` events into the [`StylusFeed`].
@@ -65,6 +63,26 @@ impl PenSample {
     }
 }
 
+/// What last wrote the pointer slot: a mouse, a pen, or a finger.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum PointerSource {
+    #[default]
+    Mouse,
+    Pen,
+    Touch,
+}
+
+impl PointerSource {
+    /// W3C `pointerType`: `"pen"`, `"touch"`, `"mouse"`, or anything else.
+    pub fn from_pointer_type(ty: &str) -> Self {
+        match ty {
+            "pen" => Self::Pen,
+            "touch" => Self::Touch,
+            _ => Self::Mouse,
+        }
+    }
+}
+
 /// Most samples a [`StylusFeed`] keeps between two frames (a stalled UI drops the oldest).
 const FEED_QUEUE: usize = 1024;
 
@@ -74,6 +92,8 @@ struct FeedState {
     latest: Option<PenSample>,
     /// Every sample set since the canvas last drained them, oldest first.
     queue: VecDeque<PenSample>,
+    /// Last pointer device that wrote this slot (mouse / pen / touch).
+    source: PointerSource,
 }
 
 /// Shared state a platform backend writes pen samples into. Cloning shares it. Each sample both
@@ -82,22 +102,41 @@ struct FeedState {
 #[derive(Clone, Debug, Default)]
 pub struct StylusFeed(Arc<Mutex<FeedState>>);
 
+pub(crate) fn pen_hold_is_no_right_click(ctx: &egui::Context, pen_down: bool) {
+    let want = if pen_down { f64::INFINITY } else { egui::InputOptions::default().max_click_duration };
+    if ctx.options(|o| o.input_options.max_click_duration) != want {
+        ctx.options_mut(|o| o.input_options.max_click_duration = want);
+    }
+}
+
 impl StylusFeed {
-    /// The current sample (`None` = no pen down); a sample is also queued for [`Self::drain`].
+    /// Convenience for native tablet monitors that only provide pen samples.
+    /// `Some` marks the slot as a pen; `None` clears the sample and returns the source to mouse.
     pub fn set(&self, s: Option<PenSample>) {
+        let source = if s.is_some() { PointerSource::Pen } else { PointerSource::Mouse };
+        self.report(source, s);
+    }
+
+    pub fn get(&self) -> Option<PenSample> {
+        self.0.lock().unwrap_or_else(PoisonError::into_inner).latest
+    }
+
+    /// Last pointer device that wrote this slot.
+    pub fn source(&self) -> PointerSource {
+        self.0.lock().unwrap_or_else(PoisonError::into_inner).source
+    }
+
+    /// Record the device and, for a pen contact, its sample.
+    pub fn report(&self, source: PointerSource, sample: Option<PenSample>) {
         let mut g = self.0.lock().unwrap_or_else(PoisonError::into_inner);
-        let s = s.map(PenSample::sanitized);
-        g.latest = s;
-        if let Some(s) = s {
+        g.source = source;
+        g.latest = if source == PointerSource::Pen { sample.map(PenSample::sanitized) } else { None };
+        if let Some(s) = g.latest {
             if g.queue.len() >= FEED_QUEUE {
                 g.queue.pop_front();
             }
             g.queue.push_back(s);
         }
-    }
-
-    pub fn get(&self) -> Option<PenSample> {
-        self.0.lock().unwrap_or_else(PoisonError::into_inner).latest
     }
 
     /// The samples set since the last drain, oldest first.
@@ -204,8 +243,6 @@ impl Stylus {
                     egui::TouchPhase::Start | egui::TouchPhase::Move => {
                         let start = *phase == egui::TouchPhase::Start;
                         if start {
-                            // A new contact keeps its force into the next frame, even when an
-                            // earlier contact lifted in this one.
                             self.lifted = false;
                             if !self.contacts.contains(id) {
                                 if self.contacts.len() >= 16 {
@@ -215,24 +252,26 @@ impl Stylus {
                             }
                         }
                         let down = start || self.contacts.contains(id);
-                        // Only a pen moves without touching, and only a pen (or a force-sensing
-                        // screen) reports a force.
                         if !down || force.is_some() {
                             self.touch_pen = true;
                         }
+                        // Hosts that only emit egui Touch (no Pointer Events adapter) still need
+                        // the shared list-drag gate to prefer scrolling over reorder.
+                        if self.feed.source() != PointerSource::Pen {
+                            self.feed.report(PointerSource::Touch, None);
+                        }
                         // Windows reports a pen pressed lighter than its first pressure level with
-                        // no force at all (winit maps pressure 0 to `None`): a light tap is
-                        // pressure 0, never a mouse click's full pressure. A finger on a screen
-                        // without force sensing stays at full pressure.
+                        // no force at all (winit maps pressure 0 to None): it is pressure 0, not a
+                        // mouse click's full pressure. A finger without force stays at full.
                         let force = force.or((down && self.touch_pen && (start || self.touch.is_none())).then_some(0.0));
-                        if let Some(f) = force {
-                            self.touch = Some(f);
-                            self.frame.push(PenSample { pressure: f, ..Default::default() });
+                        if let Some(force) = force {
+                            self.touch = Some(force);
+                            self.frame.push(PenSample { pressure: force, ..Default::default() });
                         }
                     }
                     egui::TouchPhase::End | egui::TouchPhase::Cancel => {
                         self.lifted = true;
-                        self.contacts.retain(|c| c != id);
+                        self.contacts.retain(|contact| contact != id);
                     }
                 }
             }
@@ -419,42 +458,36 @@ impl Stylus {
     }
 }
 
-/// The touch contacts a pen makes, read from the raw input. egui takes every touch contact held
-/// still past `max_click_duration` (0.8 s) for a touch screen's press-and-hold: a secondary click
-/// (a context menu) that also drops the drag. On Windows a pen arrives as touch events, so a pen
-/// held still opened a context menu. A pen held still is just a pen, as in Photoshop.
+/// Touch contacts identify a held pen so egui does not turn it into a touch long-press.
 #[derive(Clone, Debug, Default)]
 pub(crate) struct PenContacts {
-    /// Touch ids that moved without touching: only a pen hovers.
     hovering: Vec<egui::TouchId>,
-    /// The contacts down, and whether each is a pen.
     down: Vec<(egui::TouchId, bool)>,
 }
 
-/// Most touch ids [`PenContacts`] remembers (the oldest go first).
 const CONTACTS: usize = 16;
 
 impl PenContacts {
-    /// Follow a frame's touch events. True when a pen contact was down at any point of the frame.
+    /// Follow touch events in one raw-input frame; true while a pen is or was down this frame.
     pub(crate) fn observe(&mut self, events: &[egui::Event]) -> bool {
-        let pressed = |f: &Option<f32>| f.is_some_and(|f| f > 0.0);
-        let mut pen = self.down.iter().any(|(_, p)| *p);
-        for e in events {
-            let egui::Event::Touch { id, phase, force, .. } = e else { continue };
+        let has_force = |force: &Option<f32>| force.is_some_and(|force| force > 0.0);
+        let mut pen_down = self.down.iter().any(|(_, is_pen)| *is_pen);
+        for event in events {
+            let egui::Event::Touch { id, phase, force, .. } = event else { continue };
             match phase {
                 egui::TouchPhase::Start => {
-                    let is_pen = self.hovering.contains(id) || pressed(force);
-                    self.down.retain(|(c, _)| c != id);
+                    let is_pen = self.hovering.contains(id) || has_force(force);
+                    self.down.retain(|(contact, _)| contact != id);
                     if self.down.len() >= CONTACTS {
                         self.down.remove(0);
                     }
                     self.down.push((*id, is_pen));
-                    pen |= is_pen;
+                    pen_down |= is_pen;
                 }
-                egui::TouchPhase::Move => match self.down.iter_mut().find(|(c, _)| c == id) {
-                    Some(c) if pressed(force) => {
-                        c.1 = true;
-                        pen = true;
+                egui::TouchPhase::Move => match self.down.iter_mut().find(|(contact, _)| contact == id) {
+                    Some(contact) if has_force(force) => {
+                        contact.1 = true;
+                        pen_down = true;
                     }
                     Some(_) => {}
                     None if !self.hovering.contains(id) => {
@@ -465,19 +498,10 @@ impl PenContacts {
                     }
                     None => {}
                 },
-                egui::TouchPhase::End | egui::TouchPhase::Cancel => self.down.retain(|(c, _)| c != id),
+                egui::TouchPhase::End | egui::TouchPhase::Cancel => self.down.retain(|(contact, _)| contact != id),
             }
         }
-        pen
-    }
-}
-
-/// Turn egui's touch press-and-hold off while a pen contact is down (and through the frame it
-/// lifts in, so the release is the click a quick tap would be), back on otherwise for fingers.
-pub(crate) fn pen_hold_is_no_right_click(ctx: &egui::Context, pen_down: bool) {
-    let want = if pen_down { f64::INFINITY } else { egui::InputOptions::default().max_click_duration };
-    if ctx.options(|o| o.input_options.max_click_duration) != want {
-        ctx.options_mut(|o| o.input_options.max_click_duration = want);
+        pen_down
     }
 }
 
@@ -485,22 +509,19 @@ pub(crate) fn pen_hold_is_no_right_click(ctx: &egui::Context, pen_down: bool) {
 mod tests {
     use super::*;
 
-    /// Hold a touch contact still for 1.2 s over a click-sensing area, with the press-and-hold
-    /// handling the app does in `raw_input_hook`. Did the area see a secondary click?
     fn held_contact_right_clicks(hover_first: bool, force: Option<f32>) -> bool {
         let ctx = egui::Context::default();
         let mut contacts = PenContacts::default();
         let mut right_clicked = false;
-        let ev = |phase, force| egui::Event::Touch { device_id: egui::TouchDeviceId(1), id: egui::TouchId(3), phase, pos: egui::pos2(50.0, 50.0), force };
-        // A first frame lays the area out, so the press hits it.
+        let touch = |phase, force| egui::Event::Touch { device_id: egui::TouchDeviceId(1), id: egui::TouchId(3), phase, pos: egui::pos2(50.0, 50.0), force };
         let mut frames = vec![(0.0, vec![])];
         if hover_first {
-            frames.push((0.05, vec![ev(egui::TouchPhase::Move, None), egui::Event::PointerMoved(egui::pos2(50.0, 50.0))]));
+            frames.push((0.05, vec![touch(egui::TouchPhase::Move, None), egui::Event::PointerMoved(egui::pos2(50.0, 50.0))]));
         }
         frames.push((
             0.1,
             vec![
-                ev(egui::TouchPhase::Start, force),
+                touch(egui::TouchPhase::Start, force),
                 egui::Event::PointerMoved(egui::pos2(50.0, 50.0)),
                 egui::Event::PointerButton {
                     pos: egui::pos2(50.0, 50.0),
@@ -510,24 +531,23 @@ mod tests {
                 },
             ],
         ));
-        for t in [0.4, 0.7, 1.0, 1.3] {
-            frames.push((t, vec![]));
+        for time in [0.4, 0.7, 1.0, 1.3] {
+            frames.push((time, vec![]));
         }
         for (time, mut events) in frames {
-            // egui-winit emits the touch and its emulated pointer events together.
             let mut raw = egui::RawInput {
                 time: Some(time),
                 screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(200.0, 200.0))),
                 ..Default::default()
             };
             raw.events.append(&mut events);
-            let pen = contacts.observe(&raw.events);
-            pen_hold_is_no_right_click(&ctx, pen);
-            let mut out = ctx.run_ui(raw, |ui| {
-                let r = ui.allocate_rect(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(200.0, 200.0)), egui::Sense::click_and_drag());
-                right_clicked |= r.secondary_clicked();
+            let pen_down = contacts.observe(&raw.events);
+            pen_hold_is_no_right_click(&ctx, pen_down);
+            let mut output = ctx.run_ui(raw, |ui| {
+                let response = ui.allocate_rect(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(200.0, 200.0)), egui::Sense::click_and_drag());
+                right_clicked |= response.secondary_clicked();
             });
-            out.textures_delta.clear();
+            output.textures_delta.clear();
         }
         right_clicked
     }
@@ -542,18 +562,17 @@ mod tests {
     #[test]
     fn pen_contacts_follow_hover_force_and_lift() {
         use egui::TouchPhase::{Cancel, End, Move, Start};
-        let t = |id, phase, force| egui::Event::Touch { device_id: egui::TouchDeviceId(1), id: egui::TouchId(id), phase, pos: egui::pos2(1.0, 1.0), force };
-        let mut c = PenContacts::default();
-        assert!(!c.observe(&[t(1, Move, None)]), "hovering is no contact");
-        assert!(c.observe(&[t(1, Start, None)]));
-        assert!(c.observe(&[]), "still down");
-        assert!(c.observe(&[t(1, End, None)]), "the lift frame still counts");
-        assert!(!c.observe(&[]));
-        // A finger, until it reports a force.
-        assert!(!c.observe(&[t(9, Start, None), t(9, Move, None)]));
-        assert!(c.observe(&[t(9, Move, Some(0.5))]));
-        assert!(c.observe(&[t(9, Cancel, None)]));
-        assert!(!c.observe(&[]));
+        let touch = |id, phase, force| egui::Event::Touch { device_id: egui::TouchDeviceId(1), id: egui::TouchId(id), phase, pos: egui::pos2(1.0, 1.0), force };
+        let mut contacts = PenContacts::default();
+        assert!(!contacts.observe(&[touch(1, Move, None)]), "hovering is not a contact");
+        assert!(contacts.observe(&[touch(1, Start, None)]));
+        assert!(contacts.observe(&[]), "the pen remains down");
+        assert!(contacts.observe(&[touch(1, End, None)]), "the lift frame is protected");
+        assert!(!contacts.observe(&[]));
+        assert!(!contacts.observe(&[touch(9, Start, None), touch(9, Move, None)]));
+        assert!(contacts.observe(&[touch(9, Move, Some(0.5))]));
+        assert!(contacts.observe(&[touch(9, Cancel, None)]));
+        assert!(!contacts.observe(&[]));
     }
 
     fn touch(phase: egui::TouchPhase, force: Option<f32>) -> egui::Event {
@@ -679,6 +698,54 @@ mod tests {
         assert_eq!(s.sample(), None);
     }
 
+    fn touch_id(id: u64, phase: egui::TouchPhase, force: Option<f32>) -> egui::Event {
+        egui::Event::Touch { device_id: egui::TouchDeviceId(1), id: egui::TouchId(id), phase, pos: egui::pos2(1.0, 1.0), force }
+    }
+
+    #[test]
+    fn a_light_windows_pen_tap_is_not_full_pressure() {
+        use egui::TouchPhase::{End, Move, Start};
+        let mut stylus = Stylus::default();
+        stylus.update(&[touch_id(5, Move, None)]);
+        assert_eq!(stylus.pressure(), 1.0, "hovering is not contact");
+        stylus.update(&[touch_id(5, Start, None), touch_id(5, End, None)]);
+        assert_eq!(stylus.pressure(), 0.0);
+        assert_eq!(stylus.tap_pressure(), 0.0);
+        stylus.update(&[]);
+        assert_eq!(stylus.pressure(), 1.0, "after lift");
+
+        let mut stylus = Stylus::default();
+        stylus.update(&[touch_id(7, Start, Some(0.5)), touch_id(7, End, None)]);
+        stylus.update(&[]);
+        stylus.update(&[touch_id(8, Start, None)]);
+        assert_eq!(stylus.pressure(), 0.0, "a known pen starts below its first pressure level at zero");
+        stylus.update(&[touch_id(8, Move, Some(0.3))]);
+        assert_eq!(stylus.pressure(), 0.3);
+        stylus.update(&[touch_id(8, Move, None)]);
+        assert_eq!(stylus.pressure(), 0.3, "a force-less move keeps the last pressure");
+    }
+
+    #[test]
+    fn a_finger_without_force_still_paints_at_full_pressure() {
+        use egui::TouchPhase::{End, Move, Start};
+        let mut stylus = Stylus::default();
+        stylus.update(&[touch_id(1, Start, None), touch_id(1, Move, None)]);
+        assert_eq!(stylus.pressure(), 1.0);
+        stylus.update(&[touch_id(1, End, None)]);
+        stylus.update(&[]);
+        assert_eq!(stylus.pressure(), 1.0);
+    }
+
+    #[test]
+    fn a_new_tap_in_the_frame_an_old_one_lifted_keeps_its_force() {
+        use egui::TouchPhase::{End, Start};
+        let mut stylus = Stylus::default();
+        stylus.update(&[touch_id(1, Start, Some(0.6)), touch_id(1, End, None), touch_id(2, Start, Some(0.2))]);
+        assert_eq!(stylus.pressure(), 0.2);
+        stylus.update(&[]);
+        assert_eq!(stylus.pressure(), 0.2, "the second contact stays down");
+    }
+
     #[test]
     fn touch_force_drives_pressure_until_lift() {
         let mut s = Stylus::default();
@@ -695,59 +762,6 @@ mod tests {
         assert_eq!(s.pressure(), 0.4);
         s.update(&[]);
         assert_eq!(s.pressure(), 1.0);
-    }
-
-    fn touch_id(id: u64, phase: egui::TouchPhase, force: Option<f32>) -> egui::Event {
-        egui::Event::Touch { device_id: egui::TouchDeviceId(1), id: egui::TouchId(id), phase, pos: egui::pos2(1.0, 1.0), force }
-    }
-
-    #[test]
-    fn a_light_windows_pen_tap_is_not_full_pressure() {
-        use egui::TouchPhase::{End, Move, Start};
-        // winit on Windows reports a pen pressed below its first pressure level with no force
-        // (pressure 0 maps to `None`). The pen hovered first, so the tap is pressure 0, not a
-        // mouse click's 1.
-        let mut s = Stylus::default();
-        s.update(&[touch_id(5, Move, None)]);
-        assert_eq!(s.pressure(), 1.0, "hovering is no contact");
-        s.update(&[touch_id(5, Start, None), touch_id(5, End, None)]);
-        assert_eq!(s.pressure(), 0.0);
-        assert_eq!(s.tap_pressure(), 0.0);
-        s.update(&[]);
-        assert_eq!(s.pressure(), 1.0, "lifted");
-        // A pen known from an earlier force: a stroke pressed before its first level starts at 0
-        // and then follows the pen.
-        let mut s = Stylus::default();
-        s.update(&[touch_id(7, Start, Some(0.5)), touch_id(7, End, None)]);
-        s.update(&[]);
-        s.update(&[touch_id(8, Start, None)]);
-        assert_eq!(s.pressure(), 0.0);
-        s.update(&[touch_id(8, Move, Some(0.3))]);
-        assert_eq!(s.pressure(), 0.3);
-        // A force-less move mid-stroke keeps the last force.
-        s.update(&[touch_id(8, Move, None)]);
-        assert_eq!(s.pressure(), 0.3);
-    }
-
-    #[test]
-    fn a_finger_without_force_still_paints_at_full_pressure() {
-        use egui::TouchPhase::{End, Move, Start};
-        let mut s = Stylus::default();
-        s.update(&[touch_id(1, Start, None), touch_id(1, Move, None)]);
-        assert_eq!(s.pressure(), 1.0);
-        s.update(&[touch_id(1, End, None)]);
-        s.update(&[]);
-        assert_eq!(s.pressure(), 1.0);
-    }
-
-    #[test]
-    fn a_new_tap_in_the_frame_an_old_one_lifted_keeps_its_force() {
-        use egui::TouchPhase::{End, Start};
-        let mut s = Stylus::default();
-        s.update(&[touch_id(1, Start, Some(0.6)), touch_id(1, End, None), touch_id(2, Start, Some(0.2))]);
-        assert_eq!(s.pressure(), 0.2);
-        s.update(&[]);
-        assert_eq!(s.pressure(), 0.2, "the second contact is still down");
     }
 
     #[test]
