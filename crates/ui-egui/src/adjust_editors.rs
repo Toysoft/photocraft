@@ -58,6 +58,50 @@ pub struct Edit {
     pub commit: bool,
     /// Open the host's gradient-file dialog without changing adjustment parameters.
     pub import_gradients: bool,
+    /// A colour swatch was clicked: the host opens the Color Picker on it, as Photoshop does.
+    pub pick_color: Option<Pick>,
+}
+
+/// Black & White's tint colour when none is set (Photoshop's default).
+const TINT: [f32; 3] = [0.882, 0.827, 0.702];
+/// Photo Filter's colour when none is set (Warming Filter (85)).
+const FILTER: [f32; 3] = [236.0 / 255.0, 138.0 / 255.0, 0.0];
+
+/// A colour of the adjustment the Color Picker sets.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Pick {
+    /// A top-level `"#rrggbb"` parameter (`color`, `tintColor`).
+    Key(&'static str),
+    /// The colour of Gradient Map stop `n` (in location order).
+    Stop(usize),
+}
+
+impl Pick {
+    /// Where the colour is in the parameters: a key, or a JSON pointer.
+    pub fn field(self) -> String {
+        match self {
+            Pick::Key(k) => k.to_string(),
+            Pick::Stop(n) => format!("/stops/{n}/1"),
+        }
+    }
+
+    /// The colour now, from the parameters.
+    pub fn rgb(self, v: &Value) -> Option<[f32; 3]> {
+        match self {
+            Pick::Key(k) => Some(rgb_of(v, k, if k == "tintColor" { TINT } else { FILTER })),
+            Pick::Stop(n) => v.pointer(&format!("/stops/{n}/1")).map(|hex| rgb_of(&json!({ "c": hex }), "c", [0.0; 3])),
+        }
+    }
+
+    /// The Color Picker's title.
+    pub fn title(self) -> String {
+        let name = match self {
+            Pick::Key("tintColor") => tl!("Tint Color"),
+            Pick::Key(_) => tl!("Filter Color"),
+            Pick::Stop(_) => tl!("Stop Color"),
+        };
+        crate::color_picker_ui::title_for(name)
+    }
 }
 
 impl Edit {
@@ -65,6 +109,7 @@ impl Edit {
         self.changed |= o.changed;
         self.commit |= o.commit;
         self.import_gradients |= o.import_gradients;
+        self.pick_color = self.pick_color.or(o.pick_color);
     }
     fn discrete(changed: bool) -> Self {
         Edit { changed, commit: changed, ..Default::default() }
@@ -178,15 +223,10 @@ fn color32(c: [f32; 3]) -> Color32 {
     Color32::from_rgb(b(c[0]), b(c[1]), b(c[2]))
 }
 
-/// A colour swatch button (egui's picker); returns the edit.
-fn color_button(ui: &mut egui::Ui, c: &mut [f32; 3]) -> Edit {
-    let mut srgb = [c[0], c[1], c[2]].map(|x| (x.clamp(0.0, 1.0) * 255.0).round() as u8);
-    let r = crate::widgets::color_edit_button_srgb(ui, &mut srgb);
-    if r.changed() {
-        *c = srgb.map(|x| f32::from(x) / 255.0);
-    }
-    // The popup edits continuously; each change is a complete value.
-    Edit::discrete(r.changed())
+/// A colour swatch: a click asks the host for the Color Picker on colour `at`.
+fn color_button(ui: &mut egui::Ui, c: [f32; 3], at: Pick) -> Edit {
+    let r = widgets::color_swatch_button(ui, color32(c), &at.title());
+    Edit { pick_color: r.clicked().then_some(at), ..Default::default() }
 }
 
 fn label(ui: &mut egui::Ui, text: &str) {
@@ -1136,12 +1176,8 @@ fn black_white(ui: &mut egui::Ui, v: &mut Value, cx: &EditorCx) -> Edit {
             v["tint"] = json!(on);
             e.add(Edit::discrete(true));
         }
-        let mut c = rgb_of(v, "tintColor", [0.882, 0.827, 0.702]);
-        let r = ui.add_enabled_ui(on, |ui| color_button(ui, &mut c)).inner;
-        if r.changed {
-            v["tintColor"] = json!(adjust_params::hex(c));
-        }
-        e.add(r);
+        let c = rgb_of(v, "tintColor", TINT);
+        e.add(ui.add_enabled_ui(on, |ui| color_button(ui, c, Pick::Key("tintColor"))).inner);
         if widgets::secondary_button(ui, tl!("Default"), 0.0).clicked() {
             for (i, key) in HUE_RANGES.iter().enumerate() {
                 v[*key] = json!(adjust_params::BW_DEFAULTS[i]);
@@ -1157,7 +1193,7 @@ fn black_white(ui: &mut egui::Ui, v: &mut Value, cx: &EditorCx) -> Edit {
 
 fn photo_filter(ui: &mut egui::Ui, v: &mut Value, cx: &EditorCx) -> Edit {
     let mut e = Edit::default();
-    let mut c = rgb_of(v, "color", [236.0 / 255.0, 138.0 / 255.0, 0.0]);
+    let mut c = rgb_of(v, "color", FILTER);
     let hex = adjust_params::hex(c);
     let preset = PHOTO_FILTERS.iter().find(|f| adjust_params::hex(f.2.map(|x| f32::from(x) / 255.0)) == hex).map(|f| f.0);
     let mode_id = cx.mem.with("pf-mode");
@@ -1182,11 +1218,7 @@ fn photo_filter(ui: &mut egui::Ui, v: &mut Value, cx: &EditorCx) -> Edit {
         if ui.radio(use_color, tl!("Color:")).clicked() {
             use_color = true;
         }
-        let r = ui.add_enabled_ui(use_color, |ui| color_button(ui, &mut c)).inner;
-        if r.changed {
-            v["color"] = json!(adjust_params::hex(c));
-        }
-        e.add(r);
+        e.add(ui.add_enabled_ui(use_color, |ui| color_button(ui, c, Pick::Key("color"))).inner);
     });
     ui.data_mut(|d| d.insert_temp(mode_id, use_color));
     e.add(sliders(ui, v, &[("density", tl!("Density"), 0.0, 100.0, 25.0, "%", None)]));
@@ -1458,9 +1490,7 @@ fn gradient_map(ui: &mut egui::Ui, v: &mut Value, cx: &EditorCx) -> Edit {
     if let Some(s) = stops.get_mut(selected) {
         ui.horizontal(|ui| {
             label(ui, tl!("Color:"));
-            let r = color_button(ui, &mut s.1);
-            changed |= r.changed;
-            e.add(r);
+            e.add(color_button(ui, s.1, Pick::Stop(selected)));
             ui.add_enabled_ui(can_remove, |ui| {
                 remove = crate::icons::button(ui, "x", 20.0, false, tl!("Remove stop")).clicked();
             });
@@ -1654,6 +1684,14 @@ pub fn layer_editor(app: &mut PhotocraftApp, ui: &mut egui::Ui, id: LayerId, adj
     let e = editor(ui, kind, &mut values, &cx);
     if e.import_gradients {
         crate::preset_files_ui::import_gradients_dialog(app);
+    }
+    // OK in the Color Picker commits the colour as one `layer.setAdjustment`; Cancel leaves it.
+    if let Some(at) = e.pick_color
+        && let Some(rgb) = at.rgb(&values)
+    {
+        let mut p = values.clone();
+        p["layer"] = json!(id.0);
+        crate::color_picker_ui::open_for_command_param(app, &at.title(), rgb, "layer.setAdjustment", p, &at.field());
     }
     if e.changed {
         app.live_adjust = Some((id, values.clone()));

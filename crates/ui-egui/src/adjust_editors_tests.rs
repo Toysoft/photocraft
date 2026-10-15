@@ -848,3 +848,101 @@ fn row_values_round_to_their_own_decimals() {
     assert!((row_value(1.234, 0.01, 9.99, None) - 1.23).abs() < 1e-6, "small ranges keep two decimals");
     assert!(row_value(f32::NAN, -20.0, 20.0, Some(u32::MAX)).is_nan(), "no panic on odd input");
 }
+
+/// The adjustment's parameters as the Properties panel edits them.
+fn params(h: &Harness<'_, PhotocraftApp>) -> serde_json::Value {
+    photocraft_engine::adjust_params::to_params(&layer(h).1)
+}
+
+/// Clicks the swatch called `title` (its hover label is the Color Picker's title) and returns the
+/// Color Picker it opens.
+fn open_swatch(h: &mut Harness<'_, PhotocraftApp>, title: &str) -> u64 {
+    let at = h.get_by_label(title).rect().center();
+    click(h, at);
+    h.run_steps(3);
+    crate::color_picker_ui::top(h.state()).expect("the swatch opens the Color Picker")
+}
+
+fn picker_field(h: &Harness<'_, PhotocraftApp>, id: u64, key: &str) -> serde_json::Value {
+    h.state().ui.dialogs.iter().find(|d| d.id == id).and_then(|d| d.fields.get(key).cloned()).unwrap_or_default()
+}
+
+/// Photoshop opens its Color Picker from Black & White's Tint swatch, Photo Filter's Color swatch
+/// and a Gradient Map stop's colour: OK sets the colour as one History step, Cancel leaves the
+/// layer alone.
+#[test]
+fn adjustment_colour_swatches_open_the_color_picker() {
+    let cases: [(&str, &str, &str); 3] = [
+        ("blackWhite", "Color Picker (Tint Color)", "/tintColor"),
+        ("photoFilter", "Color Picker (Filter Color)", "/color"),
+        ("gradientMap", "Color Picker (Stop Color)", "/stops/1/1"),
+    ];
+    for (kind, title, at) in cases {
+        let mut h = app_harness(kind, "rgb", 8);
+        if kind == "blackWhite" {
+            let tint = h.get_by_label("Tint").rect().center();
+            click(&mut h, tint);
+        }
+        if kind == "photoFilter" {
+            // The swatch takes part once Color is chosen over a preset filter.
+            let color = h.get_by_label("Color:").rect().center();
+            click(&mut h, color);
+        }
+        if kind == "gradientMap" {
+            // The white end stop.
+            let end = map_handle(&h, 1.0);
+            click(&mut h, end);
+        }
+        let before = params(&h);
+        let steps = h.state().session.active().unwrap().history.past_len();
+        let picker = open_swatch(&mut h, title);
+        assert_eq!(picker_field(&h, picker, "__label"), json!(title), "{kind}");
+        assert_eq!(picker_field(&h, picker, "color"), before.pointer(at).cloned().unwrap_or_default(), "{kind}: opens on the colour");
+        // Cancel: nothing changes.
+        crate::dialogs::cancel(h.state_mut(), picker).unwrap();
+        h.run_steps(3);
+        assert_eq!(params(&h), before, "{kind}");
+        assert_eq!(h.state().session.active().unwrap().history.past_len(), steps, "{kind}");
+        // OK: the colour, in one step, and nothing else changes.
+        let picker = open_swatch(&mut h, title);
+        h.state_mut().ui.dialog_mut(picker).unwrap().fields.insert("color".into(), json!("#336699"));
+        crate::dialogs::confirm(h.state_mut(), picker).unwrap();
+        h.run_steps(3);
+        let after = params(&h);
+        assert_eq!(after.pointer(at), Some(&json!("#336699")), "{kind}: {after}");
+        let mut rest = after.clone();
+        *rest.pointer_mut(at).unwrap() = before.pointer(at).cloned().unwrap_or_default();
+        assert_eq!(rest, before, "{kind}: only the colour changed");
+        assert_eq!(h.state().session.active().unwrap().history.past_len(), steps + 1, "{kind}");
+        assert!(crate::color_picker_ui::top(h.state()).is_none(), "{kind}");
+    }
+}
+
+/// Image › Adjustments › Photo Filter: the Color swatch opens the Color Picker over the dialog,
+/// whose OK sets the dialog's colour (the dialog stays open); the dialog's OK applies it.
+#[test]
+fn the_adjustment_dialog_picks_its_colour_in_the_color_picker() {
+    let mut h = app_harness("photoFilter", "rgb", 8);
+    // Image › Adjustments works on a pixel layer.
+    h.state_mut().run("layer.new.layer", json!({})).unwrap();
+    h.state_mut().run("edit.fill", json!({"color": "#808080"})).unwrap();
+    let dialog = crate::adjust_dialog::open(h.state_mut(), "image.adjustments.photoFilter").expect("dialog");
+    h.run_steps(4);
+    let swatch = h.get_by_label("Color Picker (Filter Color)").rect().center();
+    let color = h.get_by_label("Color:").rect().center();
+    click(&mut h, color);
+    click(&mut h, swatch);
+    h.run_steps(3);
+    let picker = crate::color_picker_ui::top(h.state()).expect("the swatch opens the Color Picker");
+    assert_ne!(picker, dialog);
+    h.state_mut().ui.dialog_mut(picker).unwrap().fields.insert("color".into(), json!("#00ff00"));
+    crate::dialogs::confirm(h.state_mut(), picker).unwrap();
+    h.run_steps(3);
+    let fields = h.state().ui.dialogs.iter().find(|d| d.id == dialog).expect("the dialog stays open").fields.clone();
+    assert_eq!(fields.get("color"), Some(&json!("#00ff00")));
+    crate::dialogs::confirm(h.state_mut(), dialog).unwrap();
+    h.run_steps(2);
+    let st = h.state().session.active().unwrap();
+    let px = st.doc.layer(st.active_layer.unwrap()).unwrap().surface().unwrap().rgba(5, 5);
+    assert!(px[1] > px[0] + 0.05 && px[1] > px[2] + 0.05, "a green filter greens the grey: {px:?}");
+}

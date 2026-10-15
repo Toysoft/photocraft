@@ -195,9 +195,16 @@ pub(crate) fn initial_fields(target: &str, label: &str, rgb: [f32; 3]) -> Map<St
 /// Open the picker on `rgb` for something other than the tool colours: OK runs `command` with
 /// `params` plus `"color": "#rrggbb"` (e.g. a gradient stop's colour).
 pub fn open_for_command(app: &mut PhotocraftApp, label: &str, rgb: [f32; 3], command: &str, params: Value) -> u64 {
+    open_for_command_param(app, label, rgb, command, params, "color")
+}
+
+/// [`open_for_command`] with the colour going into parameter `key` instead of `color` (Black &
+/// White's `tintColor`), or at a JSON pointer into the params (`/stops/1/1`).
+pub fn open_for_command_param(app: &mut PhotocraftApp, label: &str, rgb: [f32; 3], command: &str, params: Value, key: &str) -> u64 {
     let mut f = initial_fields("command", label, rgb);
     f.insert("__command".into(), json!(command));
     f.insert("__params".into(), params);
+    f.insert("__commandKey".into(), json!(key));
     app.ui.open_dialog(DialogKind::Command, f)
 }
 
@@ -793,7 +800,13 @@ pub fn confirm(app: &mut PhotocraftApp, f: &Map<String, Value>) -> Result<Value,
     let color = f.get("color").and_then(Value::as_str).unwrap_or("#000000");
     if let Some(cmd) = f.get("__command").and_then(Value::as_str) {
         let mut p = f.get("__params").cloned().filter(Value::is_object).unwrap_or_else(|| json!({}));
-        p["color"] = json!(color);
+        // A key of the params, or a JSON pointer into them (a Gradient Map stop's colour).
+        let key = f.get("__commandKey").and_then(Value::as_str).unwrap_or("color");
+        if key.starts_with('/') {
+            *p.pointer_mut(key).ok_or("the colour isn't in the command's parameters")? = json!(color);
+        } else {
+            p[key] = json!(color);
+        }
         return app.run(cmd, p);
     }
     if target == "field" {

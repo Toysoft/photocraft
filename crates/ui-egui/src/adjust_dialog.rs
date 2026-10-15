@@ -239,6 +239,15 @@ pub fn body(app: &mut PhotocraftApp, ui: &mut egui::Ui, fields: &mut Map<String,
     if e.import_gradients {
         crate::preset_files_ui::import_gradients_dialog(app);
     }
+    // The Color Picker opens over the dialog on that colour; OK sets it in the dialog's fields.
+    if let Some(at) = e.pick_color
+        && let Some(rgb) = at.rgb(&values)
+    {
+        if let adjust_editors::Pick::Key(k) = at {
+            fields.entry(k).or_insert_with(|| json!(crate::color_picker_ui::hex(rgb)));
+        }
+        crate::color_picker_ui::request_field(fields, &at.field(), &at.title());
+    }
     if e.changed
         && let Value::Object(v) = values
     {
