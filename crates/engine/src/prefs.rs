@@ -386,6 +386,13 @@ pub struct Tools {
     /// Pen pressure response: `[input, output]` control points in 0..1 that the pen's pressure
     /// passes through before it reaches any brush ([`PressureCurve`]). Linear by default.
     pub pressure_curve: Vec<[f32; 2]>,
+    /// Arrow-key nudges of one thing (the selected layers, the selection outline, the Free
+    /// Transform box) that follow each other within [`Tools::nudge_bundle_pause_ms`] are one
+    /// History state (#2259). Off: every press is a state.
+    pub bundle_nudges: bool,
+    /// The longest pause, in milliseconds, between two nudges that still bundle into one state.
+    /// Longer than a key's auto-repeat delay (about half a second), so a held key is one state.
+    pub nudge_bundle_pause_ms: u32,
 }
 
 impl Default for Tools {
@@ -404,6 +411,8 @@ impl Default for Tools {
             right_click_with_painting_tools: RightClickPaint::BrushPicker,
             use_tablet_pressure: true,
             pressure_curve: vec![[0.0, 0.0], [1.0, 1.0]],
+            bundle_nudges: true,
+            nudge_bundle_pause_ms: 1000,
         }
     }
 }
@@ -928,6 +937,15 @@ pub struct Preferences {
     /// Edit › Keyboard Shortcuts: command id → shortcut (`Cmd+Shift+N` notation); an empty
     /// string removes the default shortcut.
     pub shortcuts: BTreeMap<String, String>,
+    /// Edit › Keyboard Shortcuts: a command's further keys besides its main one (#3665),
+    /// command id → keys. A list replaces the command's default alternates
+    /// ([`ALTERNATE_SHORTCUTS`]); an empty list removes them. Settings files from before this
+    /// map load with nothing stored, so every command keeps its defaults.
+    pub alternate_shortcuts: BTreeMap<String, Vec<String>>,
+    /// Edit › Keyboard Shortcuts › Set: saved shortcut sets by name (`crate::shortcut_sets`).
+    pub shortcut_sets: BTreeMap<String, crate::shortcut_sets::ShortcutSet>,
+    /// The saved set in use ("" for the defaults).
+    pub shortcut_set: String,
     pub menus: MenuCustomization,
     pub toolbar: ToolbarCustomization,
     /// Edit › Check Spelling: words added to the dictionary ("Add").
@@ -1080,6 +1098,7 @@ pub fn range(path: &str) -> Option<(f64, f64)> {
     Some(match path {
         "fileHandling.autosaveMinutes" => (1.0, 240.0),
         "fileHandling.recentFileCount" => (0.0, 100.0),
+        "tools.nudgeBundlePauseMs" => (100.0, 10_000.0),
         "fileHandling.rasterizeSvgGroupsDeeperThan" => (0.0, photocraft_doc::MAX_GROUP_DEPTH as f64),
         "interface.notificationDurationSeconds" => (1.0, 120.0),
         "export.jpegQuality" | "export.webpQuality" => (1.0, 100.0),
@@ -1101,7 +1120,7 @@ pub fn range(path: &str) -> Option<(f64, f64)> {
 
 /// Is this preference a `#rrggbb` colour?
 pub fn is_color(path: &str) -> bool {
-    if choices(path).is_some() || path.starts_with("shortcuts.") || path.starts_with("menus.") {
+    if choices(path).is_some() || path.starts_with("shortcuts.") || path.starts_with("alternateShortcuts.") || path.starts_with("menus.") {
         return false;
     }
     let leaf = path.rsplit('.').next().unwrap_or(path);
@@ -1130,9 +1149,10 @@ pub fn parse_hex(s: &str) -> Option<[u8; 3]> {
 
 // ------------------------------------------------------------------ JSON paths
 
-/// Map keys that are command ids (which contain dots): `shortcuts.<id>`, `menus.colors.<id>`.
+/// Map keys that are command ids (which contain dots): `shortcuts.<id>`,
+/// `alternateShortcuts.<id>`, `menus.colors.<id>`.
 fn keyed(path: &str) -> Option<(&str, &str)> {
-    for prefix in ["shortcuts.", "menus.colors."] {
+    for prefix in ["shortcuts.", "alternateShortcuts.", "menus.colors."] {
         if let Some(id) = path.strip_prefix(prefix) {
             return Some((&prefix[..prefix.len() - 1], id));
         }
@@ -1249,6 +1269,28 @@ impl Preferences {
 
     /// Set a value by dotted path, validating it. Unknown paths and wrong types are errors.
     pub fn set(&mut self, path: &str, value: Value) -> std::result::Result<(), String> {
+        if path == "alternateShortcuts" {
+            let obj = value.as_object().ok_or("`alternateShortcuts` maps command ids to lists of shortcuts")?;
+            let mut map = BTreeMap::new();
+            for (id, v) in obj {
+                map.insert(id.clone(), alternate_keys(v).map_err(|e| format!("`alternateShortcuts.{id}`: {e}"))?);
+            }
+            self.alternate_shortcuts = map;
+            return Ok(());
+        }
+        if let Some(id) = path.strip_prefix("alternateShortcuts.") {
+            // null = back to the command's default alternates.
+            match value {
+                Value::Null => {
+                    self.alternate_shortcuts.remove(id);
+                }
+                v => {
+                    let keys = alternate_keys(&v).map_err(|e| format!("`{path}`: {e}"))?;
+                    self.alternate_shortcuts.insert(id.to_string(), keys);
+                }
+            }
+            return Ok(());
+        }
         let value = match (path.strip_prefix("shortcuts."), &value) {
             // Normalise shortcut spelling so conflicts compare equal.
             (Some(_), Value::String(s)) if !s.is_empty() => Value::String(normalize_shortcut(s).ok_or_else(|| format!("`{s}` is not a valid shortcut"))?),
@@ -1279,6 +1321,10 @@ impl Preferences {
                 self.shortcuts.remove(id);
                 return Ok(());
             }
+            Some(("alternateShortcuts", id)) => {
+                self.alternate_shortcuts.remove(id);
+                return Ok(());
+            }
             Some(("menus.colors", id)) => {
                 self.menus.colors.remove(id);
                 return Ok(());
@@ -1304,6 +1350,50 @@ impl Preferences {
             None => default,
         }
     }
+
+    /// A command's further keys in effect (#3665): the user's list, else its defaults
+    /// ([`ALTERNATE_SHORTCUTS`]), normalised, without duplicates and without `primary` (the
+    /// command's main key in effect, which it already answers).
+    pub fn alternates(&self, id: &str, primary: Option<&str>) -> Vec<String> {
+        let main = primary.and_then(normalize_shortcut);
+        let keys: Vec<String> = match self.alternate_shortcuts.get(id) {
+            Some(list) => list.iter().filter_map(|s| normalize_shortcut(s)).collect(),
+            None => default_alternates(id).filter_map(normalize_shortcut).collect(),
+        };
+        let mut out: Vec<String> = Vec::with_capacity(keys.len());
+        for k in keys {
+            if main.as_ref() != Some(&k) && !out.contains(&k) {
+                out.push(k);
+            }
+        }
+        out
+    }
+}
+
+/// Most further keys one command may hold; Photoshop's own defaults use one.
+pub const MAX_ALTERNATES: usize = 8;
+
+/// Validate and normalise a command's alternate keys: a list of shortcut strings (a single
+/// string is a one-key list, `""` none).
+pub fn alternate_keys(v: &Value) -> std::result::Result<Vec<String>, String> {
+    let items: Vec<&Value> = match v {
+        Value::String(s) if s.is_empty() => Vec::new(),
+        Value::String(_) => vec![v],
+        Value::Array(a) => a.iter().collect(),
+        _ => return Err("alternate shortcuts are a list of shortcuts (e.g. [\"F3\"])".into()),
+    };
+    if items.len() > MAX_ALTERNATES {
+        return Err(format!("at most {MAX_ALTERNATES} alternate shortcuts (got {})", items.len()));
+    }
+    let mut out: Vec<String> = Vec::with_capacity(items.len());
+    for item in items {
+        let s = item.as_str().ok_or_else(|| format!("alternate shortcut `{item}` must be a string"))?;
+        let n = normalize_shortcut(s).ok_or_else(|| format!("`{s}` is not a valid shortcut (e.g. Cmd+Shift+N, F7)"))?;
+        if !out.contains(&n) {
+            out.push(n);
+        }
+    }
+    Ok(out)
 }
 
 // ------------------------------------------------------------------ shortcuts
@@ -1391,6 +1481,24 @@ pub const TEMPORARY_TOOLS: &[(&str, &str, &str)] = &[
     ("tools.temporary.erase", "Erase with Brush or Pencil (hold)", "`"),
 ];
 
+/// Photoshop's second default keys (#3665): (command, key). Each command keeps its main key
+/// (the one its menu shows) and answers these as well, as in Photoshop's default set: the
+/// legacy function keys F2 Cut, F3 Copy, F4 Paste and Shift+F7 Inverse; Shift+Backspace
+/// (Shift+Delete on a Mac) for Fill; and ⌘+ beside ⌘= for Zoom In.
+pub const ALTERNATE_SHORTCUTS: &[(&str, &str)] = &[
+    ("edit.cut", "F2"),
+    ("edit.copy", "F3"),
+    ("edit.paste", "F4"),
+    ("edit.fill", "Shift+Backspace"),
+    ("select.inverse", "Shift+F7"),
+    ("view.zoomIn", "Cmd++"),
+];
+
+/// A command's default alternate keys ([`ALTERNATE_SHORTCUTS`]).
+pub fn default_alternates(id: &str) -> impl Iterator<Item = &'static str> + '_ {
+    ALTERNATE_SHORTCUTS.iter().filter(move |(c, _)| *c == id).map(|(_, sc)| *sc)
+}
+
 /// Every bindable id with its default: commands, then the temporary tools.
 fn bindable() -> impl Iterator<Item = (&'static str, Option<&'static str>)> {
     crate::command_specs().iter().map(|c| (c.id, c.shortcut)).chain(TEMPORARY_TOOLS.iter().map(|t| (t.0, Some(t.2))))
@@ -1453,7 +1561,7 @@ impl Session {
         for st in &mut self.docs {
             st.history.max_states = n;
             st.history.max_bytes = bytes;
-            st.history.trim(&st.doc);
+            st.trim_history();
         }
         photocraft_compose::set_effect_cache_budget(budget << 20);
         // Without waiting for the system font scan: this runs on the UI thread at launch.
@@ -1545,7 +1653,7 @@ impl Session {
         }
         let mut next = self.prefs().clone();
         let mut color_changed = false;
-        if path.is_empty() || SECTIONS.iter().any(|(id, _)| *id == path) || matches!(path, "shortcuts" | "menus" | "toolbar") {
+        if path.is_empty() || SECTIONS.iter().any(|(id, _)| *id == path) || matches!(path, "shortcuts" | "alternateShortcuts" | "menus" | "toolbar") {
             // Whole section (or everything): merge the object key by key so each value is checked.
             let obj = value.as_object().ok_or_else(|| format!("`{path}` needs an object"))?;
             for (k, v) in obj {
@@ -1554,7 +1662,12 @@ impl Session {
                     color_changed |= self.set_pref("colorSettings", v.clone(), validate_color)?;
                     continue;
                 }
-                if v.is_object() && !p.starts_with("shortcuts") && !p.ends_with(".colors") && next.get(&p).is_some_and(|c| c.is_object()) {
+                if v.is_object()
+                    && !p.starts_with("shortcuts")
+                    && !p.starts_with("alternateShortcuts")
+                    && !p.ends_with(".colors")
+                    && next.get(&p).is_some_and(|c| c.is_object())
+                {
                     for (k2, v2) in v.as_object().into_iter().flatten() {
                         next.set(&format!("{p}.{k2}"), v2.clone())?;
                     }
@@ -1730,20 +1843,30 @@ fn preferences_section(s: &mut Session, p: &Value) -> Result<Value> {
 /// Edit › Keyboard Shortcuts (engine part): list, change and reset application shortcuts.
 fn keyboard_shortcuts(s: &mut Session, p: &Value) -> Result<Value> {
     let cmd = "edit.keyboardShortcuts";
+    // Every change lands at once, after all of it validated: a bad key leaves the set as it was.
+    let mut next = s.prefs().clone();
+    // A set loads first, so the call's other changes apply on top of it.
+    let mut changed = crate::shortcut_sets::load(&mut next, p).map_err(|e| bad(cmd, e))?;
     if let Some(r) = p.get("reset") {
         match r {
-            Value::Bool(true) => s.edit_prefs(|p| p.shortcuts.clear()),
-            Value::Array(ids) => s.edit_prefs(|p| {
+            Value::Bool(true) => {
+                next.shortcuts.clear();
+                next.alternate_shortcuts.clear();
+                changed = true;
+            }
+            Value::Array(ids) => {
                 for id in ids.iter().filter_map(Value::as_str) {
-                    p.shortcuts.remove(id);
+                    next.shortcuts.remove(id);
+                    next.alternate_shortcuts.remove(id);
                 }
-            }),
+                changed = true;
+            }
             _ => {}
         }
     }
-    // A Photoshop `.kys` set (`importKys`, its XML text) becomes `set` entries, matched by label
-    // (`crate::kys`); a key equal to the command's default restores the default, and keys given
-    // in `set` as well win over the file's.
+    // A Photoshop `.kys` set (`importKys`, its XML text) becomes `set` and `alternates` entries,
+    // matched by label (`crate::kys`); a key equal to the command's default restores the
+    // default, and keys given in `set` / `alternates` as well win over the file's.
     let imported;
     let mut import = None;
     let p = match p.get("importKys") {
@@ -1757,6 +1880,13 @@ fn keyboard_shortcuts(s: &mut Session, p: &Value) -> Result<Value> {
                 merged.insert(id.clone(), if default.as_deref() == Some(sc.as_str()) { Value::Null } else { json!(sc) });
             }
             merged.extend(p.get("set").and_then(Value::as_object).cloned().unwrap_or_default());
+            let mut alternates = serde_json::Map::new();
+            for (id, keys) in &plan.alternate_keys {
+                let main = plan.set.get(id).map(String::as_str);
+                let default = Preferences::default().alternates(id, main);
+                alternates.insert(id.clone(), if *keys == default { Value::Null } else { json!(keys) });
+            }
+            alternates.extend(p.get("alternates").and_then(Value::as_object).cloned().unwrap_or_default());
             import = Some(json!({
                 "name": set.name,
                 "imported": plan.set.len(),
@@ -1764,41 +1894,76 @@ fn keyboard_shortcuts(s: &mut Session, p: &Value) -> Result<Value> {
                 "unknown": plan.unknown,
                 "unreadable": plan.unreadable,
                 "alternates": plan.alternates,
+                "alternateKeys": plan.alternate_keys,
                 "toolKeys": set.tool_keys,
+                "windows": set.windows,
             }));
-            let mut next = p.clone();
-            next["set"] = Value::Object(merged);
-            imported = next;
+            let mut with_import = p.clone();
+            with_import["set"] = Value::Object(merged);
+            with_import["alternates"] = Value::Object(alternates);
+            imported = with_import;
             &imported
         }
         None => p,
     };
-    if let Some(m) = p.get("set").and_then(Value::as_object) {
-        let mut next = s.prefs().clone();
-        for (id, v) in m {
-            if !bindable().any(|(b, _)| b == id) && !p.get("allowUnknown").and_then(Value::as_bool).unwrap_or(false) {
+    let empty = serde_json::Map::new();
+    let set = match p.get("set") {
+        Some(Value::Object(m)) => m,
+        _ => &empty,
+    };
+    let alts = match p.get("alternates") {
+        None | Some(Value::Null) => &empty,
+        Some(v) => v.as_object().ok_or_else(|| bad(cmd, "`alternates` maps command ids to lists of shortcuts"))?,
+    };
+    if !set.is_empty() || !alts.is_empty() {
+        let allow_unknown = p.get("allowUnknown").and_then(Value::as_bool).unwrap_or(false);
+        changed = true;
+        for (id, v) in set {
+            if !bindable().any(|(b, _)| b == id) && !allow_unknown {
                 return Err(bad(cmd, format!("unknown command `{id}`")));
             }
             next.set(&format!("shortcuts.{id}"), v.clone()).map_err(|e| bad(cmd, e))?;
         }
-        // Like Photoshop, a shortcut moved to a new command is taken away from the old one.
+        for (id, v) in alts {
+            if !bindable().any(|(b, _)| b == id) && default_alternates(id).next().is_none() && !allow_unknown {
+                return Err(bad(cmd, format!("unknown command `{id}`")));
+            }
+            next.set(&format!("alternateShortcuts.{id}"), v.clone()).map_err(|e| bad(cmd, e))?;
+        }
+        // Like Photoshop, a shortcut moved to a new command is taken away from the old one,
+        // whether the old one held it as its main key or as an alternate (#3665).
         if p.get("removeConflicts").and_then(Value::as_bool).unwrap_or(true) {
-            for (id, v) in m {
-                let Some(sc) = v.as_str().and_then(normalize_shortcut) else { continue };
-                for (c, def) in bindable() {
+            let assigned: Vec<(&str, String)> = set
+                .iter()
+                .filter_map(|(id, v)| Some((id.as_str(), v.as_str().and_then(normalize_shortcut)?)))
+                .chain(alts.iter().flat_map(|(id, v)| alternate_keys(v).unwrap_or_default().into_iter().map(move |k| (id.as_str(), k))))
+                .collect();
+            for (id, sc) in assigned {
+                // Shell commands (View › Zoom In) have alternates but no engine default.
+                let shell = ALTERNATE_SHORTCUTS.iter().filter(|(c, _)| crate::commands::find(c).is_none()).map(|(c, _)| (*c, None));
+                for (c, def) in bindable().chain(shell) {
                     // Never strip a command that this same call is assigning:
                     // two entries for one key are a clash inside the call, which
                     // the returned conflicts list reports (#719). Stripping
                     // each other here unbound both silently.
-                    if c == id || m.contains_key(c) {
+                    if c == id || set.contains_key(c) || alts.contains_key(c) {
                         continue;
                     }
-                    if next.shortcut(c, def).and_then(normalize_shortcut).as_deref() == Some(sc.as_str()) {
+                    let main = next.shortcut(c, def).map(str::to_string);
+                    if main.as_deref().and_then(normalize_shortcut).as_deref() == Some(sc.as_str()) {
                         next.shortcuts.insert(c.to_string(), String::new());
+                    }
+                    let held = next.alternates(c, main.as_deref());
+                    if held.contains(&sc) {
+                        next.alternate_shortcuts.insert(c.to_string(), held.into_iter().filter(|k| *k != sc).collect());
                     }
                 }
             }
         }
+    }
+    // Then the sets are saved, deleted or switched, from the bindings as they now stand.
+    changed |= crate::shortcut_sets::store(&mut next, p).map_err(|e| bad(cmd, e))?;
+    if changed {
         s.edit_prefs(|p| *p = next);
     }
     let prefs = s.prefs();
@@ -1809,18 +1974,56 @@ fn keyboard_shortcuts(s: &mut Session, p: &Value) -> Result<Value> {
         .map(|c| (c.id, c.label, c.menu, c.shortcut, false))
         .chain(temporary)
         .filter(|c| filter.as_ref().is_none_or(|f| c.0.to_ascii_lowercase().contains(f) || c.1.to_ascii_lowercase().contains(f)))
-        .filter(|c| p.get("list").and_then(Value::as_bool).unwrap_or(false) || filter.is_some() || prefs.shortcuts.contains_key(c.0))
+        .filter(|c| {
+            p.get("list").and_then(Value::as_bool).unwrap_or(false)
+                || filter.is_some()
+                || prefs.shortcuts.contains_key(c.0)
+                || prefs.alternate_shortcuts.contains_key(c.0)
+        })
         .map(|(id, label, menu, def, hold)| {
-            let mut v = json!({"id": id, "label": label, "menu": menu, "default": def, "shortcut": prefs.shortcut(id, def)});
+            let main = prefs.shortcut(id, def);
+            let defaults: Vec<&str> = default_alternates(id).collect();
+            let mut v = json!({"id": id, "label": label, "menu": menu, "default": def, "shortcut": main, "alternates": prefs.alternates(id, main)});
+            if !defaults.is_empty() {
+                v["defaultAlternates"] = json!(defaults);
+            }
             if hold {
                 v["hold"] = json!(true);
             }
             v
         })
         .collect();
-    let bindings: Vec<(&str, &str)> = bindable().filter_map(|(id, def)| Some((id, prefs.shortcut(id, def)?))).collect();
-    let conflicts: Vec<Value> = conflicts(bindings).into_iter().map(|(sc, ids)| json!({"shortcut": sc, "commands": ids})).collect();
-    let mut out = json!({"overrides": prefs.shortcuts, "commands": list, "conflicts": conflicts});
+    let mut bindings: Vec<(&str, String)> = Vec::new();
+    for (id, def) in bindable() {
+        let main = prefs.shortcut(id, def);
+        bindings.extend(main.map(|m| (id, m.to_string())));
+        bindings.extend(prefs.alternates(id, main).into_iter().map(|k| (id, k)));
+    }
+    let conflicts: Vec<Value> =
+        conflicts(bindings.iter().map(|(id, k)| (*id, k.as_str()))).into_iter().map(|(sc, ids)| json!({"shortcut": sc, "commands": ids})).collect();
+    let mut out = json!({"overrides": prefs.shortcuts, "alternateOverrides": prefs.alternate_shortcuts, "commands": list, "conflicts": conflicts});
+    if let (Some(o), Value::Object(sets)) = (out.as_object_mut(), crate::shortcut_sets::describe(prefs)) {
+        o.extend(sets);
+    }
+    // The bindings as a `.kys` file, or Photoshop's Summarize page (the engine's commands; the
+    // app's dialog writes both with the shell's commands and tools added).
+    let set_name = if prefs.shortcut_set.is_empty() { crate::shortcut_sets::DEFAULTS_NAME } else { prefs.shortcut_set.as_str() };
+    if p.get("exportKys").and_then(Value::as_bool) == Some(true) {
+        let entries: Vec<crate::kys::Entry> =
+            crate::shortcut_sets::bound(prefs).into_iter().map(|(id, label, _, keys)| crate::kys::Entry { id, label, tool: false, keys }).collect();
+        out["kys"] = json!(crate::kys::write(set_name, &entries));
+    }
+    if let Some(v) = p.get("summarize").filter(|v| !v.is_null() && *v != &json!(false)) {
+        let mac = v.get("mac").and_then(Value::as_bool).unwrap_or(cfg!(target_os = "macos"));
+        let mut sections: Vec<crate::shortcut_sets::Section> = Vec::new();
+        for (_, label, menu, keys) in crate::shortcut_sets::bound(prefs) {
+            match sections.iter_mut().find(|(m, _)| *m == menu) {
+                Some((_, rows)) => rows.push((label, keys)),
+                None => sections.push((menu, vec![(label, keys)])),
+            }
+        }
+        out["html"] = json!(crate::shortcut_sets::summarize(set_name, &sections, mac));
+    }
     if let Some(import) = import {
         out["import"] = import;
     }
@@ -1952,7 +2155,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Keyboard Shortcuts…",
             ["Edit"],
             Some("Cmd+Alt+Shift+K"),
-            r##"{"set":{"<command id>|tools.temporary.hand|zoomIn|zoomOut":"Cmd+Shift+X"|""(remove)|null(default)}?,"reset":true|["<id>",…]?,"removeConflicts":bool=true,"filter":str?,"list":bool=false,"importKys":"<.kys XML>"?}"##,
+            r##"{"set":{"<command id>|tools.temporary.hand|zoomIn|zoomOut":"Cmd+Shift+X"|""(remove)|null(default)}?,"alternates":{"<command id>":["F3",…]|[](none)|null(default)}?,"reset":true|["<id>",…]?,"removeConflicts":bool=true,"filter":str?,"list":bool=false,"importKys":"<.kys XML>"?,"useSet":"<name>"|""(defaults)?,"saveSet":"<name>"?,"deleteSet":"<name>"?,"sets":{"<name>":{"shortcuts":{…},"alternateShortcuts":{…}}}?,"activeSet":"<name>"|""?,"exportKys":bool?,"summarize":bool|{"mac":bool}?}"##,
             keyboard_shortcuts,
             true
         ),
