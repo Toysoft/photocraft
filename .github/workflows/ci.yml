@@ -131,15 +131,26 @@ jobs:
         if: runner.os == 'Linux'
         run: cargo xtask scorecard --check
 
+      # cargo-nextest runs the test binaries in parallel (`cargo test` runs them one at a time) and
+      # its `ci` profile (.config/nextest.toml) stops at the first failure and fails hung tests.
+      - uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
+        with:
+          tool: cargo-nextest@0.9.146
+
       # `--features heif`: official builds open HEIC photos via the optional photocraft-heif crate.
+      # nextest doesn't run doctests, so `cargo test --doc` does, with the same selection.
+      # Separate native commands into steps so Windows reports either command's failure.
       - name: Test
-        run: cargo test --workspace --locked --features heif
+        run: cargo nextest run --workspace --locked --features heif --profile ci
+
+      - name: Doctests
+        run: cargo test --doc --workspace --locked --features heif
 
       # The same codecs without the optional decoder: HEIC must stay a clear "not in this build"
       # error for distributors who leave it out.
       - name: Test without heif
         if: runner.os == 'Linux'
-        run: cargo test -p photocraft-heif -p photocraft-codecs -p photocraft-io --locked
+        run: cargo nextest run -p photocraft-heif -p photocraft-codecs -p photocraft-io --locked --profile ci
 
       # The same tests built with the optional craft-fonts input (crates/text/build.rs), so the
       # Japanese font tests that skip without it run here. Linux only. Keep the exact `--workspace
@@ -159,7 +170,7 @@ jobs:
         env:
           CRAFT_FONTS_DIR: ${{ github.workspace }}/craft-fonts
           CRAFT_FONTS_REQUIRED: "1"
-        run: cargo test --workspace --locked --features heif
+        run: cargo nextest run --workspace --locked --features heif --profile ci
 
   corpus:
     timeout-minutes: 30
